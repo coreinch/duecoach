@@ -59,7 +59,7 @@ BARRIER_LABELS = {
 }
 
 
-SUGGEST_TIMEOUT = 30  # seconds to wait for the model's goal ideas (computed on demand) before using the built-in ones
+SUGGEST_TIMEOUT = 30  # seconds to wait for the model's goal ideas (computed on demand) before asking the open question instead
 SUGGEST_PREFETCH_WAIT = 12  # ...and, when they were started earlier in the interview, how much longer to wait for them at the end
 OPTION_WORDS = {
     "1": 0,
@@ -86,60 +86,6 @@ OPTION_WORDS = {
 }
 OPTION_FILLERS = {"option", "number", "no", "the", "idea", "αριθμος", "επιλογη", "ιδεα", "το", "τη", "την"}
 
-# Built-in goal ideas, used when the model can't suggest any. Each is measurable, says how and has a time frame. Keywords are
-# matched against the user's interview answers and recent messages after normalize() (so no accents).
-GOAL_IDEAS = [
-    (
-        r"start|begin|procrastin|put off|ξεκιν|αναβαλ",
-        "Start my most important task within 10 minutes of sitting down to work, on at least 4 days a week for the next month.",
-        "Να ξεκινάω την πιο σημαντική εργασία μου μέσα σε 10 λεπτά από τη στιγμή που κάθομαι να δουλέψω, τουλάχιστον 4 μέρες την εβδομάδα για τον επόμενο μήνα.",
-    ),
-    (
-        r"time|late|punctual|deadline|rush|χρον|αργ|ωρα|προθεσμ",
-        "Leave the house 10 minutes earlier than I need to, on at least 4 days a week for the next month.",
-        "Να φεύγω από το σπίτι 10 λεπτά νωρίτερα από όσο χρειάζεται, τουλάχιστον 4 μέρες την εβδομάδα για τον επόμενο μήνα.",
-    ),
-    (
-        r"organi[sz]|keys|lose|lost|forget|remember|clutter|mess|οργαν|κλειδ|χανω|χαν|ξεχν|θυμ|ατακτ",
-        "Put my keys, phone and wallet in one fixed place every time I come home, every day for the next four weeks.",
-        "Να βάζω κλειδιά, κινητό και πορτοφόλι πάντα στο ίδιο σημείο όταν γυρνάω σπίτι, κάθε μέρα για τις επόμενες τέσσερις εβδομάδες.",
-    ),
-    (
-        r"focus|distract|concentrat|attention|phone|συγκεντρ|αποσπ|προσοχ|κινητο",
-        "Work in one focused 25-minute block with my phone out of reach, on at least 4 days a week for the next month.",
-        "Να δουλεύω σε ένα συγκεντρωμένο μπλοκ 25 λεπτών με το κινητό μακριά μου, τουλάχιστον 4 μέρες την εβδομάδα για τον επόμενο μήνα.",
-    ),
-    (
-        r"sleep|bed|tired|exhaust|insomnia|υπν|κοιμ|κουρασ",
-        "Start winding down at a fixed time and be in bed by it on at least 5 nights a week for the next month.",
-        "Να αρχίζω να ηρεμώ σε σταθερή ώρα και να είμαι στο κρεβάτι μέχρι τότε τουλάχιστον 5 βράδια την εβδομάδα για τον επόμενο μήνα.",
-    ),
-    (
-        r"stress|anxi|overwhelm|pressure|burn|αγχ|πιεσ|εξαντλ",
-        "Take a 10-minute break to reset every weekday afternoon for the next four weeks.",
-        "Να κάνω ένα διάλειμμα 10 λεπτών για να ηρεμήσω κάθε απόγευμα των καθημερινών για τις επόμενες τέσσερις εβδομάδες.",
-    ),
-    (
-        r"plan|priorit|to do|todo|list|schedule|routine|προγραμμα|λιστα|προτεραι|ρουτινα",
-        "Write my top three things for the day each morning and tick them off, on at least 5 days a week for the next month.",
-        "Να γράφω κάθε πρωί τα τρία σημαντικότερα της ημέρας και να τα τσεκάρω, τουλάχιστον 5 μέρες την εβδομάδα για τον επόμενο μήνα.",
-    ),
-]
-DEFAULT_IDEAS = (0, 1, 2)  # indexes into GOAL_IDEAS used to fill up to three when the text matched fewer
-
-
-def fallback_goal_options(uid: int) -> list[str]:
-    """Three built-in goal ideas, the ones whose keywords best match what the user has said (generic ones fill the gaps)."""
-    profile = db.get_profile(uid)
-    said = " ".join(m["content"] for m in db.recent_messages(uid, 12) if m["role"] == "user")
-    text = normalize(" ".join([profile.get("obstacle", ""), profile.get("why", ""), profile.get("tried", ""), said]))
-    scored = sorted(((len(re.findall(pattern, text)), -index, index) for index, (pattern, _, _) in enumerate(GOAL_IDEAS)), reverse=True)
-    chosen = [index for score, _, index in scored if score > 0][:3]
-    chosen += [i for i in DEFAULT_IDEAS if i not in chosen][: 3 - len(chosen)]
-    greek = db.get_user(uid)["lang"] == "el"
-    return [GOAL_IDEAS[i][2 if greek else 1] for i in chosen]
-
-
 _prefetched: dict[int, asyncio.Task] = {}  # user -> goal ideas being worked out in the background during the interview
 
 
@@ -160,7 +106,7 @@ def prefetch_goal_options(uid: int) -> None:
 
 
 async def goal_options(uid: int) -> list[str]:
-    """Three goal ideas: the model's, drawn from what the user said, or the built-in ones if it is slow, down or unsure."""
+    """Three goal ideas drawn from what the user said, or [] if the model is slow, down or unsure (then the open question is asked)."""
     task = _prefetched.pop(uid, None)
     wait = SUGGEST_PREFETCH_WAIT if task else SUGGEST_TIMEOUT
     if task is None:
@@ -169,9 +115,9 @@ async def goal_options(uid: int) -> list[str]:
     await asyncio.wait({task}, timeout=wait)
     if not task.done():
         task.cancel()
-        return fallback_goal_options(uid)
+        return []
     options = [] if task.cancelled() or task.exception() else task.result()
-    return options if len(options) == 3 else fallback_goal_options(uid)
+    return options if len(options) == 3 else []
 
 
 def _picked_option(text: str, count: int) -> tuple[int, str] | None:
@@ -384,16 +330,17 @@ def start_intake(uid: int, restart: bool = False) -> str | None:
 
 
 async def start_goal(uid: int, after_intake: bool = False, options: list[str] | None = None) -> str:
-    """Ask for a goal by offering three ideas to pick from (or the user's own). Right after the interview the question picks up
-    what they said got in their way. `options` can be prepared ahead (while the coach is writing its reply)."""
+    """Ask for a goal by offering three ideas to pick from (or the user's own), or openly if there are no ideas. Right after the
+    interview the question picks up what they said got in their way. `options` can be prepared ahead (while the coach writes)."""
     options = options or await goal_options(uid)
     put(uid, "goal", "asked", started=time.time(), vague=0, options=options)
     db.set_field(uid, "goal_asked_at", time.time())
-    a, b, c = options
     obstacle = db.get_profile(uid).get("obstacle", "") if after_intake else ""
-    if obstacle:
-        return _t(uid, "GOAL_ASK_INTAKE", obstacle=obstacle[:100].rstrip(" .,;"), a=a, b=b, c=c)
-    return _t(uid, "GOAL_ASK", a=a, b=b, c=c)
+    quoted = obstacle[:100].rstrip(" .,;")
+    if not options:  # no ideas to offer: an open question
+        return _t(uid, "GOAL_ASK_OPEN_INTAKE", obstacle=quoted) if obstacle else _t(uid, "GOAL_ASK_OPEN")
+    a, b, c = options
+    return _t(uid, "GOAL_ASK_INTAKE", obstacle=quoted, a=a, b=b, c=c) if obstacle else _t(uid, "GOAL_ASK", a=a, b=b, c=c)
 
 
 async def start_objective(uid: int) -> str:
