@@ -113,3 +113,29 @@ async def refresh_notes(user_id: int) -> None:
     notes = await _complete([{"role": "user", "content": prompt}], max_tokens=1200)
     if notes:
         db.set_field(user_id, "notes", notes)
+
+
+async def draft(user_id: int, kind: str, text: str, previous: str | None = None, goal: str = "") -> str | None:
+    """Wording help for the goal / weekly-step flows: the user's words as one well-formed sentence.
+
+    Returns None if the model says the text isn't a goal or step at all (so the caller treats it as ordinary chat), and falls back
+    to the user's own words when the model is unavailable or returns nothing, so the flow never gets stuck on the model.
+    """
+    language = prompts.LANGUAGE_NAME.get(db.get_user(user_id)["lang"], "English")
+    template = {
+        ("goal", False): prompts.DRAFT_GOAL,
+        ("goal", True): prompts.DRAFT_GOAL_REVISION,
+        ("objective", False): prompts.DRAFT_OBJECTIVE,
+        ("objective", True): prompts.DRAFT_OBJECTIVE_REVISION,
+    }[(kind, previous is not None)]
+    system = template.format(language=language, goal=goal, previous=previous or "")
+    fallback = " ".join(text.split())[:200]
+    try:
+        out = await _complete([{"role": "system", "content": system}, {"role": "user", "content": text}], max_tokens=400)
+    except Exception:
+        log.exception("drafting failed, using the user's own words")
+        return fallback
+    out = out.strip().strip("\"'\u00ab\u00bb\u201c\u201d ")
+    if out.upper().rstrip(".! ") == "NONE" and previous is None:
+        return None
+    return " ".join(out.split())[:240] or fallback

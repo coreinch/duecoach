@@ -24,7 +24,9 @@ STRINGS = {
             "/evening <0-23|off> - ώρα που τελειώνουν\n"
             "/interval <15-240|on|off> - κάθε πόσα λεπτά (προεπιλογή 30, αρχικά κλειστό)\n"
             "/timezone <Περιοχή/Πόλη> - ζώνη ώρας για τα check-in (π.χ. Europe/Athens)\n"
-            "/goals - οι στόχοι και οι εβδομαδιαίοι στόχοι σου\n"
+            "/goals - οι στόχοι και τα βήματα της εβδομάδας\n"
+            "/goal - όρισε νέο στόχο\n"
+            "/step - διάλεξε το βήμα της εβδομάδας\n"
             "/progress - σημείωση προόδου της εβδομάδας\n"
             "/toolbox - τι έχει δουλέψει για σένα\n"
             "/language <el|en> - γλώσσα\n"
@@ -85,6 +87,25 @@ STRINGS = {
         "TZ_NO": "Εντάξει, ποια πόλη ή χώρα τότε;",
         "TZ_SKIPPED": "Κανένα πρόβλημα. Μπορείς να τη ορίσεις όποτε θέλεις με /timezone Europe/Athens. Τα check-in μένουν κλειστά μέχρι τότε.",
         "TZ_DONE": "Η ζώνη ώρας ορίστηκε σε {zone}. Αν θέλεις να σε ρωτάω μέσα στη μέρα, στείλε /interval on (ή πες μου κάθε πότε).",
+        "GOAL_ASK": "Ας ορίσουμε έναν στόχο μαζί. Ποιο είναι το ένα πράγμα που θα ήθελες περισσότερο να αλλάξεις ή να βελτιώσεις; Αρκεί μια-δυο προτάσεις, ή πες «παράλειψη».",
+        "GOAL_MORE": "Πες μου λίγο περισσότερα, σε μία-δυο προτάσεις.",
+        "GOAL_CONFIRM": "Έτσι θα τον έγραφα ως στόχο: «{goal}»\nΣου ταιριάζει; Απάντησε ναι, ή πες μου τι να αλλάξω.",
+        "GOAL_SAVED": "Ο στόχος αποθηκεύτηκε: «{goal}»",
+        "GOAL_SKIPPED": "Κανένα πρόβλημα. Γράψε /goal όποτε θέλεις να ορίσεις έναν.",
+        "GOAL_FULL": "Έχεις ήδη το μέγιστο των 4 στόχων. Ολοκλήρωσε ή άφησε έναν πριν προσθέσεις άλλον.",
+        "REVISE": "Τι θα άλλαζες;",
+        "OBJ_ASK": "Ποιο είναι ένα μικρό βήμα προς το «{goal}» που μπορείς να κάνεις αυτή την εβδομάδα; Πες πότε και πού αν μπορείς, ή πες «παράλειψη».",
+        "OBJ_MORE": "Πες μου λίγο περισσότερα για το βήμα, σε μία-δυο προτάσεις.",
+        "OBJ_CONFIRM": "Έτσι θα έγραφα το βήμα: «{step}»\nΣου ταιριάζει; Απάντησε ναι, ή πες μου τι να αλλάξω.",
+        "OBJ_REWARD": "Διάλεξε μια μικρή ανταμοιβή για όταν το κάνεις (έναν καφέ, μια βόλτα, ένα επεισόδιο), ή απάντησε κανένα.",
+        "OBJ_REWARD_NOTE": " (ανταμοιβή: {reward})",
+        "OBJ_SAVED": "Αποθήκευσα το βήμα της εβδομάδας: «{step}»{reward}. Πες μου πώς πάει· θα σε ρωτήσω σε μερικές μέρες όταν τα πούμε.",
+        "OBJ_SKIPPED": "Κανένα πρόβλημα. Γράψε /step όταν είσαι έτοιμος να διαλέξεις βήμα.",
+        "OBJ_FULL": "Έχεις ήδη 3 ανοιχτά βήματα. Πες μου πρώτα πώς πήγαν αυτά.",
+        "FU_ASK": "Πώς πήγε αυτό: «{step}»;\nΑπάντησε 1 = έγινε, 2 = κατά μέρος, 3 = όχι ακόμα.",
+        "FU_AGAIN": "Απάντησε 1 (έγινε), 2 (κατά μέρος) ή 3 (όχι ακόμα).",
+        "FU_BARRIER": "Τι εμπόδισε;\n1 = ξέχασα\n2 = δεν ήξερα πώς\n3 = μπερδεύτηκα\n4 = το απέφευγα\n5 = δεν είχα κίνητρο\nΑπάντησε με αριθμό ή πες το με δικά σου λόγια.",
+        "FU_LATER": "Εντάξει, θα το ξαναδούμε.",
         "UNSUPPORTED": "Προς το παρόν διαβάζω μόνο γραπτά μηνύματα. Γράψε μου τι σκέφτεσαι;",
     },
     "en": {
@@ -98,7 +119,9 @@ STRINGS = {
             "/evening <0-23|off> - hour they stop\n"
             "/interval <15-240|on|off> - minutes between check-ins (default 30, off at first)\n"
             "/timezone <Area/City> - set your timezone for check-ins (e.g. Europe/Athens)\n"
-            "/goals - your goals and this week's objectives\n"
+            "/goals - your goals and this week's steps\n"
+            "/goal - set a new goal\n"
+            "/step - pick this week's step\n"
             "/progress - this week's progress note\n"
             "/toolbox - what has worked for you\n"
             "/language <el|en> - language\n"
@@ -158,6 +181,25 @@ STRINGS = {
         "TZ_NO": "Okay, which city or country then?",
         "TZ_SKIPPED": "No problem. You can set it any time with /timezone Europe/Athens. Check-ins stay off until then.",
         "TZ_DONE": "Timezone set to {zone}. If you'd like me to check in during the day, send /interval on (or tell me how often).",
+        "GOAL_ASK": "Let's set a goal together. What's one thing you'd most like to change or get better at? A sentence or two is plenty, or say \"skip\".",
+        "GOAL_MORE": "Tell me a little more, in a sentence or two.",
+        "GOAL_CONFIRM": "Here's how I'd write that as a goal: \"{goal}\"\nDoes that fit? Reply yes, or tell me what to change.",
+        "GOAL_SAVED": 'Goal saved: "{goal}"',
+        "GOAL_SKIPPED": "No problem. Say /goal whenever you want to set one.",
+        "GOAL_FULL": "You already have the maximum of 4 goals. Finish or drop one before adding another.",
+        "REVISE": "What would you change?",
+        "OBJ_ASK": 'What\'s one small step toward "{goal}" you could take this week? Say when and where if you can, or say "skip".',
+        "OBJ_MORE": "Tell me a little more about the step, in a sentence or two.",
+        "OBJ_CONFIRM": 'I\'d write the step like this: "{step}"\nDoes that work? Reply yes, or tell me what to change.',
+        "OBJ_REWARD": "Pick a small reward for when you do it (a coffee, a walk, an episode of something), or reply none.",
+        "OBJ_REWARD_NOTE": " (reward: {reward})",
+        "OBJ_SAVED": 'Saved your step for this week: "{step}"{reward}. Tell me how it goes; I\'ll ask about it in a couple of days when we talk.',
+        "OBJ_SKIPPED": "No problem. Say /step when you're ready to pick a step.",
+        "OBJ_FULL": "You already have 3 open steps. Tell me how those went first.",
+        "FU_ASK": 'How did this go: "{step}"?\nReply 1 = done, 2 = partly, 3 = not yet.',
+        "FU_AGAIN": "Please reply 1 (done), 2 (partly) or 3 (not yet).",
+        "FU_BARRIER": "What got in the way?\n1 = I forgot\n2 = I didn't know how\n3 = I got confused about it\n4 = I was avoiding it\n5 = I wasn't motivated\nReply with a number, or tell me in your own words.",
+        "FU_LATER": "Okay, we'll come back to it.",
         "UNSUPPORTED": "I can only read text messages for now. Could you type it out?",
     },
 }

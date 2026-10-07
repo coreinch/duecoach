@@ -23,7 +23,9 @@ The method (follow the coaching record at the end of this prompt)
    have tried and what helped, their biggest obstacles, their strengths, sleep and daily routine basics, and which areas
    they want to work on (time management, routines, planning and prioritising, organising, starting tasks, focus, long
    projects, sleep, exercise and eating, relationships, self-talk and stress, decisions). Don't interrogate; mix in
-   something useful as you go. Then settle on 2-4 goals.
+   something useful as you go. Then settle on 2-4 goals. The system itself runs the formal goal and weekly-step setup and the
+   follow-up (it asks, drafts and confirms with the user in a fixed flow), so don't run those yourself: just coach, and use
+   add_goal/add_objective only when the user clearly states and agrees to one outside that flow.
    Check-ins are off until the user wants them and their timezone is confirmed. The system asks for the timezone itself, so
    don't ask where they live. If they volunteer their city, call set_timezone; once it is confirmed and they want check-ins
    (or ask for them), call set_checkins with the interval they choose.
@@ -114,6 +116,37 @@ PROGRESS = (
     "language. Sections: their goals; last week (each objective: done / partly / missed, what helped or what got in the way); "
     "next week's plan with chosen incentives; one specific encouraging line. Use only what the coaching record and "
     "conversation show; don't invent anything."
+)
+
+DRAFT_GOAL = """Rewrite what the user said as ONE coaching goal, in {language}, first person, at most 25 words.
+A good goal is measurable, says HOW, has a time frame (use "for the next month" if they gave none) and is realistic.
+Keep their own facts and wording; do not invent details. If the text is not a goal or wish at all (a greeting, thanks, a
+question, small talk), reply with exactly NONE. Output only the goal, no quotes."""
+
+DRAFT_GOAL_REVISION = """A coaching goal was drafted for the user and they want to change it. In {language}, first person, at most 25 words,
+write the revised goal: keep what they did not object to, apply their change, stay measurable with a how and a time frame.
+Output only the revised goal, no quotes.
+
+Current draft: {previous}"""
+
+DRAFT_OBJECTIVE = """The user's goal is: {goal}
+From what they said, write ONE small, concrete step they can take THIS WEEK toward it, in {language}, first person, at most 25
+words: what they will do, and when and where only if they said so (never invent a time). If the text is not a step or plan at all
+(a greeting, thanks, a question), reply with exactly NONE. Output only the step, no quotes."""
+
+DRAFT_OBJECTIVE_REVISION = """The user's goal is: {goal}
+A small weekly step was drafted and they want to change it. In {language}, first person, at most 25 words, write the revised step:
+keep what they did not object to and apply their change; add when and where only if they said so. Output only the step, no quotes.
+
+Current draft: {previous}"""
+
+FOLLOWUP_DONE = (
+    'The user reports they finished this weekly step: "{step}". Coach it: ask what made it work (one question) and name that '
+    "strength back to them. Don't propose a new step yet."
+)
+FOLLOWUP_BARRIER = (
+    'The user reports this weekly step was {outcome}: "{step}". The main barrier: {barrier}{note}. Coach it with no blame: answer '
+    "that barrier with one concrete change to the plan, the reminder or the reward, and offer a smaller version to try again."
 )
 
 SUMMARIZE = """Update the coaching notes about this user. Keep durable facts only: why they came, strengths, recurring struggles,

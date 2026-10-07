@@ -74,7 +74,7 @@ them off the box if the data matters.
 
 ## Commands
 
-`/help` lists them. Highlights: `/stuck`, `/plan`, `/overwhelm`, `/goals`, `/toolbox`, `/progress`, `/remind`, `/timezone`,
+`/help` lists them. Highlights: `/stuck`, `/plan`, `/overwhelm`, `/goals`, `/goal`, `/step`, `/toolbox`, `/progress`, `/remind`, `/timezone`,
 `/interval on|off|<minutes>`, `/morning`, `/evening`, `/language`, `/privacy`, `/deletedata`.
 
 ## Development
