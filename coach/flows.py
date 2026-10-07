@@ -27,6 +27,16 @@ OBJECTIVE_COOLDOWN = 2 * 86400
 FOLLOWUP_AFTER = 2 * 86400  # a weekly step is asked about once it is this old...
 FOLLOWUP_COOLDOWN = 20 * 3600  # ...and then at most once per ~day
 
+INTAKE_STEPS = ["why", "tried", "obstacle", "strength", "rhythm", "mood"]
+INTAKE_MIN_MESSAGES = 2  # stored chat messages before this exchange: the coach has answered once before the interview starts
+INTAKE_COOLDOWN = 2 * 86400  # an interview that was left unfinished is offered again after this long...
+INTAKE_MAX_STARTS = 3  # ...but only this many times, then it is dropped (the user can still run /intake)
+INTAKE_ANSWER_LIMIT = 300  # characters kept per answer
+STOP = {"stop", "enough", "no more", "that s enough", "that s all", "αρκετα", "σταματα", "τελος", "οχι αλλο", "δεν θελω αλλες"}
+HEAVY_MOOD_PATTERNS = [
+    r"depress\w*|hopeless|burn(ed|t)? out|burnout|panic\w*|anxi\w*|can t cope|falling apart|really low|very low|so sad|cry(ing)? a lot",
+    r"καταθλιψ\w*|αγχ\w*|πανικ\w*|χαλια|πολυ χαμηλα|κλαιω|ψυχολογια μου",
+]
 YES = {"yes", "y", "yeah", "yep", "yup", "correct", "right", "ok", "okay", "sure", "ναι", "ν", "σωστα", "σωστο", "ενταξει", "οκ"}
 NO = {"no", "n", "nope", "wrong", "incorrect", "no thanks", "οχι", "λαθος", "οχι ευχαριστω"}
 SKIP = {"skip", "later", "pass", "not now", "skip it", "παραληψη", "αργοτερα", "οχι τωρα", "δεν θελω"}
@@ -90,6 +100,9 @@ def clear(uid: int) -> None:
 
 def _word_count(text: str) -> int:
     return len(text.split())
+
+
+_HEAVY_MOOD = [re.compile(p) for p in HEAVY_MOOD_PATTERNS]
 
 
 # --- when is a good moment? ---
@@ -170,6 +183,22 @@ def note_question_asked(uid: int) -> None:
 # --- starting a flow (each returns the question to send) ---
 
 
+def start_intake(uid: int, restart: bool = False) -> str | None:
+    """Begin (or resume) the intake interview at the first topic not yet answered; /intake with restart=True asks them all again."""
+    profile = {} if restart else db.get_profile(uid)
+    starts = profile.get("_starts", 0) + 1
+    if starts > INTAKE_MAX_STARTS and not restart:  # they keep leaving it unfinished: stop offering
+        db.set_field(uid, "intake_state", "skipped")
+        return None
+    profile["_starts"] = starts
+    db.set_profile(uid, profile)
+    step = next((s for s in INTAKE_STEPS if s not in profile), INTAKE_STEPS[0])
+    put(uid, "intake", step, started=time.time())
+    db.set_fields(uid, intake_asked_at=time.time(), intake_state="")
+    intro = _t(uid, "INTAKE_INTRO") + "\n\n" if step == INTAKE_STEPS[0] else ""
+    return intro + _t(uid, f"INTAKE_Q_{step}")
+
+
 def start_goal(uid: int) -> str:
     put(uid, "goal", "asked", started=time.time(), vague=0)
     db.set_field(uid, "goal_asked_at", time.time())
@@ -217,6 +246,8 @@ def question_due(uid: int, text: str) -> str | None:
     goals, opens = db.active_goals(uid), db.open_objectives(uid)
     signal = signal_in(text)
     prior = db.message_count(uid)  # messages stored before this exchange; it will add the user's message and the coach's reply
+    if user["intake_state"] == "":  # the interview comes first; goals are set once it is done or skipped
+        return "intake" if prior >= INTAKE_MIN_MESSAGES and now - (user["intake_asked_at"] or 0) > INTAKE_COOLDOWN else None
     if not goals:
         ready = (signal is not None and prior >= GOAL_MIN_MESSAGES) or prior + 2 >= GOAL_FALLBACK_MESSAGES
         return "goal" if ready and now - (user["goal_asked_at"] or 0) > GOAL_COOLDOWN else None
@@ -229,15 +260,10 @@ def question_due(uid: int, text: str) -> str | None:
 
 async def start_question(uid: int, kind: str, text: str) -> str | None:
     """Start the flow for a question chosen by question_due() and return the text to send (None if it turned out not to apply)."""
-    return (
-        {
-            "followup": lambda: start_followup(uid),
-            "goal": lambda: start_goal(uid),
-            "step": lambda: start_objective(uid),
-        }[kind]()
-        if kind != "step_offer"
-        else await offer_step(uid, text)
-    )
+    if kind == "step_offer":
+        return await offer_step(uid, text)
+    starters = {"followup": start_followup, "goal": start_goal, "step": start_objective, "intake": start_intake}
+    return starters[kind](uid)
 
 
 async def offer_step(uid: int, text: str) -> str | None:
@@ -267,11 +293,39 @@ async def answer(uid: int, text: str) -> str | CoachTurn | None:
         ("objective", "asked"): _drafting,
         ("objective", "confirm"): _confirming,
         ("objective", "revise"): _confirming,
+        ("intake", state["step"]): _intake_answer,
         ("objective", "reward"): _reward,
         ("followup", "outcome"): _outcome,
         ("followup", "barrier"): _barrier,
     }.get((state["flow"], state["step"]))
     return await handler(uid, state, text, said) if handler else None
+
+
+async def _intake_answer(uid: int, state: dict, text: str, said: str):
+    """One answer of the interview: keep it as given, then ask the next topic. 'skip' passes on a topic, 'stop' ends the interview."""
+    step = state["step"]
+    profile = db.get_profile(uid)
+    if said in STOP:
+        return _finish_intake(uid, profile, stopped=True)
+    note = ""
+    if said not in SKIP:
+        profile[step] = " ".join(text.split())[:INTAKE_ANSWER_LIMIT]
+        if step == "mood" and any(p.search(said) for p in _HEAVY_MOOD):
+            profile["mood_heavy"] = True
+            note = "\n\n" + _t(uid, "INTAKE_MOOD_HEAVY")
+        db.set_profile(uid, profile)
+    following = INTAKE_STEPS[INTAKE_STEPS.index(step) + 1 :]
+    if not following:
+        return _finish_intake(uid, profile) + note
+    put(uid, "intake", following[0])
+    return f"{_t(uid, 'INTAKE_ACK')} {_t(uid, f'INTAKE_Q_{following[0]}')}"
+
+
+def _finish_intake(uid: int, profile: dict, stopped: bool = False) -> str:
+    clear(uid)
+    answered = any(topic in profile for topic in INTAKE_STEPS)
+    db.set_field(uid, "intake_state", "done" if answered else "skipped")
+    return _t(uid, "INTAKE_STOPPED" if stopped else "INTAKE_DONE")
 
 
 def _decline(uid: int, state: dict) -> str:

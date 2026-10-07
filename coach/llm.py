@@ -23,6 +23,7 @@ log = logging.getLogger("coach.llm")
 MAX_TOOL_ROUNDS = 4
 MAX_EMPTY_RETRIES = 2
 MODEL_ATTEMPTS = 2  # tries per call when there is only one model to use
+NOTES_EVERY = 20  # new chat messages between refreshes of the long-term notes
 
 MODELS = [LLM_MODEL, *[m for m in LLM_FALLBACK_MODELS if m != LLM_MODEL]]  # in order of preference
 _down_until: dict[str, float] = {}  # model -> time before which it is skipped (it failed recently)
@@ -167,8 +168,12 @@ async def reply(user_id: int, user_text: str, instruction: str | None = None, co
 
 
 async def refresh_notes(user_id: int) -> None:
-    """Fold recent conversation into long-term notes every 20 messages."""
-    if db.message_count(user_id) % 20 != 0:
+    """Fold recent conversation into long-term notes once 20 or more new messages have piled up since the last time.
+
+    (Counting "since the last time" matters: check-ins store a single message, so the count is not always a multiple of 20.)
+    """
+    count = db.message_count(user_id)
+    if count - (db.get_user(user_id)["notes_at_count"] or 0) < NOTES_EVERY:
         return
     convo = "\n".join(f"{m['role']}: {m['content']}" for m in db.recent_messages(user_id, 40))
     prompt = prompts.SUMMARIZE.format(
@@ -176,7 +181,7 @@ async def refresh_notes(user_id: int) -> None:
     )
     notes = await _complete([{"role": "user", "content": prompt}], max_tokens=1200)
     if notes:
-        db.set_field(user_id, "notes", notes)
+        db.set_fields(user_id, notes=notes, notes_at_count=count)
 
 
 async def draft(user_id: int, kind: str, text: str, previous: str | None = None, goal: str = "") -> str | None:

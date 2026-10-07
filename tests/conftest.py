@@ -31,5 +31,5 @@ def database(tmp_path):
 def user():
     """A Telegram user who has agreed to the privacy notice and confirmed their timezone."""
     row = db.get_or_create_user("telegram", "1001", "1001", "en")
-    db.set_fields(1001, consent_at=1.0, tz_set=1)
+    db.set_fields(1001, consent_at=1.0, tz_set=1, intake_state="done")
     return db.get_user(row["user_id"])

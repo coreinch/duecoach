@@ -1,5 +1,6 @@
 """SQLite storage. Call init() once at startup (importing this module has no side effects)."""
 
+import json
 import os
 import sqlite3
 import time
@@ -139,7 +140,30 @@ def _m5_question_spacing() -> None:
     _ensure_columns("users", {"question_at_count": "INTEGER DEFAULT -100"})
 
 
-MIGRATIONS = [_m1_baseline, _m2_consent_and_resilience, _m3_timezone_onboarding, _m4_coaching_flows, _m5_question_spacing]
+def _m6_intake_and_notes() -> None:
+    """The intake interview (answers kept as a profile), and when the long-term notes were last refreshed."""
+    had_users = _conn.execute("SELECT COUNT(*) FROM users").fetchone()[0]
+    _ensure_columns(
+        "users",
+        {
+            "profile": "TEXT DEFAULT ''",
+            "intake_state": "TEXT DEFAULT ''",
+            "intake_asked_at": "REAL DEFAULT 0",
+            "notes_at_count": "INTEGER DEFAULT 0",
+        },
+    )
+    if had_users:  # people who were already using the bot are not put through an interview
+        _conn.execute("UPDATE users SET intake_state='skipped' WHERE intake_state=''")
+
+
+MIGRATIONS = [
+    _m1_baseline,
+    _m2_consent_and_resilience,
+    _m3_timezone_onboarding,
+    _m4_coaching_flows,
+    _m5_question_spacing,
+    _m6_intake_and_notes,
+]
 
 
 def init(path: str | None = None) -> None:
@@ -196,6 +220,10 @@ USER_FIELDS = {
     "obj_asked_at",
     "followup_asked_at",
     "question_at_count",
+    "profile",
+    "intake_state",
+    "intake_asked_at",
+    "notes_at_count",
 }
 
 
@@ -249,6 +277,20 @@ def set_fields(user_id: int, **fields: str | int | float) -> None:
 
 def set_field(user_id: int, field: str, value: str | int | float) -> None:
     set_fields(user_id, **{field: value})
+
+
+def get_profile(user_id: int) -> dict:
+    """What the user said in the intake interview, by topic (why, tried, obstacle, strength, rhythm, mood)."""
+    user = get_user(user_id)
+    try:
+        profile = json.loads(user["profile"]) if user and user["profile"] else {}
+    except ValueError:
+        profile = {}
+    return profile if isinstance(profile, dict) else {}
+
+
+def set_profile(user_id: int, profile: dict) -> None:
+    set_field(user_id, "profile", json.dumps(profile, ensure_ascii=False) if profile else "")
 
 
 def get_notes(user_id: int) -> str:
