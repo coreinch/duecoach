@@ -41,7 +41,7 @@ docker compose up -d
    `ghcr.io/coreinch/adhd-coach` tagged `main-<short sha>`.
 3. **deploy** (`main` only): installs Ansible, generates the inventory from the `DEPLOY_HOST` secret, and runs
    `ansible/playbooks/deploy.yml`, which renders the compose file and `.env` on the VPS, logs in to GHCR, pulls the new image,
-   restarts the stack, waits for `/healthz` to report healthy (a crashing bot fails the deploy), schedules a daily database
+   restarts the stack, waits for the container to report healthy (a crashing bot fails the deploy), schedules a daily database
    backup, and removes this app's old image tags (keeping 3 for rollback).
 
 Runs on the same branch are queued, never cancelled, so the newest commit is always the one deployed last.
@@ -62,13 +62,12 @@ Set them with `gh secret set NAME -R coreinch/adhd-coach`.
 
 ### First deploy checklist
 
-1. Confirm the port in `ansible/inventory/group_vars/production.yml` (`app_port`) is free on the VPS: `ss -tlnp`.
-2. Stop any other copy of the bot that uses the same Telegram token (a local `python -m coach.bot`, or another container):
+1. Stop any other copy of the bot that uses the same Telegram token (a local `python -m coach.bot`, or another container):
    two pollers on one token fight each other.
-3. Merge to `main`. The first deploy starts with an empty database. To carry over an existing one, copy it into the volume
+2. Merge to `main`. The first deploy starts with an empty database. To carry over an existing one, copy it into the volume
    before the first start (`docker compose cp coach.db coach:/data/coach.db` on the VPS, then restart), otherwise users
    simply start fresh.
-4. Roll back by re-running the playbook with an older tag: `ansible-playbook ... -e image_tag=main-<older sha>`.
+3. Roll back by re-running the playbook with an older tag: `ansible-playbook ... -e image_tag=main-<older sha>`.
 
 Backups land in the volume's `backups/` folder (7 daily copies). They survive a bad deploy but not the loss of the VPS, so copy
 them off the box if the data matters.
