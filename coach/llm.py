@@ -10,6 +10,7 @@ log = logging.getLogger("coach.llm")
 
 MAX_TOOL_ROUNDS = 4
 MAX_EMPTY_RETRIES = 2
+MODEL_ATTEMPTS = 2  # tries per call when the gateway reports a provider outage
 MAX_CONSECUTIVE_ASSISTANT = 2  # in the history sent to the model: proactive check-ins pile up while a user is silent
 
 READ_PLAYBOOK = {"type": "function", "function": {"name": "get_strategy"}}
@@ -48,13 +49,25 @@ def _history(user_id: int) -> list[dict]:
     return out
 
 
+class ModelError(RuntimeError):
+    """The gateway answered but produced no completion (a provider outage reported inside an HTTP 200)."""
+
+
 async def _chat(messages: list[dict], tool_defs: list[dict] | None = None, max_tokens: int = 1500, force: dict | None = None):
     kwargs = {"tools": tool_defs} if tool_defs else {}
     if force:
         kwargs["tool_choice"] = force
-    async with _slots:
-        resp = await _client.chat.completions.create(model=LLM_MODEL, messages=messages, max_tokens=max_tokens, **kwargs)
-    return resp.choices[0].message
+    problem = None
+    for attempt in range(MODEL_ATTEMPTS):
+        async with _slots:
+            resp = await _client.chat.completions.create(model=LLM_MODEL, messages=messages, max_tokens=max_tokens, **kwargs)
+        if resp.choices:
+            return resp.choices[0].message
+        # free routes answer HTTP 200 with {"error": {...}} when the provider behind them is down
+        problem = getattr(resp, "error", None) or (getattr(resp, "model_extra", None) or {}).get("error") or "empty response"
+        log.warning("model returned no completion (%s)%s", problem, ", retrying" if attempt + 1 < MODEL_ATTEMPTS else "")
+        await asyncio.sleep(1)
+    raise ModelError(f"model returned no completion: {problem}")
 
 
 async def _complete(messages: list[dict], max_tokens: int = 1500) -> str:
