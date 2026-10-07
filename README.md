@@ -49,3 +49,7 @@ python -m venv .venv && .venv/bin/pip install -r requirements-dev.txt
 Layout: `coach/core.py` (commands, consent, rate limit), `coach/llm.py` (model loop and tools), `coach/tools.py` and
 `coach/playbook.py` (what the coach can do and the strategy cards), `coach/bot.py` (reminders, check-ins, startup),
 `coach/channels/` (Telegram, Viber, WhatsApp), `coach/db.py` (SQLite, numbered migrations).
+
+## Licence
+
+MIT, see [LICENSE](LICENSE).
