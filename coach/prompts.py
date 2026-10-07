@@ -108,6 +108,10 @@ REENGAGE_LAST = (
     "lost (their goals and toolbox are saved), and that they can message you any time, even just 'hi', to pick up where they "
     "left off. Add one tiny idea they could try on their own, from the playbook card that fits."
 ) + _CHECKIN_RULES
+QUESTION_FOLLOWS = (
+    "The system will add a question of its own after your reply. Do NOT end your reply with a question: end with a short, "
+    "encouraging statement or one concrete tip."
+)
 STUCK = "The user is stuck starting a task{task}. Help them via the smallest possible first step, then propose a short timer."
 PLAN = "Help the user plan today{extra}. Use their open objectives first. Ask what's on their plate if you don't know, then narrow to 1-3 priorities."
 OVERWHELM = "The user feels overwhelmed{extra}. Acknowledge briefly, then reduce the situation to one tiny next step."
