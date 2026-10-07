@@ -9,10 +9,11 @@ from aiohttp import web
 
 from .. import core, db, strings
 from ..config import is_allowed
-from . import SendError
+from . import SendError, Unreachable
 
 log = logging.getLogger("coach.viber")
 API = "https://chatapi.viber.com/pa"
+UNREACHABLE_STATUSES = {5, 6}  # receiver not registered / not subscribed
 
 
 class ViberChannel:
@@ -26,7 +27,8 @@ class ViberChannel:
         r = await self.http.post(f"{API}/{endpoint}", json=payload, headers={"X-Viber-Auth-Token": self.token})
         data = r.json()
         if r.status_code != 200 or data.get("status") != 0:
-            raise SendError(f"viber {endpoint}: {data.get('status_message', r.text[:200])}")
+            error = Unreachable if data.get("status") in UNREACHABLE_STATUSES else SendError
+            raise error(f"viber {endpoint}: {data.get('status_message', r.text[:200])}")
         return data
 
     async def set_webhook(self, url: str) -> None:

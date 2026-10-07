@@ -11,6 +11,10 @@ class SendError(Exception):
     pass
 
 
+class Unreachable(SendError):
+    """The recipient can never be messaged (they blocked the bot, deleted the chat, unsubscribed): retrying is pointless."""
+
+
 REGISTRY: dict[str, object] = {}
 
 

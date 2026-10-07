@@ -480,10 +480,12 @@ async def handle_text(channel: str, ext_id: str, chat_id: str, text: str, lang_h
     if text.startswith("/"):
         word, *args = text.split()
         command = word[1:].split("@")[0].lower()
+    # Crisis wording is answered first, whatever the message is: plain text, or inside a command ("/stuck I want to die").
+    crisis = flows.is_crisis(text) and command not in ("deletedata", "forget")
     async with user_lock(uid):
         if not user["consent_at"]:
             # health-related chat goes to a third-party AI provider: nothing is processed before the user has agreed
-            if command is None and flows.is_crisis(text):
+            if crisis:
                 # safety first, ahead of the privacy notice; nothing is stored or sent to a model
                 return _t(uid, "CRISIS", help=f" {CRISIS_HELP}" if CRISIS_HELP else "")
             if command == "agree":
@@ -491,11 +493,11 @@ async def handle_text(channel: str, ext_id: str, chat_id: str, text: str, lang_h
             if command in BEFORE_CONSENT:
                 return await COMMANDS[command](uid, args) if command not in ("start", "help") else _t(uid, "PRIVACY")
             return _t(uid, "PRIVACY")
+        if crisis:
+            return await _crisis(uid, text)  # before any command or pending question can mistake this for something else
         handler = COMMANDS.get(command) if command else None
         if handler:
             return await handler(uid, args)
-        if flows.is_crisis(text):
-            return await _crisis(uid, text)  # before any pending question can mistake this for its answer
         if (answer := await _flow_answer(uid, text)) is not None:
             return answer
         if (answer := await _timezone_answer(uid, text)) is not None:
