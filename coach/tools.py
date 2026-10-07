@@ -236,7 +236,7 @@ def coaching_state(user_id: int) -> str:
         local = datetime.now(ZoneInfo(user["tz"]))
     except Exception:
         local = datetime.now(ZoneInfo("UTC"))
-    tz_note = "confirmed by the user" if user["tz_set"] else "NOT confirmed yet: ask where they live before setting up check-ins"
+    tz_note = "confirmed by the user" if user["tz_set"] else "NOT confirmed yet (the system asks for it; do not ask yourself)"
     checkins = (
         f"on, about every {user['interval_min']} min between {user['morning_hour']}:00 and {user['evening_hour']}:59"
         if user["interval_min"] and user["morning_hour"] >= 0 and user["evening_hour"] >= 0

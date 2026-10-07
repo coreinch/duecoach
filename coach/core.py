@@ -6,7 +6,7 @@ import time
 from collections import deque
 from zoneinfo import ZoneInfo
 
-from . import db, llm, prompts, strings
+from . import db, llm, prompts, strings, timezones
 from .config import CHECKIN_INTERVAL_MINUTES, RATE_LIMIT_MESSAGES, RATE_LIMIT_WINDOW, is_allowed
 
 log = logging.getLogger("coach.core")
@@ -14,6 +14,15 @@ _background: set[asyncio.Task] = set()
 _locks: dict[int, asyncio.Lock] = {}
 _recent: dict[int, deque] = {}  # per user: timestamps of recent messages, for the rate limit
 _warned: set[int] = set()
+
+# Timezone onboarding. The bot asks for the user's city once, after a few coaching messages, because check-ins and "what time is
+# it for you" depend on it; the model is not involved, so it can't forget to ask or invent a zone.
+ASK_TIMEZONE_AFTER_MESSAGES = 6  # chat messages stored (both sides), i.e. about three exchanges
+MAX_ANSWER_WORDS = 5  # longer messages are treated as ordinary chat, not as an answer to the question
+MAX_TZ_ATTEMPTS = 3
+YES = {"yes", "y", "yeah", "yep", "yup", "correct", "right", "ok", "okay", "sure", "ναι", "ν", "σωστα", "σωστο", "ενταξει", "οκ"}
+NO = {"no", "n", "nope", "wrong", "incorrect", "no thanks", "οχι", "λαθος", "οχι ευχαριστω"}
+SKIP = {"skip", "later", "pass", "not now", "skip it", "παραληψη", "αργοτερα", "οχι τωρα", "δεν θελω"}
 
 
 def user_lock(uid: int) -> asyncio.Lock:
@@ -49,6 +58,46 @@ async def _coach(uid: int, text: str, instruction: str | None = None, coach: boo
 
 
 # --- commands: async fn(uid, args) -> reply text ---
+
+
+async def _timezone_answer(uid: int, text: str) -> str | None:
+    """Handle a reply to the bot's timezone question; None means the message is ordinary chat."""
+    user = db.get_user(uid)
+    if user["tz_set"] or user["tz_state"] not in ("asked", "confirm"):
+        return None
+    said = timezones.normalize(text)
+    if user["tz_state"] == "confirm":
+        if said in YES:
+            zone = user["tz_candidate"]
+            db.set_fields(uid, tz=zone, tz_set=1, tz_state="done", tz_candidate="")
+            return _t(uid, "TZ_DONE", zone=zone)
+        if said in NO:
+            db.set_fields(uid, tz_state="asked", tz_candidate="")
+            return _t(uid, "TZ_NO")
+        return None  # they moved on to something else; the question stays open
+    words = text.split()
+    if len(words) > MAX_ANSWER_WORDS:
+        return None
+    if said in SKIP or said in NO:
+        db.set_fields(uid, tz_state="skipped")
+        return _t(uid, "TZ_SKIPPED")
+    found = timezones.resolve(text)
+    if found.zone:
+        db.set_fields(uid, tz_state="confirm", tz_candidate=found.zone)
+        return _t(uid, "TZ_CONFIRM", zone=found.zone, time=timezones.local_time(found.zone))
+    if found.country:
+        return _t(uid, "TZ_MULTI", country=found.country)  # a follow-up question, not a failed attempt
+    attempts = (user["tz_attempts"] or 0) + 1
+    if attempts >= MAX_TZ_ATTEMPTS:
+        db.set_fields(uid, tz_state="skipped", tz_attempts=attempts)
+        return _t(uid, "TZ_SKIPPED")
+    db.set_field(uid, "tz_attempts", attempts)
+    return _t(uid, "TZ_RETRY")
+
+
+def _should_ask_timezone(uid: int) -> bool:
+    user = db.get_user(uid)
+    return bool(user and not user["tz_set"] and not user["tz_state"] and db.message_count(uid) >= ASK_TIMEZONE_AFTER_MESSAGES)
 
 
 async def _help(uid, args):
@@ -271,7 +320,13 @@ async def handle_text(channel: str, ext_id: str, chat_id: str, text: str, lang_h
         handler = COMMANDS.get(command) if command else None
         if handler:
             return await handler(uid, args)
-        return await _coach(uid, text)
+        if (answer := await _timezone_answer(uid, text)) is not None:
+            return answer
+        reply = await _coach(uid, text)
+        if reply != _t(uid, "LLM_ERROR") and _should_ask_timezone(uid):
+            db.set_field(uid, "tz_state", "asked")
+            reply = f"{reply}\n\n{_t(uid, 'TZ_ASK')}"
+        return reply
 
 
 async def handle_unsupported(channel: str, ext_id: str, chat_id: str, lang_hint: str = "en") -> str | None:
