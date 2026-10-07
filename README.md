@@ -32,6 +32,47 @@ docker compose up -d
 
 (Stop any locally running `python -m coach.bot` first. The database is upgraded automatically on start.)
 
+## CI/CD: GitHub Actions + Ansible to the VPS
+
+`.github/workflows/ci-cd.yml` runs on every push and pull request to `main`:
+
+1. **test**: `ruff check`, `ruff format --check`, `pytest`.
+2. **build-and-push**: builds the Docker image (always, so a broken Dockerfile fails CI) and, on `main` only, pushes it to
+   `ghcr.io/coreinch/adhd-coach` tagged `main-<short sha>`.
+3. **deploy** (`main` only): installs Ansible, generates the inventory from the `DEPLOY_HOST` secret, and runs
+   `ansible/playbooks/deploy.yml`, which renders the compose file and `.env` on the VPS, logs in to GHCR, pulls the new image,
+   restarts the stack, waits for `/healthz` to report healthy (a crashing bot fails the deploy), schedules a daily database
+   backup, and removes this app's old image tags (keeping 3 for rollback).
+
+Runs on the same branch are queued, never cancelled, so the newest commit is always the one deployed last.
+
+### Repository secrets
+
+| Secret | Purpose |
+| --- | --- |
+| `DEPLOY_HOST` | VPS address (never committed; the inventory is generated in CI) |
+| `DEPLOY_SSH_KEY` | private key CI uses to SSH in as root |
+| `GHCR_PULL_PAT` | token with `read:packages`, so the VPS can pull the private image |
+| `TELEGRAM_BOT_TOKEN`, `LLM_API_KEY` | the bot's credentials |
+| `ALLOWED_USERS` | who may use the bot, e.g. `telegram:123`. **Required**: the deploy refuses to run with it empty |
+| `LLM_MODEL` | optional, defaults to `kilo-auto/free` |
+| `VIBER_AUTH_TOKEN`, `WHATSAPP_*`, `PUBLIC_URL` | optional, only for those channels |
+
+Set them with `gh secret set NAME -R coreinch/adhd-coach`.
+
+### First deploy checklist
+
+1. Confirm the port in `ansible/inventory/group_vars/production.yml` (`app_port`) is free on the VPS: `ss -tlnp`.
+2. Stop any other copy of the bot that uses the same Telegram token (a local `python -m coach.bot`, or another container):
+   two pollers on one token fight each other.
+3. Merge to `main`. The first deploy starts with an empty database. To carry over an existing one, copy it into the volume
+   before the first start (`docker compose cp coach.db coach:/data/coach.db` on the VPS, then restart), otherwise users
+   simply start fresh.
+4. Roll back by re-running the playbook with an older tag: `ansible-playbook ... -e image_tag=main-<older sha>`.
+
+Backups land in the volume's `backups/` folder (7 daily copies). They survive a bad deploy but not the loss of the VPS, so copy
+them off the box if the data matters.
+
 ## Commands
 
 `/help` lists them. Highlights: `/stuck`, `/plan`, `/overwhelm`, `/goals`, `/toolbox`, `/progress`, `/remind`, `/timezone`,
