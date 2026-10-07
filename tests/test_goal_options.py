@@ -106,16 +106,28 @@ async def test_skip_still_works(model):
     assert "Say /goal whenever" in await say("skip")
 
 
-async def test_when_the_model_cannot_suggest_the_built_in_ideas_match_what_the_user_said(model, monkeypatch):
+async def test_when_the_model_cannot_suggest_ideas_the_open_question_is_asked_instead(model, monkeypatch):
     async def broken(uid):
         raise RuntimeError("down")
 
     monkeypatch.setattr(llm, "suggest_goals", broken)
-    uid = make_user(profile={"obstacle": "starting tasks and I keep getting distracted by my phone"})
+    uid = make_user()
     reply = await say("/goal")
-    assert "Start my most important task within 10 minutes" in reply and "Work in one focused 25-minute block" in reply
-    options = flows.get(uid)["options"]
-    assert len(options) == len(set(options)) == 3
+    assert "What's one thing you'd most like to change" in reply and "1) " not in reply
+    assert flows.get(uid)["options"] == []
+    assert "Here's how I'd write that as a goal" in await say("I want to stop being late for work")  # the usual draft and confirm
+    assert "Goal saved" in await say("yes")
+
+
+async def test_numbers_are_not_choices_when_no_ideas_were_offered(model, monkeypatch):
+    async def none(uid):
+        return []
+
+    monkeypatch.setattr(llm, "suggest_goals", none)
+    uid = make_user()
+    await say("/goal")
+    assert "a little more" in await say("2")  # nothing to pick from: just a short answer to the open question
+    assert db.active_goals(uid) == []
 
 
 async def test_a_slow_model_does_not_hold_the_question_up(model, monkeypatch):
@@ -127,25 +139,17 @@ async def test_a_slow_model_does_not_hold_the_question_up(model, monkeypatch):
     monkeypatch.setattr(flows, "SUGGEST_TIMEOUT", 0.05)
     make_user()
     reply = await say("/goal")
-    assert "set a goal together" in reply and IDEAS[0] not in reply  # built-in ideas instead
+    assert "What's one thing you'd most like to change" in reply and IDEAS[0] not in reply  # the open question instead
 
 
-async def test_fewer_than_three_ideas_from_the_model_means_the_built_in_ones(model, monkeypatch):
+async def test_fewer_than_three_ideas_from_the_model_means_the_open_question(model, monkeypatch):
     async def two(uid):
         return IDEAS[:2]
 
     monkeypatch.setattr(llm, "suggest_goals", two)
     make_user()
     reply = await say("/goal")
-    assert IDEAS[0] not in reply and "3) " in reply
-
-
-def test_the_built_in_ideas_always_come_to_exactly_three_distinct_ones_in_the_users_language():
-    uid = make_user()
-    assert len(set(flows.fallback_goal_options(uid))) == 3  # nothing said yet: the general-purpose trio
-    greek = make_user(lang="el", ext="3004", profile={"obstacle": "δεν μπορώ να κοιμηθώ και αγχώνομαι"})
-    options = flows.fallback_goal_options(greek)
-    assert len(set(options)) == 3 and any("κρεβάτι" in o for o in options) and any("διάλειμμα" in o for o in options)
+    assert IDEAS[0] not in reply and "1) " not in reply and "What's one thing you'd most like to change" in reply
 
 
 async def test_after_the_interview_the_question_quotes_their_obstacle_and_offers_ideas(model):
@@ -292,7 +296,7 @@ async def test_ideas_are_started_during_the_interview_and_ready_when_the_goal_qu
     assert f"1) {IDEAS[0]}" in reply_text and len(started) == 1 and time.monotonic() - began < 0.1
 
 
-async def test_if_the_early_ideas_are_still_not_ready_at_the_end_the_built_in_ones_are_used(monkeypatch):
+async def test_if_the_early_ideas_are_still_not_ready_at_the_end_none_are_offered(monkeypatch):
     uid = make_user(ext="3021", profile={"obstacle": "starting tasks"})
 
     async def never(uid):
@@ -303,4 +307,4 @@ async def test_if_the_early_ideas_are_still_not_ready_at_the_end_the_built_in_on
     monkeypatch.setattr(flows, "SUGGEST_PREFETCH_WAIT", 0.05)
     flows.prefetch_goal_options(uid)
     options = await flows.goal_options(uid)
-    assert options == flows.fallback_goal_options(uid) and uid not in flows._prefetched
+    assert options == [] and uid not in flows._prefetched

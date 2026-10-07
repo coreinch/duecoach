@@ -197,7 +197,7 @@ async def test_the_interview_ends_by_continuing_the_conversation_not_with_a_dead
         await say(answer)
     reply = await say(ANSWERS[-1])
     assert model[-1] is not None and "just finished the getting-to-know-you interview" in model[-1]  # the coach was told to wrap up
-    assert "Do NOT end with a question" in model[-1] and "Let's set a goal together" in reply and "1) " in reply
+    assert "Do NOT end with a question" in model[-1] and "Let's turn that into a goal" in reply
     assert flows.get(uid)["step"] == "asked" and db.get_user(uid)["intake_state"] == "done"
     assert "Here's how I'd write that as a goal" in await say("I want to stop being late")
 
@@ -213,7 +213,7 @@ async def test_if_the_model_is_down_the_fixed_closing_still_explains_how_this_wo
 
     monkeypatch.setattr(llm, "reply", broken)
     reply = await say(ANSWERS[-1])
-    assert "Here's how this works" in reply and "Let's set a goal together" in reply and "3) " in reply
+    assert "Here's how this works" in reply and "Let's turn that into a goal" in reply
     assert flows.get(uid)["flow"] == "goal"
 
 
@@ -267,3 +267,20 @@ async def test_stopping_early_still_says_what_to_do_next(model):
     await say("hello")
     reply = await say("stop")
     assert "/goal" in reply and "what's on your mind" in reply
+
+
+async def test_the_goal_question_after_the_interview_offers_ideas_when_the_model_has_them(model, monkeypatch):
+    async def ideas(uid):
+        return [
+            "Put my keys in one bowl every evening for the next four weeks.",
+            "Start my first task within 10 minutes, 4 days a week for a month.",
+            "Leave 10 minutes earlier on workdays for the next month.",
+        ]
+
+    monkeypatch.setattr(llm, "suggest_goals", ideas)
+    new_user(messages=2)
+    await say("hello")
+    for answer in ANSWERS[:-1]:
+        await say(answer)
+    reply = await say(ANSWERS[-1])
+    assert 'You mentioned: "starting tasks and keeping track of time"' in reply and "1) Put my keys" in reply and "Reply 1, 2 or 3" in reply

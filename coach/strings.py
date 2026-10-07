@@ -144,6 +144,8 @@ STRINGS = {
         "HANDOFF_NO_GOAL": "Στείλε /goal όποτε θες να ορίσεις έναν στόχο.",
         "HANDOFF_NO_TZ": "Τα check-in ξεκινούν μόλις ορίσεις τη ζώνη ώρας σου με /timezone.",
         "THAT_GOAL": "αυτόν τον στόχο",
+        "GOAL_ASK_OPEN": "Ας ορίσουμε έναν στόχο μαζί. Ποιο είναι το ένα πράγμα που θα ήθελες περισσότερο να αλλάξεις ή να βελτιώσεις; Αρκεί μια-δυο προτάσεις, ή πες «παράλειψη».",
+        "GOAL_ASK_OPEN_INTAKE": "Ανέφερες: «{obstacle}». Ας το κάνουμε στόχο. Τι θα ήθελες να αλλάξεις πρώτο; Αρκεί μία πρόταση, ή πες «παράλειψη».",
         "UNSUPPORTED": "Προς το παρόν διαβάζω μόνο γραπτά μηνύματα. Γράψε μου τι σκέφτεσαι;",
     },
     "en": {
@@ -276,6 +278,8 @@ STRINGS = {
         "HANDOFF_NO_GOAL": "Send /goal whenever you want to set a goal.",
         "HANDOFF_NO_TZ": "Check-ins start once you set your timezone with /timezone.",
         "THAT_GOAL": "that goal",
+        "GOAL_ASK_OPEN": "Let's set a goal together. What's one thing you'd most like to change or get better at? A sentence or two is plenty, or say \"skip\".",
+        "GOAL_ASK_OPEN_INTAKE": 'You mentioned: "{obstacle}". Let\'s turn that into a goal. What would you most like to change first? A sentence is enough, or say "skip".',
         "UNSUPPORTED": "I can only read text messages for now. Could you type it out?",
     },
 }
