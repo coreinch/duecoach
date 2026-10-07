@@ -324,7 +324,8 @@ async def _intake_answer(uid: int, state: dict, text: str, said: str):
 def _finish_intake(uid: int, profile: dict, stopped: bool = False) -> str:
     clear(uid)
     answered = any(topic in profile for topic in INTAKE_STEPS)
-    db.set_field(uid, "intake_state", "done" if answered else "skipped")
+    # the interview answers are not stored chat messages, so they don't advance the "no questions back to back" count: release it
+    db.set_fields(uid, intake_state="done" if answered else "skipped", question_at_count=-100)
     return _t(uid, "INTAKE_STOPPED" if stopped else "INTAKE_DONE")
 
 

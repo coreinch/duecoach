@@ -182,3 +182,11 @@ async def test_notes_refresh_runs_every_twenty_new_messages_even_when_the_count_
     assert len(calls) == 1 and db.get_notes(uid) == "- likes timers" and db.get_user(uid)["notes_at_count"] == 21
     await llm.refresh_notes(uid)
     assert len(calls) == 1  # and not again until twenty more have arrived
+
+
+async def test_a_goal_named_right_after_the_interview_gets_the_goal_question(model):
+    new_user(messages=2)
+    await say("hello")
+    for answer in ANSWERS:
+        await say(answer)
+    assert "set a goal together" in await say("I want to stop being late")  # no waiting out the spacing: the interview was the spacing
