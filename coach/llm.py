@@ -26,6 +26,14 @@ MODEL_ATTEMPTS = 2  # tries per call when there is only one model to use
 
 MODELS = [LLM_MODEL, *[m for m in LLM_FALLBACK_MODELS if m != LLM_MODEL]]  # in order of preference
 _down_until: dict[str, float] = {}  # model -> time before which it is skipped (it failed recently)
+_cards_read: dict[int, list[str]] = {}  # user -> playbook cards read while writing their latest reply
+
+
+def cards_read(user_id: int) -> set[str]:
+    """Which playbook cards the coach read for this user's latest reply (tells the bot what kind of moment this was)."""
+    return set(_cards_read.get(user_id, []))
+
+
 MAX_CONSECUTIVE_ASSISTANT = 2  # in the history sent to the model: proactive check-ins pile up while a user is silent
 
 READ_PLAYBOOK = {"type": "function", "function": {"name": "get_strategy"}}
@@ -125,6 +133,7 @@ async def reply(user_id: int, user_text: str, instruction: str | None = None, co
     if instruction:
         messages.append({"role": "system", "content": instruction})
     text, empty_retries, force = "", 0, READ_PLAYBOOK if coach else None
+    _cards_read[user_id] = []
     for _ in range(MAX_TOOL_ROUNDS + MAX_EMPTY_RETRIES):
         msg = await _chat(messages, tools.TOOLS, force=force)
         force = None  # only the first round is forced; after that the model answers or uses other tools
@@ -147,6 +156,8 @@ async def reply(user_id: int, user_text: str, instruction: str | None = None, co
         )
         for call in msg.tool_calls:
             result = tools.run_tool(user_id, call.function.name, call.function.arguments)
+            if call.function.name == "get_strategy" and result.startswith(tuple(playbook.IDS)):
+                _cards_read[user_id].append(result.split(" ", 1)[0])
             # log the outcome, not the arguments: they contain what the user wrote about their life
             log.info("tool %s -> %s", call.function.name, result.split(":", 1)[0])
             messages.append({"role": "tool", "tool_call_id": call.id, "content": result})
