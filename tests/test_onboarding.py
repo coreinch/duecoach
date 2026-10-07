@@ -18,7 +18,7 @@ def model(monkeypatch):
     async def fake_draft(uid, kind, text, previous=None, goal=""):
         return f"{kind}: {text}"
 
-    async def fake_reply(uid, text, instruction=None, coach=True):
+    async def fake_reply(uid, text, instruction=None):
         db.add_message(uid, "user", text)
         db.add_message(uid, "assistant", "coached")
         return "coached"
@@ -26,7 +26,6 @@ def model(monkeypatch):
     monkeypatch.setattr(llm, "suggest_goals", fake_suggest)
     monkeypatch.setattr(llm, "draft", fake_draft)
     monkeypatch.setattr(llm, "reply", fake_reply)
-    monkeypatch.setattr(llm, "cards_read", lambda uid: set())
 
 
 async def say(text, ext="6006", lang="en"):

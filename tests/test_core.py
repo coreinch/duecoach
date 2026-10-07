@@ -10,8 +10,8 @@ def ai(monkeypatch):
     """Replace the model: records what it was asked and answers 'coached'."""
     calls = []
 
-    async def fake_reply(uid, text, instruction=None, coach=True):
-        calls.append((uid, text, instruction, coach))
+    async def fake_reply(uid, text, instruction=None):
+        calls.append((uid, text, instruction))
         return "coached"
 
     monkeypatch.setattr(llm, "reply", fake_reply)
@@ -49,7 +49,6 @@ async def test_coaching_commands_and_plain_text_go_to_the_model(ai, user):
     await say("hello there")
     await say("/progress")
     assert [c[1] for c in ai] == ["/stuck my taxes", "hello there", "/progress"]
-    assert ai[0][3] is True and ai[2][3] is False  # /progress is a note, not a coaching turn
     await say("/unknowncommand")
     assert ai[-1][1] == "/unknowncommand"
 
@@ -94,7 +93,7 @@ async def test_messages_from_one_user_are_handled_one_at_a_time(user, monkeypatc
 
     active, peak = 0, 0
 
-    async def slow_reply(uid, text, instruction=None, coach=True):
+    async def slow_reply(uid, text, instruction=None):
         nonlocal active, peak
         active += 1
         peak = max(peak, active)

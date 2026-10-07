@@ -39,7 +39,7 @@ def outbox(monkeypatch):
     sent = []
     kinds = {prompts.MORNING: "morning", prompts.EVENING: "evening", prompts.PULSE: "pulse", prompts.WEEKLY_REVIEW: "review"}
 
-    async def fake_reply(uid, text, instruction=None, coach=True):
+    async def fake_reply(uid, text, instruction=None):
         return kinds.get(instruction, "reengage")
 
     class FakeChannel:
@@ -128,7 +128,7 @@ async def test_failed_check_ins_back_off_instead_of_retrying_every_pass(clock, o
     enable_checkins(uid)
     calls = []
 
-    async def failing_reply(uid, text, instruction=None, coach=True):
+    async def failing_reply(uid, text, instruction=None):
         calls.append(clock.t)
         raise RuntimeError("429")
 
@@ -144,7 +144,7 @@ async def test_user_writing_during_generation_is_not_counted_as_ignoring(clock, 
     uid = user["user_id"]
     enable_checkins(uid)
 
-    async def slow_reply(uid, text, instruction=None, coach=True):
+    async def slow_reply(uid, text, instruction=None):
         db.set_field(uid, "last_inbound", time.time() + 1)  # they write while the check-in is being prepared
         return "hello"
 

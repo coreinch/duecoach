@@ -11,7 +11,7 @@ def model(monkeypatch):
     """The model is replaced: drafts follow a script, coaching replies record what they were asked."""
     log = {"coach": [], "drafts": []}
 
-    async def fake_reply(uid, text, instruction=None, coach=True):
+    async def fake_reply(uid, text, instruction=None):
         log["coach"].append((text, instruction))
         return "coached"
 

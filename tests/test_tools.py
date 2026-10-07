@@ -81,10 +81,8 @@ def test_coaching_state_shows_time_and_record(user):
     assert "Sleep before midnight" in state and "Check-ins: off" in state
 
 
-def test_every_playbook_card_is_complete_and_the_index_is_compact():
+def test_every_playbook_card_is_complete_and_the_whole_text_is_bounded():
     ids = [c["id"] for c in playbook.CARDS]
     assert len(ids) == len(set(ids)) >= 50
     assert all(set(c) == {"id", "when", "how", "source"} and all(c.values()) for c in playbook.CARDS)
-    assert run(1, "get_strategy", id="overload").startswith("overload")
-    assert "unknown strategy" in run(1, "get_strategy", id="nope")
-    assert len(playbook.index_text().split()) < 600
+    assert len(playbook.full_text().split()) < 6000

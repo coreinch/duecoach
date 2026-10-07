@@ -10,7 +10,7 @@ def model(monkeypatch):
     """The model is replaced; `asked` records the instruction each coaching reply was given."""
     asked = []
 
-    async def fake_reply(uid, text, instruction=None, coach=True):
+    async def fake_reply(uid, text, instruction=None):
         asked.append(instruction)
         if text:
             db.add_message(uid, "user", text)
@@ -22,7 +22,6 @@ def model(monkeypatch):
 
     monkeypatch.setattr(llm, "reply", fake_reply)
     monkeypatch.setattr(llm, "draft", fake_draft)
-    monkeypatch.setattr(llm, "cards_read", lambda uid: set())
     return asked
 
 
@@ -208,7 +207,7 @@ async def test_if_the_model_is_down_the_fixed_closing_still_explains_how_this_wo
     for answer in ANSWERS[:-1]:
         await say(answer)
 
-    async def broken(uid, text, instruction=None, coach=True):
+    async def broken(uid, text, instruction=None):
         raise RuntimeError("down")
 
     monkeypatch.setattr(llm, "reply", broken)
@@ -223,7 +222,7 @@ async def test_the_coachs_closing_question_is_dropped_so_the_goal_question_is_th
     for answer in ANSWERS[:-1]:
         await say(answer)
 
-    async def asks(uid, text, instruction=None, coach=True):
+    async def asks(uid, text, instruction=None):
         db.add_message(uid, "user", text)
         db.add_message(uid, "assistant", "x")
         return "Mornings and starting are the heart of it. Shall we begin?"

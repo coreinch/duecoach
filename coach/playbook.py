@@ -1,4 +1,4 @@
-"""Coaching playbook: short strategy cards the coach looks up with the get_strategy tool.
+"""Coaching playbook: short strategy cards that are put, whole, into the coach's prompt (see full_text).
 
 The ideas come from ADHD coaching practice as described in Prevatt & Levrini, "ADHD Coaching: A Guide for Mental Health
 Professionals" (APA, 2015); the wording here is our own. Each card says when to use it and how to coach it in chat.
@@ -561,25 +561,7 @@ CARDS = [
     },
 ]
 
-_BY_ID = {c["id"]: c for c in CARDS}
-IDS = list(_BY_ID)
 
-
-def _short(when: str, limit: int = 60) -> str:
-    """The first phrases of a card's 'when' line, cut at a comma: enough for the model to match, cheaper than the whole line."""
-    out = ""
-    for part in when.split(", "):
-        if out and len(out) + len(part) > limit:
-            break
-        out = f"{out}, {part}" if out else part
-    return out
-
-
-def index_text() -> str:
-    """One line per card for the system prompt."""
-    return "\n".join(f"- {c['id']}: {_short(c['when'])}" for c in CARDS)
-
-
-def lookup(card_id: str) -> str | None:
-    card = _BY_ID.get(card_id)
-    return None if card is None else f"{card['id']} - use when: {card['when']}\nHow to coach it: {card['how']}"
+def full_text() -> str:
+    """The whole playbook as text for the system prompt: every card, so the coach can apply the one that fits in a single call."""
+    return "\n\n".join(f"{c['id']} (use when: {c['when']})\n{c['how']}" for c in CARDS)

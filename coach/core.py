@@ -61,9 +61,9 @@ async def _refresh_notes(uid: int) -> None:
         log.exception("notes refresh failed for %s", uid)
 
 
-async def _coach(uid: int, text: str, instruction: str | None = None, coach: bool = True) -> str:
+async def _coach(uid: int, text: str, instruction: str | None = None) -> str:
     try:
-        out = await llm.reply(uid, text, instruction, coach=coach)
+        out = await llm.reply(uid, text, instruction)
     except Exception:
         log.exception("LLM call failed")
         return _t(uid, "LLM_ERROR")
@@ -204,7 +204,7 @@ async def _coach_with_question(uid: int, text: str) -> str:
         kind = flows.question_due(uid, text) or ("timezone" if _should_ask_timezone(uid) else None)
     ideas = asyncio.create_task(flows.goal_options(uid)) if kind == "goal" else None  # runs while the coach writes
     reply = await _coach(uid, text, prompts.QUESTION_FOLLOWS if kind else None)
-    if kind is None or reply == _t(uid, "LLM_ERROR") or flows.distress_in_reply(uid):
+    if kind is None or reply == _t(uid, "LLM_ERROR"):
         if ideas:
             ideas.cancel()
         return reply
@@ -307,7 +307,7 @@ async def _toolbox(uid, args):
 
 
 async def _progress(uid, args):
-    return await _coach(uid, "/progress", prompts.PROGRESS, coach=False)  # a written note, not a coaching turn
+    return await _coach(uid, "/progress", prompts.PROGRESS)
 
 
 def _profile_text(uid: int) -> str:
