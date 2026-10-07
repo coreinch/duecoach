@@ -1,0 +1,31 @@
+services:
+  coach:
+    build: .
+    image: adhd-coach
+    restart: unless-stopped
+    init: true                # reaps child processes and forwards SIGTERM so the bot can shut down cleanly
+    stop_grace_period: 30s
+    env_file: .env
+    environment:
+      DB_PATH: /data/coach.db
+      WEB_HOST: 0.0.0.0
+    volumes:
+      - coach-data:/data      # the database lives here: back this volume up
+    ports:
+      # webhooks for Viber / WhatsApp (put a TLS reverse proxy or tunnel in front); not needed for Telegram only
+      - "127.0.0.1:8080:8080"
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "5"
+
+volumes:
+  coach-data:

@@ -1,0 +1,9 @@
+.env
+*.db
+*.db-*
+*.log
+coach.lock
+__pycache__/
+.venv/
+.pytest_cache/
+.ruff_cache/
