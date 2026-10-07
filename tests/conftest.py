@@ -13,7 +13,7 @@ os.environ.update(
 
 import pytest  # noqa: E402
 
-from coach import core, db  # noqa: E402
+from coach import core, db, llm  # noqa: E402
 
 
 @pytest.fixture(autouse=True)
@@ -25,6 +25,16 @@ def database(tmp_path):
     core._warned.clear()
     yield
     db.close()
+
+
+@pytest.fixture(autouse=True)
+def no_real_model(monkeypatch):
+    """A test that forgets to replace the model fails loudly instead of calling the real gateway."""
+
+    async def refuse(*args, **kwargs):
+        raise RuntimeError("the real model must not be called from tests")
+
+    monkeypatch.setattr(llm, "_complete", refuse)
 
 
 @pytest.fixture

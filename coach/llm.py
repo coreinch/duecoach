@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import re
 import time
 
 import openai
@@ -182,6 +183,32 @@ async def refresh_notes(user_id: int) -> None:
     notes = await _complete([{"role": "user", "content": prompt}], max_tokens=1200)
     if notes:
         db.set_fields(user_id, notes=notes, notes_at_count=count)
+
+
+async def suggest_goals(user_id: int) -> list[str]:
+    """Three goal ideas drawn from what the user has said (interview answers, notes, recent messages); [] if the model can't."""
+    profile, notes = db.get_profile(user_id), db.get_notes(user_id)
+    said = [m["content"] for m in db.recent_messages(user_id, 12) if m["role"] == "user"][-6:]
+    labels = {
+        "why": "Why they came",
+        "tried": "What they tried",
+        "obstacle": "What gets in their way",
+        "strength": "Strengths",
+        "rhythm": "Their day",
+    }
+    parts = [f"{label}: {profile[key]}" for key, label in labels.items() if profile.get(key)]
+    if notes:
+        parts.append(f"Notes: {notes}")
+    if said:
+        parts.append("Recent messages: " + " | ".join(said))
+    if not parts:
+        return []
+    language = prompts.LANGUAGE_NAME.get(db.get_user(user_id)["lang"], "English")
+    system = prompts.SUGGEST_GOALS.format(language=language, material="\n".join(parts))
+    out = await _complete([{"role": "system", "content": system}, {"role": "user", "content": "Suggest the three goals."}], max_tokens=600)
+    lines = [re.sub(r"^\s*(?:\d+[.)]|[-*\u2022])\s*", "", line).strip().strip("\"'\u00ab\u00bb\u201c\u201d ") for line in out.splitlines()]
+    lines = [line for line in lines if 10 <= len(line) <= 240]
+    return lines[:3] if len(lines) >= 3 else []
 
 
 async def draft(user_id: int, kind: str, text: str, previous: str | None = None, goal: str = "") -> str | None:
