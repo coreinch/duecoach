@@ -74,7 +74,7 @@ STRINGS = {
             "Αν βρίσκεσαι σε κρίση ή κίνδυνο, κάλεσε τον τοπικό αριθμό έκτακτης ανάγκης (112 στην ΕΕ) αντί για εμένα.\n\n"
             "Στείλε /agree για να συνεχίσουμε."
         ),
-        "AGREED": "Ευχαριστώ, είμαστε έτοιμοι. Πες μου τι σε έφερε εδώ. Τα check-in ξεκινούν μόλις ξέρω τη ζώνη ώρας σου. Το /help δείχνει τις εντολές.",
+        "AGREED": "Ευχαριστώ, είμαστε έτοιμοι. Να πώς θα πάει: μερικές γρήγορες ερωτήσεις για σένα, μετά διαλέγουμε έναν στόχο και ένα μικρό βήμα για αυτή την εβδομάδα, και θα είμαι δίπλα σου στην πορεία. Για αρχή, πες μου τι σε έφερε εδώ.",
         "DELETE_CONFIRM": "Αυτό σβήνει οριστικά ό,τι έχω για σένα: ιστορικό συνομιλίας, σημειώσεις, στόχους, εβδομαδιαίους στόχους, εργαλειοκουτί και υπενθυμίσεις. Στείλε /deletedata confirm για να προχωρήσω.",
         "DELETED": "Έγινε. Όλα όσα είχα για σένα σβήστηκαν. Μπορείς να ξεκινήσεις από την αρχή όποτε θέλεις.",
         "RATE_LIMITED": "Στέλνεις μηνύματα πολύ γρήγορα. Θα κάνω μια παύση λίγων λεπτών για να προλαβαίνω.",
@@ -92,7 +92,7 @@ STRINGS = {
         "GOAL_SKIPPED": "Κανένα πρόβλημα. Γράψε /goal όποτε θέλεις να ορίσεις έναν.",
         "GOAL_FULL": "Έχεις ήδη το μέγιστο των 4 στόχων. Ολοκλήρωσε ή άφησε έναν πριν προσθέσεις άλλον.",
         "REVISE": "Τι θα άλλαζες;",
-        "OBJ_ASK": "Ποιο είναι ένα μικρό βήμα προς το «{goal}» που μπορείς να κάνεις αυτή την εβδομάδα; Πες πότε και πού αν μπορείς, ή πες «παράλειψη».",
+        "OBJ_ASK": "Ποιο είναι ένα μικρό βήμα προς {goal} που μπορείς να κάνεις αυτή την εβδομάδα; Πες πότε και πού αν μπορείς, ή πες «παράλειψη».",
         "OBJ_MORE": "Πες μου λίγο περισσότερα για το βήμα, σε μία-δυο προτάσεις.",
         "OBJ_CONFIRM": "Έτσι θα έγραφα το βήμα: «{step}»\nΣου ταιριάζει; Απάντησε ναι, ή πες μου τι να αλλάξω.",
         "OBJ_REWARD": "Διάλεξε μια μικρή ανταμοιβή για όταν το κάνεις (έναν καφέ, μια βόλτα, ένα επεισόδιο), ή απάντησε κανένα.",
@@ -137,6 +137,13 @@ STRINGS = {
         "TZ_GIVE_UP": "Κανένα πρόβλημα, το αφήνω προς το παρόν. Όρισέ την όποτε θες με /timezone Europe/Athens· τα check-in ξεκινούν μόλις οριστεί.",
         "CHECKINS_ENABLED": "Θα σε ρωτάω αφού περάσουν περίπου {minutes} λεπτά ησυχίας, και πιο αραιά αν δεν απαντάς. Με /interval off σταματούν, με /interval 60 τα αραιώνεις.",
         "GOAL_ASK_INTAKE": "Ανέφερες: «{obstacle}». Ας ορίσουμε έναν στόχο μαζί. Να τρεις ιδέες:\n\n1) {a}\n2) {b}\n3) {c}\n\nΑπάντησε 1, 2 ή 3, ή γράψε τον δικό σου στόχο σε μία πρόταση. Μπορείς και να πεις «παράλειψη».",
+        "TZ_ASK_LAST": "Μία τελευταία ερώτηση για να δουλεύει όλο αυτό γύρω από τη μέρα σου: πού μένεις; Πες μου την πόλη (ή τη χώρα) σου και θα ορίσω τη ζώνη ώρας, ώστε υπενθυμίσεις και check-in να έρχονται στη σωστή ώρα. Μπορείς και να πεις «παράλειψη».",
+        "HANDOFF": "Είμαστε έτοιμοι. Μίλα μου όποτε κάτι σε εμποδίζει ή θες μια σπρωξιά, για παράδειγμα «δεν μπορώ να ξεκινήσω» ή «με πνίγουν όλα».",
+        "HANDOFF_STEP": "Το βήμα σου αυτή την εβδομάδα: «{step}». Πες μου πότε σκέφτεσαι να το κάνεις και θα σου το θυμίσω.",
+        "HANDOFF_NO_STEP": "Στείλε /step όταν θες να διαλέξεις το βήμα της εβδομάδας.",
+        "HANDOFF_NO_GOAL": "Στείλε /goal όποτε θες να ορίσεις έναν στόχο.",
+        "HANDOFF_NO_TZ": "Τα check-in ξεκινούν μόλις ορίσεις τη ζώνη ώρας σου με /timezone.",
+        "THAT_GOAL": "αυτόν τον στόχο",
         "UNSUPPORTED": "Προς το παρόν διαβάζω μόνο γραπτά μηνύματα. Γράψε μου τι σκέφτεσαι;",
     },
     "en": {
@@ -199,7 +206,7 @@ STRINGS = {
             "erase everything with /deletedata. If you're in crisis or danger, contact your local emergency number (112 in the EU) "
             "instead of me.\n\nSend /agree to continue."
         ),
-        "AGREED": "Thanks, you're set. Tell me what brought you here. Check-ins start once I know your timezone. /help lists the commands.",
+        "AGREED": "Thanks, you're set. Here's how this goes: a few quick questions about you, then we pick a goal and one small step for this week, and I'll be with you along the way. To start, tell me what brought you here.",
         "DELETE_CONFIRM": "This permanently erases everything I have about you: chat history, notes, goals, objectives, toolbox and reminders. Send /deletedata confirm to go ahead.",
         "DELETED": "Done. Everything I had about you has been erased. You're welcome to start fresh any time.",
         "RATE_LIMITED": "You're sending messages very fast. I'll pause for a few minutes so I can keep up.",
@@ -217,7 +224,7 @@ STRINGS = {
         "GOAL_SKIPPED": "No problem. Say /goal whenever you want to set one.",
         "GOAL_FULL": "You already have the maximum of 4 goals. Finish or drop one before adding another.",
         "REVISE": "What would you change?",
-        "OBJ_ASK": 'What\'s one small step toward "{goal}" you could take this week? Say when and where if you can, or say "skip".',
+        "OBJ_ASK": 'What\'s one small step toward {goal} you could take this week? Say when and where if you can, or say "skip".',
         "OBJ_MORE": "Tell me a little more about the step, in a sentence or two.",
         "OBJ_CONFIRM": 'I\'d write the step like this: "{step}"\nDoes that work? Reply yes, or tell me what to change.',
         "OBJ_REWARD": "Pick a small reward for when you do it (a coffee, a walk, an episode of something), or reply none.",
@@ -262,6 +269,13 @@ STRINGS = {
         "TZ_GIVE_UP": "No problem, I'll leave it for now. Set it any time with /timezone Europe/Athens; check-ins start once it's set.",
         "CHECKINS_ENABLED": "I'll check in after about {minutes} minutes of quiet, and less often if you don't reply. /interval off stops it, /interval 60 spaces it out.",
         "GOAL_ASK_INTAKE": 'You mentioned: "{obstacle}". Let\'s set a goal together. Here are three ideas:\n\n1) {a}\n2) {b}\n3) {c}\n\nReply 1, 2 or 3, or tell me your own goal in a sentence. You can also say "skip".',
+        "TZ_ASK_LAST": 'One last thing so this works around your day: where do you live? Tell me your city (or country) and I\'ll set your timezone, so reminders and check-ins land at the right time. You can also say "skip".',
+        "HANDOFF": 'You\'re all set. Talk to me whenever something gets in the way or you want a nudge, for example "I can\'t get started" or "I\'m overwhelmed".',
+        "HANDOFF_STEP": 'Your step this week: "{step}". Tell me when you plan to do it and I\'ll remind you.',
+        "HANDOFF_NO_STEP": "Send /step when you want to pick this week's step.",
+        "HANDOFF_NO_GOAL": "Send /goal whenever you want to set a goal.",
+        "HANDOFF_NO_TZ": "Check-ins start once you set your timezone with /timezone.",
+        "THAT_GOAL": "that goal",
         "UNSUPPORTED": "I can only read text messages for now. Could you type it out?",
     },
 }

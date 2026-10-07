@@ -74,6 +74,12 @@ async def _coach(uid: int, text: str, instruction: str | None = None, coach: boo
 # --- commands: async fn(uid, args) -> reply text ---
 
 
+def _then_handoff(uid: int, reply: str) -> str:
+    """The timezone question is settled: if this was the last stage of the setup, finish with the hand-over to normal coaching."""
+    closing = flows.handoff(uid)
+    return f"{reply}\n\n{closing}" if closing else reply
+
+
 OPEN_TZ_STATES = (
     "asked",
     "verify",
@@ -108,7 +114,7 @@ async def _timezone_answer(uid: int, text: str) -> str | None:
             return None
         if said in SKIP or said in NO:
             db.set_fields(uid, tz_state="skipped")
-            return _t(uid, "TZ_SKIPPED")
+            return _then_handoff(uid, _t(uid, "TZ_SKIPPED"))
         found = timezones.resolve(text)
         if found.zone:
             return _assume_timezone(uid, found.zone, corrections=0)
@@ -117,7 +123,7 @@ async def _timezone_answer(uid: int, text: str) -> str | None:
         attempts = (user["tz_attempts"] or 0) + 1
         if attempts >= MAX_TZ_ATTEMPTS:
             db.set_fields(uid, tz_state="skipped", tz_attempts=attempts)
-            return _t(uid, "TZ_SKIPPED")
+            return _then_handoff(uid, _t(uid, "TZ_SKIPPED"))
         db.set_field(uid, "tz_attempts", attempts)
         return _t(uid, "TZ_RETRY")
     if state == "time":  # they said the local time was wrong and were asked what time it is
@@ -125,7 +131,7 @@ async def _timezone_answer(uid: int, text: str) -> str | None:
     # state == "verify": the zone is already in use; this is the answer to "it's 16:36 where you are, right?"
     if said in YES:
         db.set_fields(uid, tz_state="done")
-        return _t(uid, "TZ_VERIFIED")
+        return _then_handoff(uid, _t(uid, "TZ_VERIFIED"))
     if said in NO:
         db.set_fields(uid, tz_state="time")
         return _t(uid, "TZ_ASK_TIME")
@@ -136,6 +142,7 @@ async def _timezone_answer(uid: int, text: str) -> str | None:
     if found.zone and found.zone != user["tz"]:  # they just named a different place
         return await _correct_timezone(uid, text)
     db.set_fields(uid, tz_state="done")  # they moved on without objecting: the assumption stands
+    flows.mark_onboarded(uid)  # ...and so the setup is over: no hand-over message on top of whatever they are saying
     return None
 
 
@@ -149,7 +156,7 @@ async def _correct_timezone(uid: int, text: str) -> str:
         if zone:
             db.confirm_timezone(uid, zone)
             db.set_fields(uid, tz_state="done", tz_candidate="", tz_attempts=0)
-            return _t(uid, "TZ_FIXED", time=timezones.local_time(zone))
+            return _then_handoff(uid, _t(uid, "TZ_FIXED", time=timezones.local_time(zone)))
     else:
         found = timezones.resolve(text)
         if found.zone and corrections <= MAX_TZ_CORRECTIONS:
@@ -159,7 +166,7 @@ async def _correct_timezone(uid: int, text: str) -> str:
     if corrections >= MAX_TZ_CORRECTIONS:  # we could not fix it: better no timezone (and no check-ins) than a wrong one
         db.revoke_timezone(uid)
         db.set_fields(uid, tz_state="skipped", tz_candidate="", tz_attempts=corrections)
-        return _t(uid, "TZ_GIVE_UP")
+        return _then_handoff(uid, _t(uid, "TZ_GIVE_UP"))
     db.set_fields(uid, tz_state="time", tz_attempts=corrections)
     return _t(uid, "TZ_TIME_RETRY")
 

@@ -292,6 +292,52 @@ def note_question_asked(uid: int) -> None:
 # --- starting a flow (each returns the question to send) ---
 
 
+# --- the setup conversation: intro -> interview -> goal -> first step -> timezone -> hand-over to normal coaching ---
+#
+# Each stage ends by leading into the next one in the same message, so the user is never left wondering what to do. The hand-over
+# happens once, when the setup is over, and says what happens from here and what to do first.
+
+
+def mark_onboarded(uid: int) -> None:
+    db.set_field(uid, "onboarded", 1)
+
+
+def handoff(uid: int) -> str:
+    """The last message of the setup (shown once): how to use the bot from here, and the first thing to do with the step."""
+    user = db.get_user(uid)
+    if user["onboarded"]:
+        return ""
+    mark_onboarded(uid)
+    goals, opens = db.active_goals(uid), db.open_objectives(uid)
+    parts = [_t(uid, "HANDOFF")]
+    if opens:
+        parts.append(_t(uid, "HANDOFF_STEP", step=opens[0]["text"]))
+    elif goals:
+        parts.append(_t(uid, "HANDOFF_NO_STEP"))
+    else:
+        parts.append(_t(uid, "HANDOFF_NO_GOAL"))
+    if not user["tz_set"]:
+        parts.append(_t(uid, "HANDOFF_NO_TZ"))
+    return " ".join(parts)
+
+
+def onboarding_next(uid: int) -> str:
+    """What follows a finished setup stage: the timezone question if it is still open, otherwise the hand-over; "" once all done."""
+    user = db.get_user(uid)
+    if user["onboarded"] or user["tz_state"] in ("asked", "verify", "time"):
+        return ""
+    if not user["tz_set"] and not user["tz_state"]:
+        db.set_fields(uid, tz_state="asked", tz_attempts=0)
+        note_question_asked(uid)
+        return _t(uid, "TZ_ASK_LAST")
+    return handoff(uid)
+
+
+def _with_next_setup_step(uid: int, reply: str) -> str:
+    following = onboarding_next(uid)
+    return f"{reply}\n\n{following}" if following else reply
+
+
 def start_intake(uid: int, restart: bool = False) -> str | None:
     """Begin (or resume) the intake interview at the first topic not yet answered; /intake with restart=True asks them all again."""
     profile = {} if restart else db.get_profile(uid)
@@ -330,7 +376,9 @@ async def start_objective(uid: int) -> str:
         return _t(uid, "OBJ_FULL")
     put(uid, "objective", "asked", started=time.time(), goal_id=goals[0]["id"], goal=goals[0]["text"], vague=0)
     db.set_field(uid, "obj_asked_at", time.time())
-    return _t(uid, "OBJ_ASK", goal=goals[0]["text"])
+    goal_text = goals[0]["text"].strip().rstrip(".")
+    # a short goal is quoted; a long one was just shown, so repeating it would only be clumsy
+    return _t(uid, "OBJ_ASK", goal=f"\u201c{goal_text}\u201d" if len(goal_text) <= 60 else _t(uid, "THAT_GOAL"))
 
 
 def _due_followup(uid: int):
@@ -458,7 +506,8 @@ def _decline(uid: int, state: dict) -> str:
     clear(uid)
     column = {"goal": "goal_asked_at", "objective": "obj_asked_at", "followup": "followup_asked_at"}[state["flow"]]
     db.set_field(uid, column, time.time())
-    return _t(uid, {"goal": "GOAL_SKIPPED", "objective": "OBJ_SKIPPED", "followup": "FU_LATER"}[state["flow"]])
+    reply = _t(uid, {"goal": "GOAL_SKIPPED", "objective": "OBJ_SKIPPED", "followup": "FU_LATER"}[state["flow"]])
+    return _with_next_setup_step(uid, reply) if state["flow"] != "followup" else reply
 
 
 async def _drafting(uid: int, state: dict, text: str, said: str):
@@ -527,7 +576,8 @@ async def _reward(uid: int, state: dict, text: str, said: str):
     clear(uid)
     if saved is None:
         return _t(uid, "OBJ_FULL")
-    return _t(uid, "OBJ_SAVED", step=state["candidate"], reward=_t(uid, "OBJ_REWARD_NOTE", reward=reward) if reward else "")
+    saved_text = _t(uid, "OBJ_SAVED", step=state["candidate"], reward=_t(uid, "OBJ_REWARD_NOTE", reward=reward) if reward else "")
+    return _with_next_setup_step(uid, saved_text)
 
 
 def _parse_outcome(said: str) -> str | None:

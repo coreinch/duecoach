@@ -167,11 +167,9 @@ async def test_only_one_question_at_a_time_goal_before_timezone(person):
     for i in range(2):
         db.add_message(person, "user", f"x{i}")  # now six messages: both questions would be due
     reply = await say("hello")
-    assert "set a goal together" in reply and "where do you live" not in reply
-    await say("skip")
-    assert "where do you live" not in await say("one more thing")  # questions are never back to back...
-    seed(person, flows.QUESTION_GAP)
-    assert "where do you live" in await say("and another")  # the timezone question follows once the goal one is out of the way
+    assert "set a goal together" in reply and "where do you live" not in reply  # the goal question first, alone
+    after_skip = await say("skip")
+    assert "Say /goal whenever" in after_skip and "where do you live" in after_skip  # and the timezone question straight after it
 
 
 async def test_an_unanswered_question_expires_after_a_day(person):
