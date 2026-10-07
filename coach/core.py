@@ -208,10 +208,12 @@ async def _coach_with_question(uid: int, text: str) -> str:
         if ideas:
             ideas.cancel()
         return reply
+    question: str | None
     if kind == "timezone":
         db.set_field(uid, "tz_state", "asked")
         question = _t(uid, "TZ_ASK")
     elif kind == "goal":
+        assert ideas is not None
         question = await flows.start_goal(uid, options=await ideas)
     else:
         question = await flows.start_question(uid, kind, text)

@@ -1,6 +1,7 @@
 """Outbound delivery. Each channel registers itself here under its name; inbound is handled by the channel modules."""
 
 import logging
+from typing import Protocol
 
 log = logging.getLogger("coach.channels")
 
@@ -15,7 +16,15 @@ class Unreachable(SendError):
     """The recipient can never be messaged (they blocked the bot, deleted the chat, unsubscribed): retrying is pointless."""
 
 
-REGISTRY: dict[str, object] = {}
+class Channel(Protocol):
+    name: str
+
+    def can_send(self, user, template_ok: bool = True) -> bool: ...
+
+    async def send(self, user, text: str) -> None: ...
+
+
+REGISTRY: dict[str, Channel] = {}
 
 
 def register(channel) -> None:

@@ -4,10 +4,11 @@ import json
 import os
 import sqlite3
 import time
+from typing import Any
 
 from .config import CHECKIN_INTERVAL_MINUTES, DB_PATH, EVENING_HOUR, MORNING_HOUR, TIMEZONE
 
-_conn: sqlite3.Connection | None = None
+_conn: Any = None  # the one shared connection, opened by init()
 
 
 def _columns(table: str) -> set[str]:
@@ -265,7 +266,8 @@ def get_or_create_user(channel: str, ext_id: str, chat_id: str, lang: str = "en"
     return get_user(user_id)
 
 
-def get_user(user_id: int) -> sqlite3.Row | None:
+def get_user(user_id: int) -> Any:
+    """The user row, or None once the user has been deleted (typed Any: nearly every caller holds a live user)."""
     return _conn.execute("SELECT * FROM users WHERE user_id=?", (user_id,)).fetchone()
 
 
@@ -275,6 +277,16 @@ def get_user_by_identity(channel: str, ext_id: str) -> sqlite3.Row | None:
 
 def all_users() -> list[sqlite3.Row]:
     return _conn.execute("SELECT * FROM users").fetchall()
+
+
+def users_for_checkins(now_ts: float) -> list[sqlite3.Row]:
+    """Users who could be due a check-in: consented, check-ins on, not snoozed, not waiting for a retry. (A coarse filter in SQL;
+    the bot's planner makes the final decision, so a table with many idle users is not walked in Python every minute.)"""
+    return _conn.execute(
+        "SELECT * FROM users WHERE consent_at IS NOT NULL AND consent_at > 0 AND interval_min > 0"
+        " AND COALESCE(snooze_until, 0) <= ? AND COALESCE(checkin_retry_at, 0) <= ?",
+        (now_ts, now_ts),
+    ).fetchall()
 
 
 def set_fields(user_id: int, **fields: str | int | float) -> None:
@@ -297,7 +309,7 @@ def confirm_timezone(user_id: int, zone: str) -> bool:
     """
     user = get_user(user_id)
     switched_on = not user["tz_set"] and not (user["interval_min"] or 0)
-    fields = {"tz": zone, "tz_set": 1}
+    fields: dict[str, Any] = {"tz": zone, "tz_set": 1}
     if switched_on:
         fields["interval_min"] = CHECKIN_INTERVAL_MINUTES
     set_fields(user_id, **fields)

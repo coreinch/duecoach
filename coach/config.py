@@ -4,6 +4,19 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+
+def _number(name: str, default: float, kind: type = int, low: float | None = None, high: float | None = None):
+    """A numeric setting from the environment; a typo stops the start-up with a message that names the setting."""
+    raw = os.getenv(name, "").strip()
+    try:
+        value = kind(raw) if raw else kind(default)
+    except ValueError:
+        raise SystemExit(f"{name} must be a number, got {raw!r}") from None
+    if (low is not None and value < low) or (high is not None and value > high):
+        raise SystemExit(f"{name} must be between {low} and {high}, got {value}")
+    return value
+
+
 # --- channels: a channel is enabled when its credentials are set ---
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "")
 VIBER_AUTH_TOKEN = os.getenv("VIBER_AUTH_TOKEN", "")
@@ -18,7 +31,7 @@ WHATSAPP_TEMPLATE = os.getenv("WHATSAPP_TEMPLATE", "")  # approved template with
 # Viber and WhatsApp deliver messages to a public HTTPS webhook served by this process.
 PUBLIC_URL = os.getenv("PUBLIC_URL", "").rstrip("/")
 WEB_HOST = os.getenv("WEB_HOST", "127.0.0.1")
-WEB_PORT = int(os.getenv("WEB_PORT", "8080"))
+WEB_PORT = _number("WEB_PORT", 8080, low=1, high=65535)
 
 
 def normalize_ext_id(channel: str, ext_id: str) -> str:
@@ -53,35 +66,40 @@ if not LLM_API_KEY:
 LLM_BASE_URL = os.getenv("LLM_BASE_URL", "https://api.kilo.ai/api/gateway")
 LLM_MODEL = os.getenv("LLM_MODEL", "kilo-auto/free")
 # Models to try, in order, when LLM_MODEL fails (an outage, a rate limit, a timeout, or a model that rejects a request).
-# Comma-separated. They must support tool calling, since the coach reads its playbook through a tool.
+# Comma-separated. They must support tool calling (reminders, goals and the like are tools).
 LLM_FALLBACK_MODELS = [m.strip() for m in os.getenv("LLM_FALLBACK_MODELS", "").split(",") if m.strip()]
 # Seconds a model that just failed is skipped, so each message doesn't wait on a model that is down.
-LLM_MODEL_COOLDOWN = int(os.getenv("LLM_MODEL_COOLDOWN", "120"))
+LLM_MODEL_COOLDOWN = _number("LLM_MODEL_COOLDOWN", 120, low=0, high=None)
 # Stop trying further models once a request has taken this many seconds (each model can use up to LLM_TIMEOUT).
-LLM_BUDGET = float(os.getenv("LLM_BUDGET", "150"))
-LLM_TIMEOUT = float(os.getenv("LLM_TIMEOUT", "60"))  # seconds per model call
-LLM_CONCURRENCY = int(os.getenv("LLM_CONCURRENCY", "4"))  # model calls in flight at once, across all users
+LLM_BUDGET = _number("LLM_BUDGET", 150, float, low=1, high=None)
+LLM_TIMEOUT = _number("LLM_TIMEOUT", 60, float, low=1, high=None)  # seconds per model call
+LLM_CONCURRENCY = _number("LLM_CONCURRENCY", 4, low=1, high=None)  # model calls in flight at once, across all users
 TIMEZONE = os.getenv("TIMEZONE", "UTC")  # default for new users; each user can change it with /timezone
-MORNING_HOUR = int(os.getenv("MORNING_HOUR", "9"))
-EVENING_HOUR = int(os.getenv("EVENING_HOUR", "20"))
+MORNING_HOUR = _number("MORNING_HOUR", 9, low=0, high=23)
+EVENING_HOUR = _number("EVENING_HOUR", 20, low=0, high=23)
 # Check-ins are opt-in: new users start with them off. These apply once someone turns them on (/interval on, or via the coach).
 # While a user is within their daily window (/morning to /evening), the bot checks in this many minutes after the last
 # message from either side. Each unanswered check-in widens the gap to the matching entry here (never below the user's interval);
 # after the last entry it stays quiet until the user writes again.
-CHECKIN_INTERVAL_MINUTES = int(os.getenv("CHECKIN_INTERVAL_MINUTES", "30"))
-BACKOFF_MINUTES = [float(x) for x in os.getenv("BACKOFF_MINUTES", "30,60,120,240,480,1440,2880,5760,10080,20160").split(",") if x.strip()]
-REVIEW_WEEKDAY = int(os.getenv("REVIEW_WEEKDAY", "6"))  # evening check-in on this weekday (Mon=0) becomes the weekly review
+CHECKIN_INTERVAL_MINUTES = _number("CHECKIN_INTERVAL_MINUTES", 30, low=1, high=None)
+try:
+    BACKOFF_MINUTES = [
+        float(x) for x in os.getenv("BACKOFF_MINUTES", "30,60,120,240,480,1440,2880,5760,10080,20160").split(",") if x.strip()
+    ]
+except ValueError:
+    raise SystemExit("BACKOFF_MINUTES must be comma-separated numbers") from None
+REVIEW_WEEKDAY = _number("REVIEW_WEEKDAY", 6, low=0, high=6)  # evening check-in on this weekday (Mon=0) becomes the weekly review
 DB_PATH = os.getenv("DB_PATH", "coach.db")
 HISTORY_TURNS = 20
 # Privacy: chat messages older than this are deleted (each user's latest 40 are kept). 0 keeps everything.
 # Extra text appended to the safety message sent when someone writes about suicide or self-harm, e.g. a local helpline:
 # "In Greece you can also call 1018." (the message always includes the emergency number 112 and a pointer to professional help)
 CRISIS_HELP = os.getenv("CRISIS_HELP", "").strip()
-RETENTION_DAYS = int(os.getenv("RETENTION_DAYS", "90"))
+RETENTION_DAYS = _number("RETENTION_DAYS", 90, low=0, high=None)
 # Everything stored about someone who has not written for this many days is deleted (0 keeps it for good).
-INACTIVE_DELETE_DAYS = int(os.getenv("INACTIVE_DELETE_DAYS", "365"))
+INACTIVE_DELETE_DAYS = _number("INACTIVE_DELETE_DAYS", 365, low=0, high=None)
 # A reminder that could not be delivered is dropped once it is this many hours overdue.
-REMINDER_GIVE_UP_HOURS = int(os.getenv("REMINDER_GIVE_UP_HOURS", "24"))
+REMINDER_GIVE_UP_HOURS = _number("REMINDER_GIVE_UP_HOURS", 24, low=0, high=None)
 # Abuse guard: at most this many messages per user inside the window (seconds).
-RATE_LIMIT_MESSAGES = int(os.getenv("RATE_LIMIT_MESSAGES", "20"))
-RATE_LIMIT_WINDOW = int(os.getenv("RATE_LIMIT_WINDOW", "600"))
+RATE_LIMIT_MESSAGES = _number("RATE_LIMIT_MESSAGES", 20, low=1, high=None)
+RATE_LIMIT_WINDOW = _number("RATE_LIMIT_WINDOW", 600, low=1, high=None)

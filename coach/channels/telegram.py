@@ -75,9 +75,11 @@ class TelegramChannel:
     async def start(self) -> None:
         await self.app.initialize()
         await self.app.start()
+        assert self.app.updater is not None
         await self.app.updater.start_polling()
 
     async def stop(self) -> None:
+        assert self.app.updater is not None
         await self.app.updater.stop()
         await self.app.stop()
         await self.app.shutdown()
