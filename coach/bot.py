@@ -89,7 +89,8 @@ def plan_checkin(u, now_ts: float, now: datetime) -> tuple[str, dict] | None:
     review_due = has_record and days_since_review >= 6 and (now.weekday() == REVIEW_WEEKDAY or days_since_review >= 8)
 
     if unanswered > 0:
-        return backoff.instruction(unanswered, u["last_inbound"], now_ts), {}
+        note = backoff.instruction(unanswered, u["last_inbound"], now_ts)
+        return (note, {}) if note else None
     if u["last_morning"] != today:
         return prompts.MORNING, {"last_morning": today}
     if now.hour == end and u["last_evening"] != today:
@@ -148,7 +149,7 @@ async def checkin(u) -> None:
 
 
 async def run_checkins() -> None:
-    results = await asyncio.gather(*(checkin(u) for u in db.all_users()), return_exceptions=True)
+    results = await asyncio.gather(*(checkin(u) for u in db.users_for_checkins(time.time())), return_exceptions=True)
     for error in results:
         if isinstance(error, Exception):
             log.error("check-in pass failed", exc_info=error)

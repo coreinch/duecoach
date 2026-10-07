@@ -123,3 +123,15 @@ def test_delete_user_data_removes_everything(user):
 def test_webhook_duplicates_are_detected():
     assert db.mark_seen("whatsapp:abc") is True
     assert db.mark_seen("whatsapp:abc") is False
+
+
+def test_users_for_checkins_skips_those_who_cannot_be_due(user):
+    uid = user["user_id"]
+    db.set_fields(uid, consent_at=1.0, interval_min=30, snooze_until=0, checkin_retry_at=0)
+    assert [u["user_id"] for u in db.users_for_checkins(100.0)] == [uid]
+    db.set_fields(uid, snooze_until=500.0)
+    assert db.users_for_checkins(100.0) == []
+    db.set_fields(uid, snooze_until=0, interval_min=0)
+    assert db.users_for_checkins(100.0) == []
+    db.set_fields(uid, interval_min=30, consent_at=0)
+    assert db.users_for_checkins(100.0) == []

@@ -2,6 +2,7 @@ import asyncio
 import logging
 import re
 import time
+from typing import Any
 
 import openai
 from openai import AsyncOpenAI
@@ -82,10 +83,11 @@ def status() -> dict:
     return {"models": list(MODELS), "cooling_down": {m: round(t - now) for m, t in _down_until.items() if t > now}}
 
 
-async def _chat(messages: list[dict], tool_defs: list[dict] | None = None, max_tokens: int = 1500):
-    kwargs = {"tools": tool_defs} if tool_defs else {}
+async def _chat(messages: Any, tool_defs: list[dict] | None = None, max_tokens: int = 1500):
+    kwargs: dict[str, Any] = {"tools": tool_defs} if tool_defs else {}
     attempts = MODEL_ATTEMPTS if len(MODELS) == 1 else 1  # with fallbacks available, move on rather than retry the same model
-    failures, started = [], time.time()
+    failures: list[str] = []
+    started = time.time()
     for model in _order():
         if failures and time.time() - started > LLM_BUDGET:
             failures.append(f"not tried (over the {LLM_BUDGET:g}s budget): {model}")

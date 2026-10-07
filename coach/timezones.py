@@ -10,7 +10,7 @@ import re
 import unicodedata
 import zoneinfo
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timedelta
 from functools import lru_cache
 
 # places people live in that aren't a zone name in the tz database (the database names one city per zone)
@@ -291,7 +291,11 @@ def zone_for_offset(offset_minutes: int, near: str | None = None, now_utc: datet
     then the likeliest of the well-known places, then any.
     """
     now = now_utc or datetime.now(zoneinfo.ZoneInfo("UTC"))
-    matching = [z for z in _zone_countries() if now.astimezone(zoneinfo.ZoneInfo(z)).utcoffset().total_seconds() / 60 == offset_minutes]
+    matching = [
+        z
+        for z in _zone_countries()
+        if (now.astimezone(zoneinfo.ZoneInfo(z)).utcoffset() or timedelta(0)).total_seconds() / 60 == offset_minutes
+    ]
     if not matching:
         return None
     country = _zone_countries().get(near or "")
