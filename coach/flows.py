@@ -8,6 +8,7 @@ never blocks anything for long.
 """
 
 import json
+import re
 import time
 from dataclasses import dataclass
 
@@ -17,7 +18,10 @@ from .timezones import normalize
 FLOW_TTL = 24 * 3600
 MAX_REVISIONS = 3
 MAX_VAGUE_ANSWERS = 2
-GOAL_AFTER_MESSAGES = 4  # stored chat messages (both sides): about two exchanges before the first goal question
+GOAL_MIN_MESSAGES = 2  # stored chat messages (both sides): not before the coach has answered once...
+GOAL_FALLBACK_MESSAGES = 6  # ...and if the user never states a problem or wish, ask anyway after about three exchanges
+QUESTION_GAP = 4  # stored chat messages that must pass after any question of ours before the next one (two exchanges)
+STEP_OFFER_COOLDOWN = 6 * 3600  # after "skip" on a step, don't offer to save one they agreed to for a few hours
 GOAL_COOLDOWN = 7 * 86400  # after "skip", wait this long before offering again
 OBJECTIVE_COOLDOWN = 2 * 86400
 FOLLOWUP_AFTER = 2 * 86400  # a weekly step is asked about once it is this old...
@@ -88,6 +92,76 @@ def _word_count(text: str) -> int:
     return len(text.split())
 
 
+# --- when is a good moment? ---
+#
+# The bot adds a question to the coach's reply only at a natural point: the user has just named a problem or a wish, or has agreed
+# to try something. It never asks while someone is struggling, straight after a question of its own, or when they asked a question
+# themselves. Patterns run on normalize()d text: lower-case, accents and apostrophes removed ("can't" becomes "can t").
+
+PROBLEM_PATTERNS = [
+    r"\bi (always|never|keep|constantly|usually|often) \w+",
+    r"\bi (can t|cant|cannot|don t|do not|couldn t|won t) (seem to )?(focus|concentrate|start|finish|stop|remember|get|keep|sleep|manage|do|stay)",
+    r"\bi (struggle|have trouble|have a hard time|find it hard|m struggling|am struggling|forget|lose|lost)\b",
+    r"\bi (am|m|feel|was) (always |so |very |really |constantly )?(late|behind|overwhelmed|stuck|distracted|disorgani[sz]ed|unorgani[sz]ed|exhausted|lost)\b",
+    r"\bi (want|need|d like|would like|wish|hope|m trying|am trying|have) to \w+",
+    r"\b(ξεχναω|ξεχνω|ξεχασα|χανω|αργω|αναβαλλω|αναβαλω|δυσκολευομαι)\b",
+    r"\bδεν (μπορω|καταφερνω|προλαβαινω)\b",
+    r"\b(παντα|συνεχεια|διαρκωσ|διαρκως) \w+",
+    r"\b(θελω|θα ηθελα|χρειαζομαι|προσπαθω|πρεπει) να\b",
+    r"\bμε δυσκολευει\b",
+    r"\bνιωθω (χαμεν|μπερδεμεν|κουρασμεν|αγχωμεν|κολλημεν)\w*",
+]
+STEP_PATTERNS = [
+    r"\b(ok|okay|alright|sure|yes|yeah|fine|good|great|cool)\b.{0,20}\b(i ll|i will|i m going to|let s|i can|i could)\b",
+    r"\bi (ll|will) (try|put|do|set|start|make|keep|use|write|get|place|leave|lay)\b",
+    r"\bi m going to (try|put|do|set|start|make|use|write)\b",
+    r"\blet me try\b",
+    r"\bsounds (good|great|doable|like a plan)\b",
+    r"\bthat (works|could work|might work)\b",
+    r"\bθα (το |τα |τον |την )?(δοκιμασω|κανω|βαλω|ξεκινησω|φτιαξω|γραψω|χρησιμοποιησω|κρατησω|αφησω)\b",
+    r"\b(ενταξει|οκ|καλα|ναι)\b.{0,20}\bθα\b",
+    r"\bακουγεται (καλο|καλα|ωραιο)\b",
+]
+CRISIS_PATTERNS = [
+    r"\b(kill myself|suicid\w*|end(ing)? (it all|my life)|take my own life|want to die|wanna die|hurt(ing)? myself|harm(ing)? myself|self harm|no reason to live)\b",
+    r"\b(don t want to (live|be here)|can t go on|better off dead)\b",
+    r"\babus(ed|e|ive)\b",
+    r"αυτοκτον\w*|να πεθανω|δεν θελω να ζω|τελειωσω (τα παντα|τη ζωη|ολα)|κακο στον εαυτο μου|δεν αντεχω αλλο|κακοποι\w*",
+]
+# playbook cards that mean the coach is helping with distress rather than with a plan
+DISTRESS_CARDS = {"pause_coaching", "anxiety_approach", "self_talk", "setback_reframe", "overload", "too_much_signals"}
+_PROBLEM, _STEP, _CRISIS = ([re.compile(p) for p in patterns] for patterns in (PROBLEM_PATTERNS, STEP_PATTERNS, CRISIS_PATTERNS))
+
+
+def signal_in(text: str) -> str | None:
+    """'step' if the user just agreed to try something, 'problem' if they named a struggle or a wish, else None."""
+    said = normalize(text)
+    if any(p.search(said) for p in _STEP):
+        return "step"
+    if any(p.search(said) for p in _PROBLEM):
+        return "problem"
+    return None
+
+
+def is_crisis(text: str) -> bool:
+    said = normalize(text)
+    return any(p.search(said) for p in _CRISIS)
+
+
+def question_blocked(uid: int, text: str) -> bool:
+    """True when this is not the moment for a question of the bot's own."""
+    if is_crisis(text) or llm.cards_read(uid) & DISTRESS_CARDS:
+        return True  # someone in distress needs the coach, not a form
+    if text.strip().endswith(("?", ";", "\u037e")):
+        return True  # they asked something themselves: answer it and stop
+    user = db.get_user(uid)
+    return db.message_count(uid) - (user["question_at_count"] if user["question_at_count"] is not None else -100) < QUESTION_GAP
+
+
+def note_question_asked(uid: int) -> None:
+    db.set_field(uid, "question_at_count", db.message_count(uid))
+
+
 # --- starting a flow (each returns the question to send) ---
 
 
@@ -127,7 +201,7 @@ def start_followup(uid: int) -> str | None:
     return _t(uid, "FU_ASK", step=objective["text"])
 
 
-def next_question(uid: int) -> str | None:
+async def next_question(uid: int, text: str) -> str | None:
     """Which question (if any) to add to this reply. At most one question is ever pending: callers check get() first."""
     if get(uid):
         return None
@@ -136,12 +210,29 @@ def next_question(uid: int) -> str | None:
     user = db.get_user(uid)
     now = time.time()
     goals, opens = db.active_goals(uid), db.open_objectives(uid)
+    signal = signal_in(text)
+    count = db.message_count(uid)
     if not goals:
-        if db.message_count(uid) >= GOAL_AFTER_MESSAGES and now - (user["goal_asked_at"] or 0) > GOAL_COOLDOWN:
+        ready = (signal is not None and count >= GOAL_MIN_MESSAGES) or count >= GOAL_FALLBACK_MESSAGES
+        if ready and now - (user["goal_asked_at"] or 0) > GOAL_COOLDOWN:
             return start_goal(uid)
-    elif not opens and now - (user["obj_asked_at"] or 0) > OBJECTIVE_COOLDOWN:
-        return start_objective(uid)
+    elif not opens:
+        if signal == "step" and now - (user["obj_asked_at"] or 0) > STEP_OFFER_COOLDOWN:
+            return await offer_step(uid, text)  # they just agreed to something: offer to keep it as this week's step
+        if now - (user["obj_asked_at"] or 0) > OBJECTIVE_COOLDOWN:
+            return start_objective(uid)
     return None
+
+
+async def offer_step(uid: int, text: str) -> str | None:
+    """The user said what they'll try: draft it as this week's step and ask whether to save it."""
+    goal = db.active_goals(uid)[0]
+    draft = await llm.draft(uid, "objective", text, goal=goal["text"])
+    if draft is None:
+        return None
+    put(uid, "objective", "confirm", started=time.time(), goal_id=goal["id"], goal=goal["text"], candidate=draft, revisions=0)
+    db.set_field(uid, "obj_asked_at", time.time())
+    return _t(uid, "OBJ_CONFIRM", step=draft)
 
 
 # --- answering the pending question ---

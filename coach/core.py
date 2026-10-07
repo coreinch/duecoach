@@ -114,13 +114,16 @@ async def _flow_answer(uid: int, text: str) -> str | None:
 async def _coach_with_question(uid: int, text: str) -> str:
     """The coach's reply, plus at most one question from the bot (follow-up, goal, weekly step or timezone)."""
     reply = await _coach(uid, text)
-    if reply == _t(uid, "LLM_ERROR") or flows.get(uid) or _timezone_pending(uid):
+    if reply == _t(uid, "LLM_ERROR") or flows.get(uid) or _timezone_pending(uid) or flows.question_blocked(uid, text):
         return reply
-    question = flows.next_question(uid)
+    question = await flows.next_question(uid, text)
     if question is None and _should_ask_timezone(uid):
         db.set_field(uid, "tz_state", "asked")
         question = _t(uid, "TZ_ASK")
-    return f"{reply}\n\n{question}" if question else reply
+    if question is None:
+        return reply
+    flows.note_question_asked(uid)
+    return f"{reply}\n\n{question}"
 
 
 async def _goal(uid, args):

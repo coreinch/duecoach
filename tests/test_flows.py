@@ -28,16 +28,21 @@ def model(monkeypatch):
 
 @pytest.fixture
 def person(model):
-    """Agreed, timezone confirmed, two exchanges of chat so far, no goals yet."""
+    """Agreed, timezone confirmed, three exchanges of chat so far (so the count-based fallback applies), no goals yet."""
     row = db.get_or_create_user("telegram", "4004", "4004", "en")
     db.set_fields(row["user_id"], consent_at=1.0, tz_set=1)
-    for i in range(4):
+    for i in range(6):
         db.add_message(row["user_id"], "user" if i % 2 == 0 else "assistant", f"m{i}")
     return row["user_id"]
 
 
 async def say(text, ext="4004"):
     return await core.handle_text("telegram", ext, ext, text)
+
+
+def seed(uid, n):
+    for i in range(n):
+        db.add_message(uid, "user" if i % 2 == 0 else "assistant", f"filler {i}")
 
 
 def age_objectives(uid, days):
@@ -118,7 +123,8 @@ async def test_a_finished_step_is_recorded_and_coached_for_what_worked(person, m
     assert await say("1") == "coached"
     assert db._conn.execute("SELECT status FROM objectives").fetchone()["status"] == "done"
     assert "finished this weekly step" in model["coach"][-1][1]
-    assert "small step toward" in await say("what now?")  # next: a new step, since none is open
+    seed(person, flows.QUESTION_GAP)  # a couple of exchanges since the bot last asked something
+    assert "small step toward" in await say("ok what now")  # next: a new step, since none is open
 
 
 async def test_the_followup_free_text_barrier_is_kept_and_unknown_replies_are_asked_again(person):
@@ -163,7 +169,9 @@ async def test_only_one_question_at_a_time_goal_before_timezone(person):
     reply = await say("hello")
     assert "set a goal together" in reply and "where do you live" not in reply
     await say("skip")
-    assert "where do you live" in await say("one more thing")  # the timezone question follows once the goal one is out of the way
+    assert "where do you live" not in await say("one more thing")  # questions are never back to back...
+    seed(person, flows.QUESTION_GAP)
+    assert "where do you live" in await say("and another")  # the timezone question follows once the goal one is out of the way
 
 
 async def test_an_unanswered_question_expires_after_a_day(person):

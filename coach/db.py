@@ -134,7 +134,12 @@ def _m4_coaching_flows() -> None:
     )
 
 
-MIGRATIONS = [_m1_baseline, _m2_consent_and_resilience, _m3_timezone_onboarding, _m4_coaching_flows]
+def _m5_question_spacing() -> None:
+    """How many chat messages existed when the bot last added a question of its own, so questions are never back to back."""
+    _ensure_columns("users", {"question_at_count": "INTEGER DEFAULT -100"})
+
+
+MIGRATIONS = [_m1_baseline, _m2_consent_and_resilience, _m3_timezone_onboarding, _m4_coaching_flows, _m5_question_spacing]
 
 
 def init(path: str | None = None) -> None:
@@ -190,6 +195,7 @@ USER_FIELDS = {
     "goal_asked_at",
     "obj_asked_at",
     "followup_asked_at",
+    "question_at_count",
 }
 
 
