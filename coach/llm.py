@@ -76,6 +76,12 @@ def _order() -> list[str]:
     return [m for m in MODELS if _down_until.get(m, 0) <= now] or list(MODELS)
 
 
+def status() -> dict:
+    """For /healthz: which models are configured and which are cooling down after a failure (seconds left)."""
+    now = time.time()
+    return {"models": list(MODELS), "cooling_down": {m: round(t - now) for m, t in _down_until.items() if t > now}}
+
+
 async def _chat(messages: list[dict], tool_defs: list[dict] | None = None, max_tokens: int = 1500):
     kwargs = {"tools": tool_defs} if tool_defs else {}
     attempts = MODEL_ATTEMPTS if len(MODELS) == 1 else 1  # with fallbacks available, move on rather than retry the same model
