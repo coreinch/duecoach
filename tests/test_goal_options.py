@@ -3,6 +3,7 @@ import asyncio
 import pytest
 
 from coach import core, db, flows, llm
+from coach.flows import goal_ideas
 
 IDEAS = [
     "Put my keys in one bowl by the door every evening for the next four weeks.",
@@ -135,7 +136,7 @@ async def test_a_slow_model_does_not_hold_the_question_up(model, monkeypatch):
         return IDEAS
 
     monkeypatch.setattr(llm, "suggest_goals", slow)
-    monkeypatch.setattr(flows, "SUGGEST_TIMEOUT", 0.05)
+    monkeypatch.setattr(goal_ideas, "SUGGEST_TIMEOUT", 0.05)
     make_user()
     reply = await say("/goal")
     assert "What's one thing you'd most like to change" in reply and IDEAS[0] not in reply  # the open question instead
@@ -300,7 +301,7 @@ async def test_if_the_early_ideas_are_still_not_ready_at_the_end_none_are_offere
         return list(IDEAS)
 
     monkeypatch.setattr(llm, "suggest_goals", never)
-    monkeypatch.setattr(flows, "SUGGEST_PREFETCH_WAIT", 0.05)
+    monkeypatch.setattr(goal_ideas, "SUGGEST_PREFETCH_WAIT", 0.05)
     flows.prefetch_goal_options(uid)
     options = await flows.goal_options(uid)
-    assert options == [] and uid not in flows._prefetched
+    assert options == [] and uid not in goal_ideas._prefetched

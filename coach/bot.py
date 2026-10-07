@@ -10,7 +10,7 @@ from zoneinfo import ZoneInfo
 import httpx
 from aiohttp import web
 
-from . import backoff, channels, core, db, flows, llm, prompts, strings
+from . import backoff, channels, chat, core, db, flows, llm, prompts, strings
 from .channels.telegram import TelegramChannel
 from .channels.viber import ViberChannel
 from .channels.whatsapp import WhatsAppChannel
@@ -275,7 +275,7 @@ async def main(stop: asyncio.Event | None = None) -> None:
         task.cancel()
     if telegram:
         await telegram.stop()
-    pending = [t for t in core._background if not t.done()]
+    pending = [t for t in chat.background if not t.done()]
     if pending:
         await asyncio.wait(pending, timeout=10)  # let in-flight note updates finish
     await runner.cleanup()

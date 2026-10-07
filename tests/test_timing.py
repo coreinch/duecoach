@@ -2,7 +2,7 @@ import time
 
 import pytest
 
-from coach import core, db, flows, llm
+from coach import chat, core, db, flows, llm
 
 
 @pytest.fixture
@@ -216,7 +216,7 @@ async def test_a_question_that_was_due_is_not_asked_when_the_person_is_strugglin
     ],
 )
 def test_the_coachs_closing_question_is_dropped_when_ours_follows(reply, expected):
-    assert core.without_trailing_question(reply) == expected
+    assert chat.without_trailing_question(reply) == expected
 
 
 async def test_the_reply_and_our_question_do_not_both_end_with_a_question(model, monkeypatch):
@@ -251,15 +251,16 @@ async def test_crisis_wording_never_becomes_the_answer_to_a_pending_question(mod
 
 async def test_crisis_wording_also_cancels_the_timezone_question_and_works_in_greek(model):
     uid = make_user(8)
-    db.set_fields(uid, tz_set=0, tz_state="asked", lang="el")
+    db.set_fields(uid, tz_set=0, lang="el")
+    flows.put(uid, "timezone", "asked", attempts=0)
     reply = await say("δεν αντέχω άλλο")
     assert "112" in reply and "ασφαλής" in reply
-    assert db.get_user(uid)["tz_state"] == ""
+    assert db.get_user(uid)["tz_state"] == "" and flows.get(uid) is None
 
 
 async def test_a_configured_local_helpline_is_added(model, monkeypatch):
     make_user(8)
-    monkeypatch.setattr(core, "CRISIS_HELP", "In Greece you can also call 1018.")
+    monkeypatch.setattr(chat, "CRISIS_HELP", "In Greece you can also call 1018.")
     assert "In Greece you can also call 1018." in await say("I want to kill myself")
 
 

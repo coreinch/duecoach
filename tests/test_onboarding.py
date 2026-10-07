@@ -103,7 +103,7 @@ async def test_skipping_the_timezone_ends_the_setup_with_a_hand_over_that_says_h
     uid = db.get_or_create_user("telegram", "6006", "6006", "en")["user_id"]
     db.set_fields(uid, consent_at=1.0, intake_state="done")
     db.add_goal(uid, "a goal")
-    db.set_fields(uid, tz_state="asked")
+    flows.put(uid, "timezone", "asked", attempts=0)
     reply = await say("skip")
     assert (
         "No problem" in reply
@@ -125,7 +125,8 @@ async def test_with_the_timezone_already_known_the_step_leads_straight_to_the_ha
 
 async def test_a_correction_to_the_local_time_also_ends_with_the_hand_over(model):
     uid = db.get_or_create_user("telegram", "6006", "6006", "en")["user_id"]
-    db.set_fields(uid, consent_at=1.0, intake_state="done", tz_state="asked")
+    db.set_fields(uid, consent_at=1.0, intake_state="done")
+    flows.put(uid, "timezone", "asked", attempts=0)
     db.add_goal(uid, "a goal")
     await say("Athens")
     await say("no")
