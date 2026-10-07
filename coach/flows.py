@@ -59,7 +59,8 @@ BARRIER_LABELS = {
 }
 
 
-SUGGEST_TIMEOUT = 30  # seconds to wait for the model's goal ideas before using the built-in ones
+SUGGEST_TIMEOUT = 30  # seconds to wait for the model's goal ideas (computed on demand) before using the built-in ones
+SUGGEST_PREFETCH_WAIT = 12  # ...and, when they were started earlier in the interview, how much longer to wait for them at the end
 OPTION_WORDS = {
     "1": 0,
     "one": 0,
@@ -139,12 +140,37 @@ def fallback_goal_options(uid: int) -> list[str]:
     return [GOAL_IDEAS[i][2 if greek else 1] for i in chosen]
 
 
+_prefetched: dict[int, asyncio.Task] = {}  # user -> goal ideas being worked out in the background during the interview
+
+
+def _swallow(task: asyncio.Task) -> None:
+    if not task.cancelled():
+        task.exception()  # read it, so a failed background job doesn't log "exception was never retrieved"
+
+
+def prefetch_goal_options(uid: int) -> None:
+    """Start working out the goal ideas now. The free model is slow (about half a minute), so this is begun as soon as the user
+    has said what gets in their way: the remaining interview answers give it time to finish before the goal question is needed."""
+    previous = _prefetched.pop(uid, None)
+    if previous:
+        previous.cancel()
+    task = asyncio.create_task(llm.suggest_goals(uid))
+    task.add_done_callback(_swallow)
+    _prefetched[uid] = task
+
+
 async def goal_options(uid: int) -> list[str]:
     """Three goal ideas: the model's, drawn from what the user said, or the built-in ones if it is slow, down or unsure."""
-    try:
-        options = await asyncio.wait_for(llm.suggest_goals(uid), SUGGEST_TIMEOUT)
-    except Exception:
-        options = []
+    task = _prefetched.pop(uid, None)
+    wait = SUGGEST_PREFETCH_WAIT if task else SUGGEST_TIMEOUT
+    if task is None:
+        task = asyncio.create_task(llm.suggest_goals(uid))
+        task.add_done_callback(_swallow)
+    await asyncio.wait({task}, timeout=wait)
+    if not task.done():
+        task.cancel()
+        return fallback_goal_options(uid)
+    options = [] if task.cancelled() or task.exception() else task.result()
     return options if len(options) == 3 else fallback_goal_options(uid)
 
 
@@ -484,6 +510,8 @@ async def _intake_answer(uid: int, state: dict, text: str, said: str):
             profile["mood_heavy"] = True
             note = "\n\n" + _t(uid, "INTAKE_MOOD_HEAVY")
         db.set_profile(uid, profile)
+        if step == "obstacle":
+            prefetch_goal_options(uid)  # the later answers give the model time to think the ideas through
     following = INTAKE_STEPS[INTAKE_STEPS.index(step) + 1 :]
     if not following:
         closing = _finish_intake(uid, profile)
