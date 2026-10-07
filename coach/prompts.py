@@ -145,6 +145,13 @@ keep what they did not object to and apply their change; add when and where only
 
 Current draft: {previous}"""
 
+INTAKE_WRAPUP = (
+    "The user has just finished the getting-to-know-you interview; their answers are in the record under 'What they told you at "
+    "intake'. In 2-3 short sentences: show you listened by reflecting back what you understood in their own words (the main "
+    "struggle and one strength), say what you'd focus on first, and tell them briefly how this works: they can talk to you any time, "
+    "and together you'll set a goal and one small step each week. Mention check-ins only if the record says they are on. Warm and "
+    "concrete, no lists, no commands. Do NOT end with a question: the system asks the next one."
+)
 FOLLOWUP_DONE = (
     'The user reports they finished this weekly step: "{step}". Coach it: ask what made it work (one question) and name that '
     "strength back to them. Don't propose a new step yet."

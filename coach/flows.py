@@ -63,6 +63,8 @@ class CoachTurn:
 
     text: str
     instruction: str
+    follow_up: str = ""  # a question of the bot's to add after the coach's reply
+    fallback: str = ""  # what to send instead if the model is unavailable
 
 
 def _t(uid: int, key: str, **kw) -> str:
@@ -199,9 +201,13 @@ def start_intake(uid: int, restart: bool = False) -> str | None:
     return intro + _t(uid, f"INTAKE_Q_{step}")
 
 
-def start_goal(uid: int) -> str:
+def start_goal(uid: int, after_intake: bool = False) -> str:
+    """Ask for a goal. Right after the interview the question picks up what they said got in their way."""
     put(uid, "goal", "asked", started=time.time(), vague=0)
     db.set_field(uid, "goal_asked_at", time.time())
+    obstacle = db.get_profile(uid).get("obstacle", "") if after_intake else ""
+    if obstacle:
+        return _t(uid, "GOAL_ASK_INTAKE", obstacle=obstacle[:100].rstrip(" .,;"))
     return _t(uid, "GOAL_ASK")
 
 
@@ -316,7 +322,12 @@ async def _intake_answer(uid: int, state: dict, text: str, said: str):
         db.set_profile(uid, profile)
     following = INTAKE_STEPS[INTAKE_STEPS.index(step) + 1 :]
     if not following:
-        return _finish_intake(uid, profile) + note
+        closing = _finish_intake(uid, profile)
+        if note or db.active_goals(uid):
+            return closing + note  # after a heavy answer, or when redoing the interview with goals already set: nothing more is pushed
+        question = start_goal(uid, after_intake=True)
+        # carry on straight away: the coach says what it understood and how this works, then the first goal question follows
+        return CoachTurn("(finished the intake interview)", prompts.INTAKE_WRAPUP, follow_up=question, fallback=f"{closing}\n\n{question}")
     put(uid, "intake", following[0])
     return f"{_t(uid, 'INTAKE_ACK')} {_t(uid, f'INTAKE_Q_{following[0]}')}"
 
