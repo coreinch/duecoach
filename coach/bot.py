@@ -219,7 +219,8 @@ def acquire_instance_lock():
     return handle
 
 
-async def main() -> None:
+async def main(stop: asyncio.Event | None = None) -> None:
+    """Run until SIGINT/SIGTERM (or until `stop` is set, which is how tests end it)."""
     lock_handle = acquire_instance_lock()
     db.init()
     http = httpx.AsyncClient(timeout=20)
@@ -257,7 +258,7 @@ async def main() -> None:
             log.exception("could not register the Viber webhook")
     log.info("channels enabled: %s", ", ".join(channels.REGISTRY))
 
-    stop = asyncio.Event()
+    stop = stop or asyncio.Event()
     loop = asyncio.get_running_loop()
     for sig in (signal.SIGINT, signal.SIGTERM):
         loop.add_signal_handler(sig, stop.set)
