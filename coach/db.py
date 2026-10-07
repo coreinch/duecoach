@@ -121,7 +121,20 @@ def _m3_timezone_onboarding() -> None:
     _ensure_columns("users", {"tz_state": "TEXT DEFAULT ''", "tz_candidate": "TEXT DEFAULT ''", "tz_attempts": "INTEGER DEFAULT 0"})
 
 
-MIGRATIONS = [_m1_baseline, _m2_consent_and_resilience, _m3_timezone_onboarding]
+def _m4_coaching_flows() -> None:
+    """Code-led goal / weekly step / follow-up conversations: the flow in progress (JSON) and when each was last offered."""
+    _ensure_columns(
+        "users",
+        {
+            "flow_state": "TEXT DEFAULT ''",
+            "goal_asked_at": "REAL DEFAULT 0",
+            "obj_asked_at": "REAL DEFAULT 0",
+            "followup_asked_at": "REAL DEFAULT 0",
+        },
+    )
+
+
+MIGRATIONS = [_m1_baseline, _m2_consent_and_resilience, _m3_timezone_onboarding, _m4_coaching_flows]
 
 
 def init(path: str | None = None) -> None:
@@ -173,6 +186,10 @@ USER_FIELDS = {
     "tz_state",
     "tz_candidate",
     "tz_attempts",
+    "flow_state",
+    "goal_asked_at",
+    "obj_asked_at",
+    "followup_asked_at",
 }
 
 

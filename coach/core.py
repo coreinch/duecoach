@@ -6,8 +6,9 @@ import time
 from collections import deque
 from zoneinfo import ZoneInfo
 
-from . import db, llm, prompts, strings, timezones
+from . import db, flows, llm, prompts, strings, timezones
 from .config import CHECKIN_INTERVAL_MINUTES, RATE_LIMIT_MESSAGES, RATE_LIMIT_WINDOW, is_allowed
+from .flows import NO, SKIP, YES
 
 log = logging.getLogger("coach.core")
 _background: set[asyncio.Task] = set()
@@ -20,9 +21,6 @@ _warned: set[int] = set()
 ASK_TIMEZONE_AFTER_MESSAGES = 6  # chat messages stored (both sides), i.e. about three exchanges
 MAX_ANSWER_WORDS = 5  # longer messages are treated as ordinary chat, not as an answer to the question
 MAX_TZ_ATTEMPTS = 3
-YES = {"yes", "y", "yeah", "yep", "yup", "correct", "right", "ok", "okay", "sure", "ναι", "ν", "σωστα", "σωστο", "ενταξει", "οκ"}
-NO = {"no", "n", "nope", "wrong", "incorrect", "no thanks", "οχι", "λαθος", "οχι ευχαριστω"}
-SKIP = {"skip", "later", "pass", "not now", "skip it", "παραληψη", "αργοτερα", "οχι τωρα", "δεν θελω"}
 
 
 def user_lock(uid: int) -> asyncio.Lock:
@@ -95,9 +93,44 @@ async def _timezone_answer(uid: int, text: str) -> str | None:
     return _t(uid, "TZ_RETRY")
 
 
+def _timezone_pending(uid: int) -> bool:
+    user = db.get_user(uid)
+    return bool(user and not user["tz_set"] and user["tz_state"] in ("asked", "confirm"))
+
+
 def _should_ask_timezone(uid: int) -> bool:
     user = db.get_user(uid)
     return bool(user and not user["tz_set"] and not user["tz_state"] and db.message_count(uid) >= ASK_TIMEZONE_AFTER_MESSAGES)
+
+
+async def _flow_answer(uid: int, text: str) -> str | None:
+    """Reply to the goal / weekly-step / follow-up question in progress, if any. None: ordinary chat."""
+    result = await flows.answer(uid, text)
+    if isinstance(result, flows.CoachTurn):  # the user reported how a step went: coach that now
+        return await _coach(uid, result.text, result.instruction)
+    return result
+
+
+async def _coach_with_question(uid: int, text: str) -> str:
+    """The coach's reply, plus at most one question from the bot (follow-up, goal, weekly step or timezone)."""
+    reply = await _coach(uid, text)
+    if reply == _t(uid, "LLM_ERROR") or flows.get(uid) or _timezone_pending(uid):
+        return reply
+    question = flows.next_question(uid)
+    if question is None and _should_ask_timezone(uid):
+        db.set_field(uid, "tz_state", "asked")
+        question = _t(uid, "TZ_ASK")
+    return f"{reply}\n\n{question}" if question else reply
+
+
+async def _goal(uid, args):
+    if len(db.active_goals(uid)) >= db.MAX_GOALS:
+        return _t(uid, "GOAL_FULL")
+    return flows.start_goal(uid)
+
+
+async def _step(uid, args):
+    return flows.start_objective(uid)
 
 
 async def _help(uid, args):
@@ -261,6 +294,8 @@ COMMANDS = {
     "timezone": _timezone,
     "language": _language,
     "interval": _interval,
+    "goal": _goal,
+    "step": _step,
     "morning": _checkin("morning"),
     "evening": _checkin("evening"),
     "privacy": _privacy,
@@ -320,13 +355,11 @@ async def handle_text(channel: str, ext_id: str, chat_id: str, text: str, lang_h
         handler = COMMANDS.get(command) if command else None
         if handler:
             return await handler(uid, args)
+        if (answer := await _flow_answer(uid, text)) is not None:
+            return answer
         if (answer := await _timezone_answer(uid, text)) is not None:
             return answer
-        reply = await _coach(uid, text)
-        if reply != _t(uid, "LLM_ERROR") and _should_ask_timezone(uid):
-            db.set_field(uid, "tz_state", "asked")
-            reply = f"{reply}\n\n{_t(uid, 'TZ_ASK')}"
-        return reply
+        return await _coach_with_question(uid, text)
 
 
 async def handle_unsupported(channel: str, ext_id: str, chat_id: str, lang_hint: str = "en") -> str | None:

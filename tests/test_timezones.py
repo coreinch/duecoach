@@ -54,6 +54,8 @@ def new_user(monkeypatch):
     monkeypatch.setattr(llm, "reply", fake_reply)
     row = db.get_or_create_user("telegram", "8008", "8008", "en")
     db.set_field(row["user_id"], "consent_at", 1.0)
+    db.add_goal(row["user_id"], "a goal")  # so the goal and step questions don't come before the timezone one
+    db.add_objective(row["user_id"], None, "a step", "")
     return 8008
 
 
@@ -99,6 +101,8 @@ async def test_skipping_and_failing_three_times_both_stop_the_questions(new_user
     assert db.get_user(new_user)["tz_state"] == "skipped" and "where do you live" not in await say("another message")
     other = db.get_or_create_user("telegram", "9009", "9009")["user_id"]
     db.set_field(other, "consent_at", 1.0)
+    db.add_goal(other, "a goal")
+    db.add_objective(other, None, "a step", "")
     seed_history(other)
     await say("hi", "9009")
     assert "couldn't work out" in await say("blah", "9009")

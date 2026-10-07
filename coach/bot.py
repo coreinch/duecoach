@@ -10,7 +10,7 @@ from zoneinfo import ZoneInfo
 import httpx
 from aiohttp import web
 
-from . import backoff, channels, core, db, llm, prompts, strings
+from . import backoff, channels, core, db, flows, llm, prompts, strings
 from .channels.telegram import TelegramChannel
 from .channels.viber import ViberChannel
 from .channels.whatsapp import WhatsAppChannel
@@ -66,6 +66,8 @@ async def deliver_reminders() -> None:
 def plan_checkin(u, now_ts: float, now: datetime) -> tuple[str, dict] | None:
     """What check-in (if any) is due for this user right now: (instruction for the model, user fields to record once sent)."""
     interval, start, end, unanswered = u["interval_min"] or 0, u["morning_hour"], u["evening_hour"], u["unanswered"] or 0
+    if flows.get(u["user_id"]):
+        return None  # a question from the bot is waiting for an answer: don't pile another message on top
     if not u["consent_at"] or interval <= 0 or start < 0 or end < 0 or now_ts < (u["snooze_until"] or 0):
         return None
     if now_ts < (u["checkin_retry_at"] or 0) or not start <= now.hour <= end:
@@ -121,7 +123,9 @@ async def checkin(u) -> None:
             return
         seen_inbound = u["last_inbound"] or 0
         try:
-            await channels.send(u, await llm.reply(uid, "", instruction))
+            # a weekly step that is due for follow-up becomes a short fixed question instead of a free-form check-in
+            message = flows.start_followup(uid) if (u["unanswered"] or 0) == 0 else None
+            await channels.send(u, message or await llm.reply(uid, "", instruction))
         except Exception:
             log.exception("check-in failed for %s, backing off", uid)
             db.record_checkin_failed(uid)
