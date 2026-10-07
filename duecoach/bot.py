@@ -36,7 +36,7 @@ from .config import (
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(levelname)s %(message)s")
 for noisy in ("httpx", "httpx2", "httpcore"):  # request logs include URLs (the Telegram one contains the bot token)
     logging.getLogger(noisy).setLevel(logging.WARNING)
-log = logging.getLogger("coach")
+log = logging.getLogger("duecoach")
 
 LOOP_SECONDS = 30
 STALE_AFTER = 4 * LOOP_SECONDS  # the health check fails when a background loop hasn't completed a pass for this long
@@ -211,7 +211,7 @@ async def healthz(request: web.Request) -> web.Response:
 
 def acquire_instance_lock():
     """Two bots on one database would double-send everything: refuse to start if another process holds the lock."""
-    handle = open(os.path.join(os.path.dirname(os.path.abspath(DB_PATH)), "coach.lock"), "w")
+    handle = open(os.path.join(os.path.dirname(os.path.abspath(DB_PATH)), "duecoach.lock"), "w")
     try:
         fcntl.flock(handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
     except OSError:

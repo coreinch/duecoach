@@ -2,8 +2,8 @@ import asyncio
 
 import pytest
 
-from coach import core, db, flows, llm
-from coach.flows import goal_ideas
+from duecoach import core, db, flows, llm
+from duecoach.flows import goal_ideas
 
 IDEAS = [
     "Put my keys in one bowl by the door every evening for the next four weeks.",

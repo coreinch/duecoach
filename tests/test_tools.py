@@ -1,7 +1,7 @@
 import json
 import time
 
-from coach import db, playbook, tools
+from duecoach import db, playbook, tools
 
 
 def run(uid, tool, **args):

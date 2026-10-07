@@ -1,7 +1,7 @@
 import os
 import tempfile
 
-# coach.config reads the environment when it is first imported, so set it up before anything imports coach
+# duecoach.config reads the environment when it is first imported, so set it up before anything imports duecoach
 os.environ.update(
     LLM_API_KEY="test-key",
     DB_PATH=os.path.join(tempfile.mkdtemp(), "unused.db"),
@@ -13,14 +13,14 @@ os.environ.update(
 
 import pytest  # noqa: E402
 
-from coach import core, db, llm, ratelimit  # noqa: E402
-from coach.flows import goal_ideas  # noqa: E402
+from duecoach import core, db, llm, ratelimit  # noqa: E402
+from duecoach.flows import goal_ideas  # noqa: E402
 
 
 @pytest.fixture(autouse=True)
 def database(tmp_path):
     """A fresh, empty database for every test."""
-    db.init(str(tmp_path / "coach.db"))
+    db.init(str(tmp_path / "duecoach.db"))
     core._locks.clear()
     ratelimit.reset()
     goal_ideas._prefetched.clear()  # background goal-idea jobs belong to the event loop of the test that started them

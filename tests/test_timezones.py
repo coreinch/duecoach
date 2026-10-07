@@ -4,7 +4,7 @@ from zoneinfo import ZoneInfo
 
 import pytest
 
-from coach import core, db, flows, llm, timezones
+from duecoach import core, db, flows, llm, timezones
 
 
 @pytest.mark.parametrize(
@@ -202,7 +202,7 @@ async def test_check_ins_switch_on_only_the_first_time_a_timezone_is_set(new_use
 async def test_the_coachs_timezone_tool_switches_check_ins_on_too(new_user):
     import json
 
-    from coach import tools
+    from duecoach import tools
 
     result = tools.run_tool(new_user, "set_timezone", json.dumps({"name": "Europe/Athens"}))
     assert "switched on automatically" in result and db.get_user(new_user)["interval_min"] == 30

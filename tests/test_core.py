@@ -2,7 +2,7 @@ import time
 
 import pytest
 
-from coach import core, db, llm, ratelimit
+from duecoach import core, db, llm, ratelimit
 
 
 @pytest.fixture
@@ -112,7 +112,7 @@ async def test_messages_from_one_user_are_handled_one_at_a_time(user, monkeypatc
 
 
 async def test_unauthorised_users_are_ignored(ai, monkeypatch):
-    monkeypatch.setattr("coach.config.ALLOWED", {("telegram", "1")})
+    monkeypatch.setattr("duecoach.config.ALLOWED", {("telegram", "1")})
     assert await say("hello", "999") is None and db.get_user(999) is None
 
 

@@ -3,7 +3,7 @@
 import logging
 from typing import Protocol
 
-log = logging.getLogger("coach.channels")
+log = logging.getLogger("duecoach.channels")
 
 MAX_LEN = 4000  # below the 4096 limit of Telegram and WhatsApp
 

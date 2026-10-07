@@ -5,7 +5,7 @@ import httpx
 import openai
 import pytest
 
-from coach import db, llm
+from duecoach import db, llm
 
 
 def message(content=None, calls=()):
@@ -41,7 +41,7 @@ async def test_tools_change_state_and_are_logged_without_their_arguments(model, 
         message(calls=[("add_goal", {"text": secret})]),
         message("Saved."),
     ]
-    with caplog.at_level("INFO", logger="coach.llm"):
+    with caplog.at_level("INFO", logger="duecoach.llm"):
         await llm.reply(1001, "hi")
     assert db.active_goals(1001)[0]["text"] == secret
     assert secret not in caplog.text and "tool add_goal -> ok" in caplog.text

@@ -1,6 +1,12 @@
 ---
 # Where the compose stack lives on the VPS.
-deploy_dir: /opt/adhd-coach
+deploy_dir: /opt/duecoach
+
+# Where the app lived before it was renamed from adhd-coach (see the migration tasks in deploy.yml). Once the new stack has
+# been running for a while, the old folder and the old volume can be deleted by hand.
+legacy_deploy_dir: /opt/adhd-coach
+legacy_volume: adhd-coach_coach-data
+volume: duecoach_data
 
 # Host port for the Viber/WhatsApp webhooks. Only used when custom_domain is
 # set (see below): a Telegram-only deployment publishes no port at all. Bound
@@ -14,7 +20,7 @@ app_port: 8093
 # the account or repo is ever renamed this needs a manual update too (a stale
 # value fails the deploy with "manifest unknown").
 ghcr_owner: coreinch
-ghcr_repo: adhd-coach
+ghcr_repo: duecoach
 ghcr_image: "ghcr.io/{{ ghcr_owner }}/{{ ghcr_repo }}"
 
 # Overridden per-run from the command line, e.g.:
@@ -37,6 +43,6 @@ keep_app_images: 3
 # The SQLite database holds every user's chats and goals. A daily online
 # backup is written next to it, inside the same Docker volume (it protects
 # against corruption and bad deploys, NOT against losing the VPS: copy
-# /var/lib/docker/volumes/adhd-coach_coach-data/_data/backups off the box if
+# /var/lib/docker/volumes/duecoach_data/_data/backups off the box if
 # that matters).
 keep_backups: 7

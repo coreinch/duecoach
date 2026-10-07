@@ -3,8 +3,8 @@ import time
 
 import pytest
 
-from coach import bot, channels, core, db, flows, llm, prompts
-from coach.flows import goals
+from duecoach import bot, channels, core, db, flows, llm, prompts
+from duecoach.flows import goals
 
 
 @pytest.fixture

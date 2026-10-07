@@ -1,7 +1,7 @@
 import sqlite3
 import time
 
-from coach import db
+from duecoach import db
 
 
 def test_fresh_database_is_at_latest_version():

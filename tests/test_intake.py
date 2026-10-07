@@ -2,7 +2,7 @@ import time
 
 import pytest
 
-from coach import core, db, flows, llm, tools
+from duecoach import core, db, flows, llm, tools
 
 
 @pytest.fixture

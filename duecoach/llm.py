@@ -20,7 +20,7 @@ from .config import (
     LLM_TIMEOUT,
 )
 
-log = logging.getLogger("coach.llm")
+log = logging.getLogger("duecoach.llm")
 
 MAX_TOOL_ROUNDS = 4
 MAX_EMPTY_RETRIES = 2

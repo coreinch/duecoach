@@ -1,5 +1,5 @@
 ---
-- name: Deploy adhd-coach
+- name: Deploy duecoach
   hosts: production
   gather_facts: false
 
@@ -56,6 +56,75 @@
         password: "{{ ghcr_pat }}"
       when: ghcr_pat is defined and ghcr_pat | length > 0
 
+    # One-time move from the old name (adhd-coach): the database lives in a Docker
+    # volume named after the deploy folder, so a new folder means a new, empty volume.
+    # If the old volume exists and the new one does not, stop the old bot (two
+    # copies would both poll Telegram and hold the database), copy the data over
+    # with its ownership, and only then start the new stack. The old volume and
+    # folder are left in place as a backup. If the copy fails, the old stack is
+    # started again and the deploy fails. On every later deploy this does nothing.
+    - name: Is there an old stack to move?
+      ansible.builtin.stat:
+        path: "{{ legacy_deploy_dir }}/docker-compose.yml"
+      register: legacy_stack
+
+    - name: Does the old data volume exist?
+      ansible.builtin.command: docker volume inspect {{ legacy_volume }}
+      register: legacy_volume_check
+      changed_when: false
+      failed_when: false
+
+    - name: Does the new data volume exist?
+      ansible.builtin.command: docker volume inspect {{ volume }}
+      register: new_volume_check
+      changed_when: false
+      failed_when: false
+
+    - name: Move the database from the old volume to the new one
+      when: legacy_volume_check.rc == 0 and new_volume_check.rc != 0
+      block:
+        - name: Pull the new image (it does the copying)
+          ansible.builtin.command: docker pull {{ ghcr_image }}:{{ image_tag }}
+          changed_when: true
+
+        - name: Stop the old bot
+          ansible.builtin.command: docker compose stop
+          args:
+            chdir: "{{ legacy_deploy_dir }}"
+          when: legacy_stack.stat.exists
+          changed_when: true
+
+        - name: Create the new volume (labelled so compose adopts it)
+          ansible.builtin.command: >-
+            docker volume create
+            --label com.docker.compose.project={{ deploy_dir | basename }}
+            --label com.docker.compose.volume=data
+            {{ volume }}
+          changed_when: true
+
+        - name: Copy the data, keeping ownership
+          ansible.builtin.command: >-
+            docker run --rm --user root --entrypoint sh
+            -v {{ legacy_volume }}:/from:ro -v {{ volume }}:/to
+            {{ ghcr_image }}:{{ image_tag }}
+            -c "cp -a /from/. /to/ && chown 10001:10001 /to && test -s /to/coach.db"
+          changed_when: true
+      rescue:
+        - name: Remove the half-copied volume
+          ansible.builtin.command: docker volume rm {{ volume }}
+          failed_when: false
+
+        - name: Start the old bot again
+          ansible.builtin.command: docker compose start
+          args:
+            chdir: "{{ legacy_deploy_dir }}"
+          when: legacy_stack.stat.exists
+          failed_when: false
+
+        - name: Stop the deploy
+          ansible.builtin.fail:
+            msg: Moving the database to the new volume failed; the old bot was started again and nothing was changed.
+
     # pull: always forces a fresh pull even when the tag string is unchanged.
     # The named volume holding the database is untouched by a redeploy.
     - name: Pull image and (re)start the stack
@@ -69,15 +138,15 @@
     # image's HEALTHCHECK reports healthy only once the bot is up and its
     # background loops are running; no host port is involved.
     - name: Find the bot container
-      ansible.builtin.command: docker compose ps -q coach
+      ansible.builtin.command: docker compose ps -q duecoach
       args:
         chdir: "{{ deploy_dir }}"
-      register: coach_container
+      register: app_container
       changed_when: false
-      failed_when: coach_container.stdout | length == 0
+      failed_when: app_container.stdout | length == 0
 
     - name: Wait for the bot to report healthy
-      ansible.builtin.command: docker inspect --format "{{ '{{.State.Health.Status}}' }}" {{ coach_container.stdout }}
+      ansible.builtin.command: docker inspect --format "{{ '{{.State.Health.Status}}' }}" {{ app_container.stdout }}
       register: health
       until: health.stdout == "healthy"
       retries: 24
@@ -92,12 +161,17 @@
         dest: "{{ deploy_dir }}/backup.sh"
         mode: "0750"
 
-    - name: Schedule the daily database backup
+    - name: Remove the backup job of the old name
       ansible.builtin.cron:
         name: "adhd-coach database backup"
+        state: absent
+
+    - name: Schedule the daily database backup
+      ansible.builtin.cron:
+        name: "duecoach database backup"
         minute: "30"
         hour: "3"
-        job: "{{ deploy_dir }}/backup.sh >> /var/log/adhd-coach-backup.log 2>&1"
+        job: "{{ deploy_dir }}/backup.sh >> /var/log/duecoach-backup.log 2>&1"
 
     # Every deploy pulls a new tag (main-<sha>) and nothing removes the old
     # ones, so the VPS disk fills up over time. This box is SHARED with other
