@@ -1,0 +1,147 @@
+---
+- name: Deploy adhd-coach
+  hosts: production
+  gather_facts: false
+
+  tasks:
+    # An unset GitHub secret arrives as an empty string, and the bot treats an
+    # empty ALLOWED_USERS as "open to everyone" (everyone then spends the
+    # model quota and their chats are stored). Refuse to deploy that by
+    # accident: open access must be requested explicitly with -e open_access=true.
+    - name: Check the required settings are present
+      ansible.builtin.assert:
+        that:
+          - llm_api_key | default('') | length > 0
+          - (telegram_bot_token | default('') | length > 0) or (viber_auth_token | default('') | length > 0) or (whatsapp_token | default('') | length > 0)
+          - (allowed_users | default('') | length > 0) or (open_access | default(false) | bool)
+        fail_msg: >-
+          Missing settings. Set the LLM_API_KEY secret, at least one channel token (TELEGRAM_BOT_TOKEN, VIBER_AUTH_TOKEN
+          or WHATSAPP_TOKEN) and ALLOWED_USERS (or deliberately pass -e open_access=true).
+      no_log: true
+
+    - name: Verify Docker and the compose plugin are available
+      ansible.builtin.command: docker compose version
+      register: compose_check
+      changed_when: false
+      failed_when: compose_check.rc != 0
+
+    - name: Ensure deploy directory exists
+      ansible.builtin.file:
+        path: "{{ deploy_dir }}"
+        state: directory
+        mode: "0755"
+
+    - name: Render production docker-compose.yml
+      ansible.builtin.template:
+        src: ../templates/docker-compose.prod.yml.j2
+        dest: "{{ deploy_dir }}/docker-compose.yml"
+        mode: "0644"
+
+    # Contains the bot token and the model API key: 0600, templated from
+    # extra-vars passed at runtime (see ci-cd.yml), never committed.
+    - name: Render .env
+      ansible.builtin.template:
+        src: ../templates/env.j2
+        dest: "{{ deploy_dir }}/.env"
+        mode: "0600"
+
+    # Only needed while the GHCR package is private. Checks non-empty, not
+    # just "is defined": CI always passes -e ghcr_pat=..., even when the
+    # secret is unset, in which case GitHub Actions substitutes an empty
+    # string rather than omitting the flag.
+    - name: Log in to GHCR
+      community.docker.docker_login:
+        registry_url: ghcr.io
+        username: "{{ ghcr_owner }}"
+        password: "{{ ghcr_pat }}"
+      when: ghcr_pat is defined and ghcr_pat | length > 0
+
+    # pull: always forces a fresh pull even when the tag string is unchanged.
+    # The named volume holding the database is untouched by a redeploy.
+    - name: Pull image and (re)start the stack
+      community.docker.docker_compose_v2:
+        project_src: "{{ deploy_dir }}"
+        pull: always
+        state: present
+
+    # A crashing bot (bad token, another instance holding the database lock,
+    # a failed migration) must fail the deploy instead of looking green. The
+    # app answers /healthz as soon as its web server is up.
+    - name: Wait for the bot to report healthy
+      ansible.builtin.uri:
+        url: "http://127.0.0.1:{{ app_port }}/healthz"
+        status_code: 200
+      register: health
+      until: health.status == 200
+      retries: 18
+      delay: 5
+
+    # Daily online backup of the SQLite database (see keep_backups in
+    # group_vars/production.yml for what this does and does not protect against).
+    - name: Install the backup script
+      ansible.builtin.template:
+        src: ../templates/backup.sh.j2
+        dest: "{{ deploy_dir }}/backup.sh"
+        mode: "0750"
+
+    - name: Schedule the daily database backup
+      ansible.builtin.cron:
+        name: "adhd-coach database backup"
+        minute: "30"
+        hour: "3"
+        job: "{{ deploy_dir }}/backup.sh >> /var/log/adhd-coach-backup.log 2>&1"
+
+    # Every deploy pulls a new tag (main-<sha>) and nothing removes the old
+    # ones, so the VPS disk fills up over time. This box is SHARED with other
+    # stacks (cicd-lab, namernut, wordpress, ...), so this deliberately does
+    # NOT run a blanket `docker image prune -a`, which would delete any image
+    # that happens not to be running right now, including their stopped
+    # ones. Instead: (1) remove only THIS app's older tags beyond the newest
+    # `keep_app_images` (kept for a quick rollback), and (2) prune dangling
+    # (untagged) images, which nothing can be using. Runs after the stack is
+    # up, so the image in use is always the newest tag and is protected twice
+    # over (never in the removal list; docker refuses to remove an image a
+    # container is using anyway).
+    - name: List this app's image tags, newest first
+      ansible.builtin.command: docker image ls {{ ghcr_image }} --format "{{ '{{.Repository}}:{{.Tag}}' }}"
+      register: app_image_refs
+      changed_when: false
+
+    - name: Remove this app's image tags older than the newest {{ keep_app_images }}
+      ansible.builtin.command: docker rmi {{ item }}
+      loop: "{{ (app_image_refs.stdout_lines | reject('search', ':<none>$') | list)[keep_app_images:] }}"
+      register: rmi_result
+      changed_when: rmi_result.rc == 0
+      # Cleanup must never fail a deploy that already succeeded: an image
+      # can be in use (rollback container) or already gone.
+      failed_when: false
+
+    - name: Prune dangling images
+      ansible.builtin.command: docker image prune -f
+      register: prune_result
+      changed_when: "'Total reclaimed space: 0B' not in prune_result.stdout"
+      failed_when: false
+
+    # Touches nginx config shared with every other site on this VPS: only a
+    # new file is written, no existing vhost is touched, and the reload
+    # handler refuses to reload if `nginx -t` doesn't pass first. Skipped
+    # entirely when custom_domain is blank (Telegram-only deployments).
+    - name: Render custom-domain nginx vhost
+      ansible.builtin.template:
+        src: ../templates/custom-domain.conf.j2
+        dest: "/etc/nginx/conf.d/{{ custom_domain }}.conf"
+        mode: "0644"
+      when: custom_domain is defined and custom_domain | length > 0
+      notify:
+        - Test nginx config
+        - Reload nginx
+
+  handlers:
+    - name: Test nginx config
+      ansible.builtin.command: nginx -t
+      changed_when: false
+
+    - name: Reload nginx
+      ansible.builtin.systemd:
+        name: nginx
+        state: reloaded

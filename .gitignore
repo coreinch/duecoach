@@ -7,3 +7,6 @@ __pycache__/
 .venv/
 .pytest_cache/
 .ruff_cache/
+
+# Ansible: the real inventory is generated in CI from the DEPLOY_HOST secret
+ansible/inventory/hosts.ini

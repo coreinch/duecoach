@@ -1,0 +1,159 @@
+name: CI/CD
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+# Serialize runs per branch/PR. Without this, two quick pushes to main would
+# run independently and the slower run for the older commit could finish its
+# deploy last, silently putting stale code on the VPS. `cancel-in-progress`
+# is deliberately false: cancelling would also kill a deploy that is already
+# mid-SSH into the server. Queued runs wait their turn, so the newest commit
+# is always deployed last.
+concurrency:
+  group: ci-cd-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
+        with:
+          python-version: "3.13"
+          cache: pip
+          cache-dependency-path: requirements-dev.txt
+
+      - run: pip install -r requirements-dev.txt
+      - run: ruff check .
+      - run: ruff format --check .
+      - run: pytest
+
+  build-and-push:
+    needs: test
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      image_tag: ${{ steps.vars.outputs.image_tag }}
+
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      # GHCR image paths must be lowercase; a GitHub username/repo can
+      # contain uppercase letters.
+      - name: Compute lowercase image repository name
+        id: repo
+        run: echo "name=$(echo '${{ github.repository }}' | tr '[:upper:]' '[:lower:]')" >> "$GITHUB_OUTPUT"
+
+      - name: Compute deploy image tag
+        id: vars
+        run: echo "image_tag=main-$(echo ${{ github.sha }} | cut -c1-7)" >> "$GITHUB_OUTPUT"
+
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4
+
+      - uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract image metadata (tags, labels)
+        id: meta
+        uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6
+        with:
+          images: ghcr.io/${{ steps.repo.outputs.name }}
+          # {{branch}} is empty on pull_request runs, which would produce an
+          # invalid tag; fall back to the PR's head ref there (metadata-action
+          # sanitizes it into a valid tag component).
+          tags: |
+            type=ref,event=branch
+            type=sha,format=short,prefix=${{ github.event_name == 'pull_request' && github.head_ref || '{{branch}}' }}-
+
+      - name: Build and push image
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7
+        with:
+          context: .
+          # The build always runs, even on a PR, so a Dockerfile break fails
+          # CI loudly. Only the push to the registry is limited to main.
+          push: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  deploy:
+    needs: build-and-push
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: Install Ansible and required collections
+        run: |
+          python3 -m pip install --upgrade pip
+          pip install ansible
+          ansible-galaxy collection install -r ansible/requirements.yml
+
+      # The VPS address lives only in the DEPLOY_HOST secret, never in the
+      # repo: the committed inventory is just hosts.ini.example. This file
+      # only ever exists on the ephemeral runner.
+      - name: Generate inventory from secret
+        run: |
+          mkdir -p ansible/inventory
+          printf '[production]\nvps ansible_host=%s ansible_user=root\n' "${{ secrets.DEPLOY_HOST }}" > ansible/inventory/hosts.ini
+
+      - name: Configure SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.DEPLOY_SSH_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -H "${{ secrets.DEPLOY_HOST }}" >> ~/.ssh/known_hosts
+
+      - name: Run Ansible deploy playbook
+        env:
+          IMAGE_TAG: ${{ needs.build-and-push.outputs.image_tag }}
+          GHCR_PAT: ${{ secrets.GHCR_PULL_PAT }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          ALLOWED_USERS: ${{ secrets.ALLOWED_USERS }}
+          LLM_API_KEY: ${{ secrets.LLM_API_KEY }}
+          LLM_MODEL: ${{ secrets.LLM_MODEL }}
+          VIBER_AUTH_TOKEN: ${{ secrets.VIBER_AUTH_TOKEN }}
+          WHATSAPP_TOKEN: ${{ secrets.WHATSAPP_TOKEN }}
+          WHATSAPP_PHONE_NUMBER_ID: ${{ secrets.WHATSAPP_PHONE_NUMBER_ID }}
+          WHATSAPP_VERIFY_TOKEN: ${{ secrets.WHATSAPP_VERIFY_TOKEN }}
+          WHATSAPP_APP_SECRET: ${{ secrets.WHATSAPP_APP_SECRET }}
+          WHATSAPP_TEMPLATE: ${{ secrets.WHATSAPP_TEMPLATE }}
+          PUBLIC_URL: ${{ secrets.PUBLIC_URL }}
+        run: |
+          # Built via jq rather than interpolated into the ansible-playbook
+          # command line: tokens can contain shell metacharacters, and
+          # jq --arg escapes arbitrary content safely.
+          jq -n \
+            --arg image_tag "$IMAGE_TAG" \
+            --arg ghcr_pat "$GHCR_PAT" \
+            --arg telegram_bot_token "$TELEGRAM_BOT_TOKEN" \
+            --arg allowed_users "$ALLOWED_USERS" \
+            --arg llm_api_key "$LLM_API_KEY" \
+            --arg llm_model "$LLM_MODEL" \
+            --arg viber_auth_token "$VIBER_AUTH_TOKEN" \
+            --arg whatsapp_token "$WHATSAPP_TOKEN" \
+            --arg whatsapp_phone_number_id "$WHATSAPP_PHONE_NUMBER_ID" \
+            --arg whatsapp_verify_token "$WHATSAPP_VERIFY_TOKEN" \
+            --arg whatsapp_app_secret "$WHATSAPP_APP_SECRET" \
+            --arg whatsapp_template "$WHATSAPP_TEMPLATE" \
+            --arg public_url "$PUBLIC_URL" \
+            '$ARGS.named' > /tmp/extra-vars.json
+
+          ansible-playbook -i ansible/inventory/hosts.ini ansible/playbooks/deploy.yml \
+            --private-key ~/.ssh/deploy_key \
+            -e @/tmp/extra-vars.json

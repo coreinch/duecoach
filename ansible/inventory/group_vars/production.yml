@@ -1,0 +1,45 @@
+---
+# Where the compose stack lives on the VPS.
+deploy_dir: /opt/adhd-coach
+
+# Host port for the bot's web server (the /healthz check and, for Viber and
+# WhatsApp, the webhooks). Bound to 127.0.0.1 only in
+# templates/docker-compose.prod.yml.j2: reachable from the VPS itself, via the
+# nginx vhost below when one is configured. Telegram needs no inbound traffic.
+# This box is shared: 8090/8091 are used by cicd-lab and 8092 by namernut, so
+# 8093 is the next one. Confirm it is free with `ss -tlnp` before the first
+# deploy.
+app_port: 8093
+
+# Must match the GHCR path GitHub Actions pushes to: lowercase "owner/repo",
+# derived in ci-cd.yml from ${{ github.repository }}. That follows the GitHub
+# account's CURRENT name, and there is no dynamic way to derive it here, so if
+# the account or repo is ever renamed this needs a manual update too (a stale
+# value fails the deploy with "manifest unknown").
+ghcr_owner: coreinch
+ghcr_repo: adhd-coach
+ghcr_image: "ghcr.io/{{ ghcr_owner }}/{{ ghcr_repo }}"
+
+# Overridden per-run from the command line, e.g.:
+#   ansible-playbook playbooks/deploy.yml -e image_tag=main-a1b2c3d
+image_tag: main
+
+# Public hostname for an nginx vhost that forwards /viber, /whatsapp and
+# /healthz to the bot. Leave blank for a Telegram-only deployment: the vhost
+# task is then skipped entirely. When set, it reuses the same self-signed
+# origin certificate as the other vhosts on this box (Cloudflare terminates
+# the real HTTPS at its edge), and the DNS record must be pointed at the VPS
+# with the proxy enabled in the Cloudflare dashboard, which is outside this
+# repo's reach.
+custom_domain: ""
+
+# How many of this app's most recent image tags to keep on the VPS after a
+# deploy (the newest is the running one; the rest are for a quick rollback).
+keep_app_images: 3
+
+# The SQLite database holds every user's chats and goals. A daily online
+# backup is written next to it, inside the same Docker volume (it protects
+# against corruption and bad deploys, NOT against losing the VPS: copy
+# /var/lib/docker/volumes/adhd-coach_coach-data/_data/backups off the box if
+# that matters).
+keep_backups: 7

@@ -1,0 +1,33 @@
+services:
+  coach:
+    image: "{{ ghcr_image }}:{{ image_tag }}"
+    restart: unless-stopped
+    init: true
+    stop_grace_period: 30s
+    env_file:
+      - .env
+    environment:
+      DB_PATH: /data/coach.db
+      WEB_HOST: 0.0.0.0
+    volumes:
+      # The database. Named volume: survives redeploys and image updates.
+      - coach-data:/data
+    ports:
+      # 127.0.0.1-only: the nginx vhost (when configured) is the only public
+      # entry point, and only for the Viber/WhatsApp webhooks.
+      - "127.0.0.1:{{ app_port }}:8080"
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "5"
+
+volumes:
+  coach-data:

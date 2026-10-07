@@ -1,0 +1,20 @@
+#!/bin/sh
+# Daily online backup of the bot's SQLite database, written by the deploy
+# playbook. Uses SQLite's backup API, so it is safe while the bot is running.
+set -eu
+cd {{ deploy_dir }}
+docker compose exec -T coach python - <<'PY'
+import datetime
+import glob
+import os
+import sqlite3
+
+os.makedirs("/data/backups", exist_ok=True)
+source = sqlite3.connect("/data/coach.db")
+target = sqlite3.connect(f"/data/backups/coach-{datetime.date.today().isoformat()}.db")
+source.backup(target)
+target.close()
+source.close()
+for old in sorted(glob.glob("/data/backups/coach-*.db"))[:-{{ keep_backups }}]:
+    os.remove(old)
+PY
