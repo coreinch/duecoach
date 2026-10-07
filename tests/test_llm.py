@@ -80,3 +80,34 @@ def test_the_system_prompt_carries_the_date_time_notes_and_playbook(user):
     db.set_field(1001, "notes", "likes timers")
     system = llm._system(1001)
     assert "Now: " in system and "Europe/Athens" in system and "likes timers" in system and "- start_sprint:" in system
+
+
+class FakeCompletions:
+    def __init__(self, answers):
+        self.answers, self.calls = list(answers), 0
+
+    async def create(self, **kwargs):
+        self.calls += 1
+        return self.answers.pop(0)
+
+
+def outage():
+    return NS(choices=None, error={"message": "provider_unavailable", "code": 502})
+
+
+async def test_a_provider_outage_is_retried_once_then_reported_clearly(monkeypatch):
+    ok = NS(choices=[NS(message=message("fine"))])
+    fake = FakeCompletions([outage(), ok])
+    monkeypatch.setattr(llm._client, "chat", NS(completions=fake))
+    monkeypatch.setattr(llm.asyncio, "sleep", lambda s: _noop())
+    assert (await llm._chat([{"role": "user", "content": "hi"}])).content == "fine" and fake.calls == 2
+
+    fake = FakeCompletions([outage(), outage()])
+    monkeypatch.setattr(llm._client, "chat", NS(completions=fake))
+    with pytest.raises(llm.ModelError, match="provider_unavailable"):
+        await llm._chat([{"role": "user", "content": "hi"}])
+    assert fake.calls == 2
+
+
+async def _noop():
+    return None
