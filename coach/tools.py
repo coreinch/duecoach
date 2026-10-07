@@ -5,7 +5,7 @@ import time
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
-from . import db, playbook
+from . import db
 from .config import CHECKIN_INTERVAL_MINUTES
 
 MAX_REMINDER_MINUTES = 60 * 24 * 30
@@ -24,12 +24,6 @@ def _fn(name: str, description: str, properties: dict, required: list[str]) -> d
 
 
 TOOLS = [
-    _fn(
-        "get_strategy",
-        "Read the coaching playbook card for a technique before you suggest it. Pick the id from the playbook index.",
-        {"id": {"type": "string", "enum": playbook.IDS}},
-        ["id"],
-    ),
     _fn(
         "set_reminder",
         "Send the user a message after a delay: a timer, a nudge, or a reminder. Call it once per reminder.",
@@ -132,10 +126,6 @@ def _set_reminder(uid: int, a: dict) -> str:
     return f"ok: reminder set for {minutes:g} minutes from now"
 
 
-def _get_strategy(uid: int, a: dict) -> str:
-    return playbook.lookup(str(a["id"])) or "error: unknown strategy id"
-
-
 def _set_timezone(uid: int, a: dict) -> str:
     name = _text(a, "name")
     try:
@@ -217,7 +207,6 @@ _DISPATCH = {
     "set_timezone": _set_timezone,
     "set_checkins": _set_checkins,
     "snooze_checkins": _snooze_checkins,
-    "get_strategy": _get_strategy,
     "set_reminder": _set_reminder,
     "add_goal": _add_goal,
     "retire_goal": _retire_goal,

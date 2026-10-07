@@ -225,9 +225,15 @@ CRISIS_PATTERNS = [
     r"\babus(ed|e|ive)\b",
     r"αυτοκτον\w*|να πεθανω|δεν θελω να ζω|τελειωσω (τα παντα|τη ζωη|ολα)|κακο στον εαυτο μου|δεν αντεχω αλλο|κακοποι\w*",
 ]
-# playbook cards that mean the coach is helping with distress rather than with a plan
-DISTRESS_CARDS = {"pause_coaching", "anxiety_approach", "self_talk", "setback_reframe", "overload", "too_much_signals"}
-_PROBLEM, _STEP, _CRISIS = ([re.compile(p) for p in patterns] for patterns in (PROBLEM_PATTERNS, STEP_PATTERNS, CRISIS_PATTERNS))
+# softer than a crisis: the person is struggling (anxiety, overwhelm, harsh self-criticism). Not the moment for a form.
+DISTRESS_PATTERNS = [
+    r"anxi\w*|panic\w*|overwhelm\w*|too much|can t cope|drowning|hopeless|give up|giving up|worthless|useless|stupid|failure|hate myself",
+    r"what s wrong with me|always (mess|screw)\w* (it |everything )?up|can t do anything right|burn(ed|t)? out|breaking down|falling apart",
+    r"αγχ\w*|πανικ\w*|με πνιγ\w*|δεν τα βγαζω|τα παρατω|αχρηστ\w*|χαζ\w*|αποτυχ\w*|απελπισ\w*|τι φταιει σε μενα|τα χαλαω παντα",
+]
+_PROBLEM, _STEP, _CRISIS, _DISTRESS = (
+    [re.compile(p) for p in patterns] for patterns in (PROBLEM_PATTERNS, STEP_PATTERNS, CRISIS_PATTERNS, DISTRESS_PATTERNS)
+)
 
 
 def signal_in(text: str) -> str | None:
@@ -245,19 +251,19 @@ def is_crisis(text: str) -> bool:
     return any(p.search(said) for p in _CRISIS)
 
 
+def is_distress(text: str) -> bool:
+    said = normalize(text)
+    return any(p.search(said) for p in _DISTRESS)
+
+
 def question_blocked(uid: int, text: str) -> bool:
-    """True when this is not the moment for a question of the bot's own (known before the coach writes its reply)."""
-    if is_crisis(text):
-        return True  # someone in distress needs the coach, not a form
+    """True when this is not the moment for a question of the bot's own."""
+    if is_crisis(text) or is_distress(text):
+        return True  # someone struggling needs the coach, not a form
     if text.strip().endswith(("?", ";", "\u037e")):
         return True  # they asked something themselves: answer it and stop
     user = db.get_user(uid)
     return db.message_count(uid) - (user["question_at_count"] if user["question_at_count"] is not None else -100) < QUESTION_GAP
-
-
-def distress_in_reply(uid: int) -> bool:
-    """The coach just read a card about distress, which only shows once the reply is written: drop the question then."""
-    return bool(llm.cards_read(uid) & DISTRESS_CARDS)
 
 
 def note_question_asked(uid: int) -> None:

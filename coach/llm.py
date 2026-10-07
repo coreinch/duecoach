@@ -23,6 +23,7 @@ log = logging.getLogger("coach.llm")
 
 MAX_TOOL_ROUNDS = 4
 MAX_EMPTY_RETRIES = 2
+MAX_CONSECUTIVE_ASSISTANT = 2  # in the history sent to the model: proactive check-ins pile up while a user is silent
 MODEL_ATTEMPTS = 2  # tries per call when there is only one model to use
 NOTES_EVERY = 20  # new chat messages between refreshes of the long-term notes
 # Free routes are reasoning models: they think before they answer, and the thinking counts against max_tokens. A small limit
@@ -31,18 +32,6 @@ SHORT_JOB_TOKENS = 2000
 
 MODELS = [LLM_MODEL, *[m for m in LLM_FALLBACK_MODELS if m != LLM_MODEL]]  # in order of preference
 _down_until: dict[str, float] = {}  # model -> time before which it is skipped (it failed recently)
-_cards_read: dict[int, list[str]] = {}  # user -> playbook cards read while writing their latest reply
-
-
-def cards_read(user_id: int) -> set[str]:
-    """Which playbook cards the coach read for this user's latest reply (tells the bot what kind of moment this was)."""
-    return set(_cards_read.get(user_id, []))
-
-
-MAX_CONSECUTIVE_ASSISTANT = 2  # in the history sent to the model: proactive check-ins pile up while a user is silent
-
-READ_PLAYBOOK = {"type": "function", "function": {"name": "get_strategy"}}
-
 _client = AsyncOpenAI(api_key=LLM_API_KEY, base_url=LLM_BASE_URL, timeout=LLM_TIMEOUT, max_retries=2)
 _slots = asyncio.Semaphore(LLM_CONCURRENCY)  # one slow or rate-limited gateway must not be hammered by every user at once
 
@@ -55,8 +44,8 @@ def _system(user_id: int) -> str:
         + "\n"
         + prompts.LANGUAGE.get(lang, prompts.LANGUAGE["en"])
         + (f"\n\nWhat you know about the user:\n{notes}" if notes else "")
-        + "\n\nPlaybook index (technique ids you can read with get_strategy):\n"
-        + playbook.index_text()
+        + "\n\nCoaching playbook (techniques to apply in your own words; use the one that fits what they need right now):\n\n"
+        + playbook.full_text()
         + "\n\n"
         + tools.coaching_state(user_id)
     )
@@ -87,10 +76,8 @@ def _order() -> list[str]:
     return [m for m in MODELS if _down_until.get(m, 0) <= now] or list(MODELS)
 
 
-async def _chat(messages: list[dict], tool_defs: list[dict] | None = None, max_tokens: int = 1500, force: dict | None = None):
+async def _chat(messages: list[dict], tool_defs: list[dict] | None = None, max_tokens: int = 1500):
     kwargs = {"tools": tool_defs} if tool_defs else {}
-    if force:
-        kwargs["tool_choice"] = force
     attempts = MODEL_ATTEMPTS if len(MODELS) == 1 else 1  # with fallbacks available, move on rather than retry the same model
     failures, started = [], time.time()
     for model in _order():
@@ -127,21 +114,19 @@ async def _complete(messages: list[dict], max_tokens: int = 1500) -> str:
     return ((await _chat(messages, max_tokens=max_tokens)).content or "").strip()
 
 
-async def reply(user_id: int, user_text: str, instruction: str | None = None, coach: bool = True) -> str:
-    """Chat with history. `instruction` is a hidden steering note for this turn (e.g. a /stuck command).
+async def reply(user_id: int, user_text: str, instruction: str | None = None) -> str:
+    """Chat with history, in one model call: the whole playbook is in the system prompt, so no lookup round is needed.
 
-    With coach=True (the default) the model must read a playbook card before it answers, on every turn.
+    `instruction` is a hidden steering note for this turn (e.g. a /stuck command or a check-in's purpose).
     """
     if user_text:
         db.add_message(user_id, "user", user_text)
     messages = [{"role": "system", "content": _system(user_id)}, *_history(user_id)]
     if instruction:
         messages.append({"role": "system", "content": instruction})
-    text, empty_retries, force = "", 0, READ_PLAYBOOK if coach else None
-    _cards_read[user_id] = []
+    text, empty_retries = "", 0
     for _ in range(MAX_TOOL_ROUNDS + MAX_EMPTY_RETRIES):
-        msg = await _chat(messages, tools.TOOLS, force=force)
-        force = None  # only the first round is forced; after that the model answers or uses other tools
+        msg = await _chat(messages, tools.TOOLS)
         text = (msg.content or "").strip()
         if not msg.tool_calls:
             if text or empty_retries >= MAX_EMPTY_RETRIES:
@@ -161,8 +146,6 @@ async def reply(user_id: int, user_text: str, instruction: str | None = None, co
         )
         for call in msg.tool_calls:
             result = tools.run_tool(user_id, call.function.name, call.function.arguments)
-            if call.function.name == "get_strategy" and result.startswith(tuple(playbook.IDS)):
-                _cards_read[user_id].append(result.split(" ", 1)[0])
             # log the outcome, not the arguments: they contain what the user wrote about their life
             log.info("tool %s -> %s", call.function.name, result.split(":", 1)[0])
             messages.append({"role": "tool", "tool_call_id": call.id, "content": result})

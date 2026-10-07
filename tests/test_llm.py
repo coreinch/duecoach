@@ -18,33 +18,26 @@ def model(monkeypatch):
     """Script the model: each queued item is the message returned by one call; every call is recorded."""
     queue, calls = [], []
 
-    async def fake_chat(messages, tool_defs=None, max_tokens=1500, force=None):
-        calls.append({"messages": list(messages), "force": force})
+    async def fake_chat(messages, tool_defs=None, max_tokens=1500):
+        calls.append({"messages": list(messages)})
         return queue.pop(0)
 
     monkeypatch.setattr(llm, "_chat", fake_chat)
     return NS(queue=queue, calls=calls)
 
 
-async def test_the_first_round_is_forced_to_read_the_playbook_and_the_card_reaches_the_model(model, user):
-    model.queue += [message(calls=[("get_strategy", {"id": "start_sprint"})]), message("Try a 5-minute timer.")]
+async def test_one_call_answers_and_the_whole_playbook_is_already_in_the_prompt(model, user):
+    model.queue += [message("Try a 5-minute timer.")]
     assert await llm.reply(1001, "I can't start") == "Try a 5-minute timer."
-    assert model.calls[0]["force"] == llm.READ_PLAYBOOK and model.calls[1]["force"] is None
-    tool_result = model.calls[1]["messages"][-1]
-    assert tool_result["role"] == "tool" and "Shrink the task" in tool_result["content"]
+    assert len(model.calls) == 1
+    system = model.calls[0]["messages"][0]["content"]
+    assert "Shrink the task" in system and all(f"{c['id']} (use when" in system for c in llm.playbook.CARDS)
     assert [m["role"] for m in db.recent_messages(1001, 5)] == ["user", "assistant"]
-
-
-async def test_notes_style_calls_skip_the_forced_lookup(model, user):
-    model.queue += [message("Here is your note.")]
-    await llm.reply(1001, "/progress", "write a note", coach=False)
-    assert model.calls[0]["force"] is None
 
 
 async def test_tools_change_state_and_are_logged_without_their_arguments(model, user, caplog):
     secret = "my secret goal about my divorce"
     model.queue += [
-        message(calls=[("get_strategy", {"id": "goal_wording"})]),
         message(calls=[("add_goal", {"text": secret})]),
         message("Saved."),
     ]
@@ -55,15 +48,15 @@ async def test_tools_change_state_and_are_logged_without_their_arguments(model, 
 
 
 async def test_empty_answers_are_retried_then_fall_back_in_the_users_language(model, user):
-    model.queue += [message(calls=[("get_strategy", {"id": "overload"})]), message(None), message("  "), message("")]
+    model.queue += [message(None), message("  "), message("")]
     db.set_field(1001, "lang", "el")
     out = await llm.reply(1001, "hi")
     assert out == "Είμαι εδώ. Θέλεις να μου πεις τι συμβαίνει;"
-    assert len(model.calls) == 4  # forced round + the answer retried twice
+    assert len(model.calls) == 3  # the answer, retried twice
 
 
 async def test_check_ins_send_the_instruction_but_store_only_the_reply(model, user):
-    model.queue += [message(calls=[("get_strategy", {"id": "start_sprint"})]), message("How is the first step going?")]
+    model.queue += [message("How is the first step going?")]
     await llm.reply(1001, "", "PULSE INSTRUCTION")
     assert model.calls[0]["messages"][-1] == {"role": "system", "content": "PULSE INSTRUCTION"}
     assert db.recent_messages(1001, 5) == [{"role": "assistant", "content": "How is the first step going?"}]
@@ -81,7 +74,7 @@ def test_history_keeps_at_most_two_assistant_messages_in_a_row(user):
 def test_the_system_prompt_carries_the_date_time_notes_and_playbook(user):
     db.set_field(1001, "notes", "likes timers")
     system = llm._system(1001)
-    assert "Now: " in system and "Europe/Athens" in system and "likes timers" in system and "- start_sprint:" in system
+    assert "Now: " in system and "Europe/Athens" in system and "likes timers" in system and "start_sprint (use when" in system
 
 
 class FakeCompletions:

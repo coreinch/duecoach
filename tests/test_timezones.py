@@ -52,7 +52,7 @@ def seed_history(uid, n=6):
 def new_user(monkeypatch):
     """Has agreed to the privacy notice and finished the interview, hasn't given a timezone. The model is replaced by a fixed answer."""
 
-    async def fake_reply(uid, text, instruction=None, coach=True):
+    async def fake_reply(uid, text, instruction=None):
         return "coached"
 
     monkeypatch.setattr(llm, "reply", fake_reply)
@@ -224,7 +224,7 @@ async def test_crisis_wording_while_the_local_time_is_being_checked_keeps_the_zo
 
 
 async def test_no_question_after_a_failed_model_call_or_for_confirmed_users(new_user, monkeypatch):
-    async def broken(uid, text, instruction=None, coach=True):
+    async def broken(uid, text, instruction=None):
         raise RuntimeError("down")
 
     monkeypatch.setattr(llm, "reply", broken)
@@ -233,7 +233,7 @@ async def test_no_question_after_a_failed_model_call_or_for_confirmed_users(new_
     assert db.get_user(new_user)["tz_state"] == ""
     db.set_field(new_user, "tz_set", 1)
 
-    async def fine(uid, text, instruction=None, coach=True):
+    async def fine(uid, text, instruction=None):
         return "coached"
 
     monkeypatch.setattr(llm, "reply", fine)

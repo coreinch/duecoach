@@ -24,7 +24,7 @@ def model(monkeypatch):
         log["drafts"].append((kind, text, previous))
         return f"{kind}: {text}" if previous is None else f"{kind} (revised): {text} <- {previous[:20]}"
 
-    async def fake_reply(uid, text, instruction=None, coach=True):
+    async def fake_reply(uid, text, instruction=None):
         db.add_message(uid, "user", text)
         db.add_message(uid, "assistant", "coached")
         return "coached"
@@ -32,7 +32,6 @@ def model(monkeypatch):
     monkeypatch.setattr(llm, "suggest_goals", fake_suggest)
     monkeypatch.setattr(llm, "draft", fake_draft)
     monkeypatch.setattr(llm, "reply", fake_reply)
-    monkeypatch.setattr(llm, "cards_read", lambda uid: set())
     return log
 
 
@@ -217,7 +216,7 @@ async def test_the_goal_ideas_are_prepared_while_the_coach_writes_not_after_it(m
     db.set_profile(uid, {"why": "x", "tried": "y", "obstacle": "z", "strength": "s", "rhythm": "r"})
     flows.put(uid, "intake", "mood", started=time.time())
 
-    async def slow_reply(uid, text, instruction=None, coach=True):
+    async def slow_reply(uid, text, instruction=None):
         await asyncio.sleep(0.3)
         db.add_message(uid, "user", text)
         db.add_message(uid, "assistant", "coached")
@@ -229,7 +228,6 @@ async def test_the_goal_ideas_are_prepared_while_the_coach_writes_not_after_it(m
 
     monkeypatch.setattr(llm, "reply", slow_reply)
     monkeypatch.setattr(llm, "suggest_goals", slow_suggest)
-    monkeypatch.setattr(llm, "cards_read", lambda uid: set())
     started = time.monotonic()
     reply = await say("a bit stressed", "3010")
     elapsed = time.monotonic() - started
@@ -248,14 +246,13 @@ async def test_ideas_prepared_for_a_question_that_gets_dropped_are_abandoned(mon
         finished.append(1)
         return list(IDEAS)
 
-    async def distressed_reply(uid, text, instruction=None, coach=True):
+    async def distressed_reply(uid, text, instruction=None):
         db.add_message(uid, "user", text)
         db.add_message(uid, "assistant", "coached")
         return "coached"
 
     monkeypatch.setattr(llm, "reply", distressed_reply)
     monkeypatch.setattr(llm, "suggest_goals", slow_suggest)
-    monkeypatch.setattr(llm, "cards_read", lambda uid: {"self_talk"})  # the coach ended up helping with distress
     reply = await say("I always mess everything up", "3011")
     await asyncio.sleep(0.4)
     assert reply == "coached" and flows.get(uid) is None and finished == []
@@ -273,14 +270,13 @@ async def test_ideas_are_started_during_the_interview_and_ready_when_the_goal_qu
         await asyncio.sleep(0.15)
         return list(IDEAS)
 
-    async def reply(uid, text, instruction=None, coach=True):
+    async def reply(uid, text, instruction=None):
         db.add_message(uid, "user", text)
         db.add_message(uid, "assistant", "coached")
         return "coached"
 
     monkeypatch.setattr(llm, "suggest_goals", slow_suggest)
     monkeypatch.setattr(llm, "reply", reply)
-    monkeypatch.setattr(llm, "cards_read", lambda uid: set())
     flows.put(uid, "intake", "why", started=time.time())
     await say("because mornings fall apart", "3020")
     await say("alarms", "3020")

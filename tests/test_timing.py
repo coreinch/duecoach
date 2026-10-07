@@ -7,10 +7,9 @@ from coach import core, db, flows, llm
 
 @pytest.fixture
 def model(monkeypatch):
-    """Coaching replies are fixed; drafts echo the text. `cards` is what the coach is pretended to have read this turn."""
-    state = {"cards": set()}
+    """Coaching replies are fixed; drafts echo the text."""
 
-    async def fake_reply(uid, text, instruction=None, coach=True):
+    async def fake_reply(uid, text, instruction=None):
         if text:  # like the real model call: both sides of the exchange are stored
             db.add_message(uid, "user", text)
         db.add_message(uid, "assistant", "coached")
@@ -21,8 +20,6 @@ def model(monkeypatch):
 
     monkeypatch.setattr(llm, "reply", fake_reply)
     monkeypatch.setattr(llm, "draft", fake_draft)
-    monkeypatch.setattr(llm, "cards_read", lambda uid: state["cards"])
-    return state
 
 
 def make_user(messages, ext="5005"):
@@ -111,9 +108,7 @@ async def test_never_during_a_crisis_even_with_a_problem_named(model):
 
 async def test_never_when_the_coach_is_helping_with_distress(model):
     make_user(8)
-    model["cards"] = {"anxiety_approach"}
     assert await say("I always get so anxious before work") == "coached"
-    model["cards"] = set()
     assert ASKS_FOR_GOAL in await say("I always run late too")  # a calmer moment: now it fits
 
 
@@ -186,7 +181,7 @@ async def test_the_fixed_questions_from_before_still_work_end_to_end(model):
 async def test_the_coach_is_told_not_to_ask_its_own_question_when_ours_follows(model, monkeypatch):
     seen = []
 
-    async def recording_reply(uid, text, instruction=None, coach=True):
+    async def recording_reply(uid, text, instruction=None):
         seen.append(instruction)
         db.add_message(uid, "user", text)
         db.add_message(uid, "assistant", "coached")
@@ -203,13 +198,10 @@ async def test_the_coach_is_told_not_to_ask_its_own_question_when_ours_follows(m
     assert seen[-1] is None
 
 
-async def test_a_question_that_was_due_is_dropped_if_the_coach_ended_up_helping_with_distress(model):
+async def test_a_question_that_was_due_is_not_asked_when_the_person_is_struggling(model):
     uid = make_user(2)
-    original = model["cards"]
-    model["cards"] = {"self_talk"}  # the coach turns out to read a distress card while writing its reply
     reply = await say("I always mess everything up")
     assert reply == "coached" and flows.get(uid) is None and db.get_user(uid)["question_at_count"] == -100
-    model["cards"] = original
 
 
 @pytest.mark.parametrize(
@@ -228,7 +220,7 @@ def test_the_coachs_closing_question_is_dropped_when_ours_follows(reply, expecte
 
 
 async def test_the_reply_and_our_question_do_not_both_end_with_a_question(model, monkeypatch):
-    async def asks_anyway(uid, text, instruction=None, coach=True):
+    async def asks_anyway(uid, text, instruction=None):
         db.add_message(uid, "user", text)
         db.add_message(uid, "assistant", "x")
         return "Keep them in a bowl by the door. Do you have one?"
