@@ -116,7 +116,12 @@ def _m2_consent_and_resilience() -> None:
         _conn.execute("UPDATE users SET consent_at=COALESCE(created_at, ?), tz_set=1 WHERE consent_at IS NULL", (time.time(),))
 
 
-MIGRATIONS = [_m1_baseline, _m2_consent_and_resilience]
+def _m3_timezone_onboarding() -> None:
+    """The bot asks new users for their city itself: where that conversation stands, and the zone awaiting a yes/no."""
+    _ensure_columns("users", {"tz_state": "TEXT DEFAULT ''", "tz_candidate": "TEXT DEFAULT ''", "tz_attempts": "INTEGER DEFAULT 0"})
+
+
+MIGRATIONS = [_m1_baseline, _m2_consent_and_resilience, _m3_timezone_onboarding]
 
 
 def init(path: str | None = None) -> None:
@@ -165,6 +170,9 @@ USER_FIELDS = {
     "checkin_failures",
     "checkin_retry_at",
     "last_review",
+    "tz_state",
+    "tz_candidate",
+    "tz_attempts",
 }
 
 
