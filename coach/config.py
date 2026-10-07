@@ -52,6 +52,13 @@ if not LLM_API_KEY:
     raise SystemExit("LLM_API_KEY is not set (see .env.example)")
 LLM_BASE_URL = os.getenv("LLM_BASE_URL", "https://api.kilo.ai/api/gateway")
 LLM_MODEL = os.getenv("LLM_MODEL", "kilo-auto/free")
+# Models to try, in order, when LLM_MODEL fails (an outage, a rate limit, a timeout, or a model that rejects a request).
+# Comma-separated. They must support tool calling, since the coach reads its playbook through a tool.
+LLM_FALLBACK_MODELS = [m.strip() for m in os.getenv("LLM_FALLBACK_MODELS", "").split(",") if m.strip()]
+# Seconds a model that just failed is skipped, so each message doesn't wait on a model that is down.
+LLM_MODEL_COOLDOWN = int(os.getenv("LLM_MODEL_COOLDOWN", "120"))
+# Stop trying further models once a request has taken this many seconds (each model can use up to LLM_TIMEOUT).
+LLM_BUDGET = float(os.getenv("LLM_BUDGET", "150"))
 LLM_TIMEOUT = float(os.getenv("LLM_TIMEOUT", "60"))  # seconds per model call
 LLM_CONCURRENCY = int(os.getenv("LLM_CONCURRENCY", "4"))  # model calls in flight at once, across all users
 TIMEZONE = os.getenv("TIMEZONE", "UTC")  # default for new users; each user can change it with /timezone

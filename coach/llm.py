@@ -1,16 +1,31 @@
 import asyncio
 import logging
+import time
 
+import openai
 from openai import AsyncOpenAI
 
 from . import db, playbook, prompts, strings, tools
-from .config import HISTORY_TURNS, LLM_API_KEY, LLM_BASE_URL, LLM_CONCURRENCY, LLM_MODEL, LLM_TIMEOUT
+from .config import (
+    HISTORY_TURNS,
+    LLM_API_KEY,
+    LLM_BASE_URL,
+    LLM_BUDGET,
+    LLM_CONCURRENCY,
+    LLM_FALLBACK_MODELS,
+    LLM_MODEL,
+    LLM_MODEL_COOLDOWN,
+    LLM_TIMEOUT,
+)
 
 log = logging.getLogger("coach.llm")
 
 MAX_TOOL_ROUNDS = 4
 MAX_EMPTY_RETRIES = 2
-MODEL_ATTEMPTS = 2  # tries per call when the gateway reports a provider outage
+MODEL_ATTEMPTS = 2  # tries per call when there is only one model to use
+
+MODELS = [LLM_MODEL, *[m for m in LLM_FALLBACK_MODELS if m != LLM_MODEL]]  # in order of preference
+_down_until: dict[str, float] = {}  # model -> time before which it is skipped (it failed recently)
 MAX_CONSECUTIVE_ASSISTANT = 2  # in the history sent to the model: proactive check-ins pile up while a user is silent
 
 READ_PLAYBOOK = {"type": "function", "function": {"name": "get_strategy"}}
@@ -50,24 +65,49 @@ def _history(user_id: int) -> list[dict]:
 
 
 class ModelError(RuntimeError):
-    """The gateway answered but produced no completion (a provider outage reported inside an HTTP 200)."""
+    """No model produced a completion (outages, rate limits, timeouts), with what each one reported."""
+
+
+def _order() -> list[str]:
+    """Models to try now: those not recently failed, best first. If every model is cooling down, try them all anyway."""
+    now = time.time()
+    return [m for m in MODELS if _down_until.get(m, 0) <= now] or list(MODELS)
 
 
 async def _chat(messages: list[dict], tool_defs: list[dict] | None = None, max_tokens: int = 1500, force: dict | None = None):
     kwargs = {"tools": tool_defs} if tool_defs else {}
     if force:
         kwargs["tool_choice"] = force
-    problem = None
-    for attempt in range(MODEL_ATTEMPTS):
-        async with _slots:
-            resp = await _client.chat.completions.create(model=LLM_MODEL, messages=messages, max_tokens=max_tokens, **kwargs)
-        if resp.choices:
-            return resp.choices[0].message
-        # free routes answer HTTP 200 with {"error": {...}} when the provider behind them is down
-        problem = getattr(resp, "error", None) or (getattr(resp, "model_extra", None) or {}).get("error") or "empty response"
-        log.warning("model returned no completion (%s)%s", problem, ", retrying" if attempt + 1 < MODEL_ATTEMPTS else "")
-        await asyncio.sleep(1)
-    raise ModelError(f"model returned no completion: {problem}")
+    attempts = MODEL_ATTEMPTS if len(MODELS) == 1 else 1  # with fallbacks available, move on rather than retry the same model
+    failures, started = [], time.time()
+    for model in _order():
+        if failures and time.time() - started > LLM_BUDGET:
+            failures.append(f"not tried (over the {LLM_BUDGET:g}s budget): {model}")
+            break
+        problem = "no completion"
+        for attempt in range(attempts):
+            try:
+                async with _slots:
+                    resp = await _client.chat.completions.create(model=model, messages=messages, max_tokens=max_tokens, **kwargs)
+            except openai.OpenAIError as error:  # connection, timeout, rate limit, server error, or a request this model rejects
+                problem = f"{type(error).__name__}: {error}"[:200]
+                rejected = isinstance(error, (openai.BadRequestError, openai.UnprocessableEntityError))
+            else:
+                if resp.choices:
+                    _down_until.pop(model, None)
+                    if model != MODELS[0]:
+                        log.warning("answered by fallback model %s", model)
+                    return resp.choices[0].message
+                # free routes answer HTTP 200 with {"error": {...}} when the provider behind them is down
+                error_body = getattr(resp, "error", None) or (getattr(resp, "model_extra", None) or {}).get("error")
+                problem, rejected = str(error_body or "empty response")[:200], False
+            log.warning("model %s failed (%s)%s", model, problem, ", retrying" if attempt + 1 < attempts else "")
+            if attempt + 1 < attempts:
+                await asyncio.sleep(1)
+        if not rejected:  # a model that merely rejected this one request is not down; don't skip it for the next user
+            _down_until[model] = time.time() + LLM_MODEL_COOLDOWN
+        failures.append(f"{model}: {problem}")
+    raise ModelError("; ".join(failures))
 
 
 async def _complete(messages: list[dict], max_tokens: int = 1500) -> str:

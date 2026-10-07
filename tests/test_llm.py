@@ -1,6 +1,8 @@
 import json
 from types import SimpleNamespace as NS
 
+import httpx
+import openai
 import pytest
 
 from coach import db, llm
@@ -111,3 +113,103 @@ async def test_a_provider_outage_is_retried_once_then_reported_clearly(monkeypat
 
 async def _noop():
     return None
+
+
+class PerModel:
+    """Scripted gateway: each model name has its own queue of answers (a reply, an outage body, or an exception to raise)."""
+
+    def __init__(self, **queues):
+        self.queues = {name.replace("_", "-"): list(items) for name, items in queues.items()}
+        self.calls = []
+
+    async def create(self, **kwargs):
+        model = kwargs["model"]
+        self.calls.append(model)
+        item = self.queues[model].pop(0)
+        if isinstance(item, Exception):
+            raise item
+        return item
+
+
+def good(text="fine"):
+    return NS(choices=[NS(message=message(text))])
+
+
+def connection_error():
+    return openai.APIConnectionError(request=httpx.Request("POST", "http://gateway"))
+
+
+def bad_request():
+    request = httpx.Request("POST", "http://gateway")
+    return openai.BadRequestError("tools not supported", response=httpx.Response(400, request=request), body=None)
+
+
+@pytest.fixture
+def chain(monkeypatch):
+    """Three models in preference order, no cooldown history, and a clock the test controls."""
+    clock = {"t": 1000.0}
+    monkeypatch.setattr(llm, "MODELS", ["primary", "backup-1", "backup-2"])
+    monkeypatch.setattr(llm, "_down_until", {})
+    monkeypatch.setattr(llm.time, "time", lambda: clock["t"])
+    monkeypatch.setattr(llm, "LLM_MODEL_COOLDOWN", 120)
+
+    def install(gateway):
+        monkeypatch.setattr(llm._client, "chat", NS(completions=gateway))
+        return gateway
+
+    install.clock = clock
+    return install
+
+
+async def ask():
+    return (await llm._chat([{"role": "user", "content": "hi"}])).content
+
+
+async def test_the_first_model_is_used_when_it_works(chain):
+    gateway = chain(PerModel(primary=[good("one")]))
+    assert await ask() == "one" and gateway.calls == ["primary"]
+
+
+async def test_a_failing_model_falls_through_to_the_next_and_is_skipped_for_a_while(chain):
+    gateway = chain(PerModel(primary=[outage(), good("back")], backup_1=[good("b1"), good("b1 again")], backup_2=[]))
+    assert await ask() == "b1" and gateway.calls == ["primary", "backup-1"]
+    assert await ask() == "b1 again" and gateway.calls[2:] == ["backup-1"]  # primary is cooling down: no wait on it
+    chain.clock["t"] += 121
+    assert await ask() == "back" and gateway.calls[3:] == ["primary"]  # cooldown over: the preferred model is tried first again
+
+
+async def test_connection_errors_and_rejected_requests_also_fall_through(chain):
+    gateway = chain(PerModel(primary=[connection_error()], backup_1=[bad_request()], backup_2=[good("third")]))
+    assert await ask() == "third" and gateway.calls == ["primary", "backup-1", "backup-2"]
+    assert set(llm._down_until) == {"primary"}  # a request one model rejects doesn't make it "down" for everyone else
+
+
+async def test_when_every_model_fails_the_error_names_each_one_and_all_are_tried_again_next_time(chain):
+    gateway = chain(PerModel(primary=[outage(), good("ok")], backup_1=[connection_error()], backup_2=[outage()]))
+    with pytest.raises(llm.ModelError) as error:
+        await ask()
+    assert all(name in str(error.value) for name in ("primary", "backup-1", "backup-2"))
+    assert await ask() == "ok"  # all were cooling down, so the preferred one was tried first rather than giving up
+    assert gateway.calls == ["primary", "backup-1", "backup-2", "primary"]
+
+
+async def test_a_model_that_recovers_leaves_the_cooldown_list(chain):
+    chain(PerModel(primary=[outage(), good("recovered")], backup_1=[good("b1")], backup_2=[]))
+    await ask()
+    assert "primary" in llm._down_until
+    chain.clock["t"] += 121
+    await ask()
+    assert "primary" not in llm._down_until
+
+
+async def test_the_total_time_budget_stops_further_models_after_slow_failures(chain, monkeypatch):
+    class Slow(PerModel):
+        async def create(self, **kwargs):
+            chain.clock["t"] += 100  # every attempt takes 100 seconds before failing
+            return await super().create(**kwargs)
+
+    gateway = chain(Slow(primary=[outage()], backup_1=[outage()], backup_2=[good("never reached")]))
+    monkeypatch.setattr(llm, "LLM_BUDGET", 150)
+    with pytest.raises(llm.ModelError, match="budget"):
+        await ask()
+    assert gateway.calls == ["primary", "backup-1"]  # the third model was not tried
