@@ -185,10 +185,14 @@ async def _flow_answer(uid: int, text: str) -> str | None:
     """Reply to the goal / weekly-step / follow-up question in progress, if any. None: ordinary chat."""
     result = await flows.answer(uid, text)
     if isinstance(result, flows.CoachTurn):  # the user reported how a step went, or finished the interview: coach that now
-        reply = await _coach(uid, result.text, result.instruction)
+        coaching = _coach(uid, result.text, result.instruction)
+        if callable(result.follow_up):  # the question takes a model call too: compute it while the coach writes
+            reply, question = await asyncio.gather(coaching, result.follow_up())
+        else:
+            reply, question = await coaching, result.follow_up
         if reply == _t(uid, "LLM_ERROR") and result.fallback:
-            return result.fallback
-        return f"{without_trailing_question(reply)}\n\n{result.follow_up}" if result.follow_up else reply
+            return f"{result.fallback}\n\n{question}" if question else result.fallback
+        return f"{without_trailing_question(reply)}\n\n{question}" if question else reply
     return result
 
 
@@ -198,12 +202,17 @@ async def _coach_with_question(uid: int, text: str) -> str:
     kind = None
     if not (flows.get(uid) or _timezone_pending(uid) or flows.question_blocked(uid, text)):
         kind = flows.question_due(uid, text) or ("timezone" if _should_ask_timezone(uid) else None)
+    ideas = asyncio.create_task(flows.goal_options(uid)) if kind == "goal" else None  # runs while the coach writes
     reply = await _coach(uid, text, prompts.QUESTION_FOLLOWS if kind else None)
     if kind is None or reply == _t(uid, "LLM_ERROR") or flows.distress_in_reply(uid):
+        if ideas:
+            ideas.cancel()
         return reply
     if kind == "timezone":
         db.set_field(uid, "tz_state", "asked")
         question = _t(uid, "TZ_ASK")
+    elif kind == "goal":
+        question = await flows.start_goal(uid, options=await ideas)
     else:
         question = await flows.start_question(uid, kind, text)
     if question is None:

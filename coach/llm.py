@@ -25,6 +25,9 @@ MAX_TOOL_ROUNDS = 4
 MAX_EMPTY_RETRIES = 2
 MODEL_ATTEMPTS = 2  # tries per call when there is only one model to use
 NOTES_EVERY = 20  # new chat messages between refreshes of the long-term notes
+# Free routes are reasoning models: they think before they answer, and the thinking counts against max_tokens. A small limit
+# is used up by the thinking and the answer comes back empty, so even one-sentence jobs get a generous budget.
+SHORT_JOB_TOKENS = 2000
 
 MODELS = [LLM_MODEL, *[m for m in LLM_FALLBACK_MODELS if m != LLM_MODEL]]  # in order of preference
 _down_until: dict[str, float] = {}  # model -> time before which it is skipped (it failed recently)
@@ -180,7 +183,7 @@ async def refresh_notes(user_id: int) -> None:
     prompt = prompts.SUMMARIZE.format(
         notes=db.get_notes(user_id) or "(none)", convo=convo, language=prompts.LANGUAGE_NAME.get(db.get_user(user_id)["lang"], "English")
     )
-    notes = await _complete([{"role": "user", "content": prompt}], max_tokens=1200)
+    notes = await _complete([{"role": "user", "content": prompt}], max_tokens=SHORT_JOB_TOKENS)
     if notes:
         db.set_fields(user_id, notes=notes, notes_at_count=count)
 
@@ -205,7 +208,9 @@ async def suggest_goals(user_id: int) -> list[str]:
         return []
     language = prompts.LANGUAGE_NAME.get(db.get_user(user_id)["lang"], "English")
     system = prompts.SUGGEST_GOALS.format(language=language, material="\n".join(parts))
-    out = await _complete([{"role": "system", "content": system}, {"role": "user", "content": "Suggest the three goals."}], max_tokens=600)
+    out = await _complete(
+        [{"role": "system", "content": system}, {"role": "user", "content": "Suggest the three goals."}], max_tokens=SHORT_JOB_TOKENS
+    )
     lines = [re.sub(r"^\s*(?:\d+[.)]|[-*\u2022])\s*", "", line).strip().strip("\"'\u00ab\u00bb\u201c\u201d ") for line in out.splitlines()]
     lines = [line for line in lines if 10 <= len(line) <= 240]
     return lines[:3] if len(lines) >= 3 else []
@@ -227,7 +232,7 @@ async def draft(user_id: int, kind: str, text: str, previous: str | None = None,
     system = template.format(language=language, goal=goal, previous=previous or "")
     fallback = " ".join(text.split())[:200]
     try:
-        out = await _complete([{"role": "system", "content": system}, {"role": "user", "content": text}], max_tokens=400)
+        out = await _complete([{"role": "system", "content": system}, {"role": "user", "content": text}], max_tokens=SHORT_JOB_TOKENS)
     except Exception:
         log.exception("drafting failed, using the user's own words")
         return fallback

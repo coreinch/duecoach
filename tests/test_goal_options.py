@@ -189,3 +189,69 @@ async def test_suggest_goals_has_nothing_to_go_on_for_a_brand_new_user(monkeypat
 
     monkeypatch.setattr(llm, "_complete", must_not_be_called)
     assert await llm.suggest_goals(uid) == []
+
+
+async def test_short_model_jobs_get_enough_tokens_for_a_reasoning_models_hidden_thinking(monkeypatch):
+    uid = make_user(profile={"why": "my mornings fall apart", "obstacle": "starting tasks"})
+    budgets = []
+
+    async def capture(messages, max_tokens=1500):
+        budgets.append(max_tokens)
+        return "Put my keys in one bowl by the door every evening for the next four weeks."
+
+    monkeypatch.setattr(llm, "_complete", capture)
+    await llm.suggest_goals(uid)
+    await llm.draft(uid, "goal", "I want to be on time")
+    assert budgets and all(b >= 1500 for b in budgets)  # 400-600 was used up by the thinking and came back empty
+
+
+async def test_the_goal_ideas_are_prepared_while_the_coach_writes_not_after_it(monkeypatch):
+    import time
+
+    uid = make_user(ext="3010")
+    db.set_fields(uid, consent_at=1.0, tz_set=1, intake_state="")
+    db.set_profile(uid, {"why": "x", "tried": "y", "obstacle": "z", "strength": "s", "rhythm": "r"})
+    flows.put(uid, "intake", "mood", started=time.time())
+
+    async def slow_reply(uid, text, instruction=None, coach=True):
+        await asyncio.sleep(0.3)
+        db.add_message(uid, "user", text)
+        db.add_message(uid, "assistant", "coached")
+        return "coached"
+
+    async def slow_suggest(uid):
+        await asyncio.sleep(0.3)
+        return list(IDEAS)
+
+    monkeypatch.setattr(llm, "reply", slow_reply)
+    monkeypatch.setattr(llm, "suggest_goals", slow_suggest)
+    monkeypatch.setattr(llm, "cards_read", lambda uid: set())
+    started = time.monotonic()
+    reply = await say("a bit stressed", "3010")
+    elapsed = time.monotonic() - started
+    assert reply.startswith("coached") and f"1) {IDEAS[0]}" in reply
+    assert elapsed < 0.5  # about 0.3s (the two overlap), not 0.6s
+
+
+async def test_ideas_prepared_for_a_question_that_gets_dropped_are_abandoned(monkeypatch):
+    uid = make_user(ext="3011")
+    for i in range(2):
+        db.add_message(uid, "user" if i % 2 == 0 else "assistant", f"m{i}")
+    finished = []
+
+    async def slow_suggest(uid):
+        await asyncio.sleep(0.3)
+        finished.append(1)
+        return list(IDEAS)
+
+    async def distressed_reply(uid, text, instruction=None, coach=True):
+        db.add_message(uid, "user", text)
+        db.add_message(uid, "assistant", "coached")
+        return "coached"
+
+    monkeypatch.setattr(llm, "reply", distressed_reply)
+    monkeypatch.setattr(llm, "suggest_goals", slow_suggest)
+    monkeypatch.setattr(llm, "cards_read", lambda uid: {"self_talk"})  # the coach ended up helping with distress
+    reply = await say("I always mess everything up", "3011")
+    await asyncio.sleep(0.4)
+    assert reply == "coached" and flows.get(uid) is None and finished == []

@@ -11,6 +11,7 @@ import asyncio
 import json
 import re
 import time
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 
 from . import db, llm, prompts, strings
@@ -58,7 +59,7 @@ BARRIER_LABELS = {
 }
 
 
-SUGGEST_TIMEOUT = 20  # seconds to wait for the model's goal ideas before using the built-in ones
+SUGGEST_TIMEOUT = 30  # seconds to wait for the model's goal ideas before using the built-in ones
 OPTION_WORDS = {
     "1": 0,
     "one": 0,
@@ -170,8 +171,10 @@ class CoachTurn:
 
     text: str
     instruction: str
-    follow_up: str = ""  # a question of the bot's to add after the coach's reply
-    fallback: str = ""  # what to send instead if the model is unavailable
+    follow_up: "str | Callable[[], Awaitable[str]]" = (
+        ""  # a question of the bot's to add after the coach's reply (may be computed alongside it)
+    )
+    fallback: str = ""  # sent instead of the coach's reply (still followed by the question) if the model is unavailable
 
 
 def _t(uid: int, key: str, **kw) -> str:
@@ -354,10 +357,10 @@ def start_intake(uid: int, restart: bool = False) -> str | None:
     return intro + _t(uid, f"INTAKE_Q_{step}")
 
 
-async def start_goal(uid: int, after_intake: bool = False) -> str:
+async def start_goal(uid: int, after_intake: bool = False, options: list[str] | None = None) -> str:
     """Ask for a goal by offering three ideas to pick from (or the user's own). Right after the interview the question picks up
-    what they said got in their way."""
-    options = await goal_options(uid)
+    what they said got in their way. `options` can be prepared ahead (while the coach is writing its reply)."""
+    options = options or await goal_options(uid)
     put(uid, "goal", "asked", started=time.time(), vague=0, options=options)
     db.set_field(uid, "goal_asked_at", time.time())
     a, b, c = options
@@ -486,9 +489,13 @@ async def _intake_answer(uid: int, state: dict, text: str, said: str):
         closing = _finish_intake(uid, profile)
         if note or db.active_goals(uid):
             return closing + note  # after a heavy answer, or when redoing the interview with goals already set: nothing more is pushed
-        question = await start_goal(uid, after_intake=True)
+        ideas = asyncio.create_task(goal_options(uid))  # starts now, so it runs while the coach writes its reply
+
+        async def goal_question() -> str:
+            return await start_goal(uid, after_intake=True, options=await ideas)
+
         # carry on straight away: the coach says what it understood and how this works, then the first goal question follows
-        return CoachTurn("(finished the intake interview)", prompts.INTAKE_WRAPUP, follow_up=question, fallback=f"{closing}\n\n{question}")
+        return CoachTurn("(finished the intake interview)", prompts.INTAKE_WRAPUP, follow_up=goal_question, fallback=closing)
     put(uid, "intake", following[0])
     return f"{_t(uid, 'INTAKE_ACK')} {_t(uid, f'INTAKE_Q_{following[0]}')}"
 
