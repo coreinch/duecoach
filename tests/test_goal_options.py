@@ -255,3 +255,52 @@ async def test_ideas_prepared_for_a_question_that_gets_dropped_are_abandoned(mon
     reply = await say("I always mess everything up", "3011")
     await asyncio.sleep(0.4)
     assert reply == "coached" and flows.get(uid) is None and finished == []
+
+
+async def test_ideas_are_started_during_the_interview_and_ready_when_the_goal_question_comes(monkeypatch):
+    import time
+
+    uid = make_user(ext="3020")
+    db.set_fields(uid, intake_state="")
+    started = []
+
+    async def slow_suggest(uid):
+        started.append(time.monotonic())
+        await asyncio.sleep(0.15)
+        return list(IDEAS)
+
+    async def reply(uid, text, instruction=None, coach=True):
+        db.add_message(uid, "user", text)
+        db.add_message(uid, "assistant", "coached")
+        return "coached"
+
+    monkeypatch.setattr(llm, "suggest_goals", slow_suggest)
+    monkeypatch.setattr(llm, "reply", reply)
+    monkeypatch.setattr(llm, "cards_read", lambda uid: set())
+    flows.put(uid, "intake", "why", started=time.time())
+    await say("because mornings fall apart", "3020")
+    await say("alarms", "3020")
+    assert not started  # nothing yet: the obstacle has not been told
+    await say("starting tasks", "3020")  # now the ideas begin to be worked out...
+    await asyncio.sleep(0.01)
+    assert len(started) == 1
+    await asyncio.sleep(0.2)  # ...while the user answers the remaining questions
+    for answer in ("I'm creative", "wake at 7"):
+        await say(answer, "3020")
+    began = time.monotonic()
+    reply_text = await say("fine", "3020")  # last answer: the goal question needs no further waiting
+    assert f"1) {IDEAS[0]}" in reply_text and len(started) == 1 and time.monotonic() - began < 0.1
+
+
+async def test_if_the_early_ideas_are_still_not_ready_at_the_end_the_built_in_ones_are_used(monkeypatch):
+    uid = make_user(ext="3021", profile={"obstacle": "starting tasks"})
+
+    async def never(uid):
+        await asyncio.sleep(30)
+        return list(IDEAS)
+
+    monkeypatch.setattr(llm, "suggest_goals", never)
+    monkeypatch.setattr(flows, "SUGGEST_PREFETCH_WAIT", 0.05)
+    flows.prefetch_goal_options(uid)
+    options = await flows.goal_options(uid)
+    assert options == flows.fallback_goal_options(uid) and uid not in flows._prefetched

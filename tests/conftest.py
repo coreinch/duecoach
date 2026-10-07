@@ -13,7 +13,7 @@ os.environ.update(
 
 import pytest  # noqa: E402
 
-from coach import core, db, llm  # noqa: E402
+from coach import core, db, flows, llm  # noqa: E402
 
 
 @pytest.fixture(autouse=True)
@@ -23,6 +23,7 @@ def database(tmp_path):
     core._locks.clear()
     core._recent.clear()
     core._warned.clear()
+    flows._prefetched.clear()  # background goal-idea jobs belong to the event loop of the test that started them
     yield
     db.close()
 
