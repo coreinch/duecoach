@@ -165,6 +165,32 @@ def _m7_onboarded() -> None:
         _conn.execute("UPDATE users SET onboarded=1")
 
 
+def _m8_timezone_as_flow() -> None:
+    """An open timezone question now lives in `flow_state` like the other flows; `tz_state` keeps only the lasting outcome.
+
+    ("asked" becomes "" so the question can be asked again; "verify" and "time" mean a zone is in use, so "done".)
+    """
+    rows = _conn.execute(
+        "SELECT user_id, tz_state, tz_candidate, tz_attempts, flow_state FROM users WHERE tz_state IN ('asked','verify','time')"
+    )
+    for row in rows.fetchall():
+        flow = ""
+        if not row["flow_state"]:
+            flow = json.dumps(
+                {
+                    "flow": "timezone",
+                    "step": row["tz_state"],
+                    "started": time.time(),
+                    "candidate": row["tz_candidate"] or "",
+                    "attempts": row["tz_attempts"] or 0,
+                }
+            )
+        _conn.execute(
+            "UPDATE users SET tz_state=?, flow_state=? WHERE user_id=?",
+            ("" if row["tz_state"] == "asked" else "done", flow or row["flow_state"], row["user_id"]),
+        )
+
+
 MIGRATIONS = [
     _m1_baseline,
     _m2_consent_and_resilience,
@@ -173,6 +199,7 @@ MIGRATIONS = [
     _m5_question_spacing,
     _m6_intake_and_notes,
     _m7_onboarded,
+    _m8_timezone_as_flow,
 ]
 
 
@@ -223,8 +250,6 @@ USER_FIELDS = {
     "checkin_retry_at",
     "last_review",
     "tz_state",
-    "tz_candidate",
-    "tz_attempts",
     "flow_state",
     "goal_asked_at",
     "obj_asked_at",

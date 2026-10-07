@@ -2,7 +2,7 @@ import time
 
 import pytest
 
-from coach import core, db, llm
+from coach import core, db, llm, ratelimit
 
 
 @pytest.fixture
@@ -82,7 +82,7 @@ async def test_deleting_your_data_needs_confirmation(ai, user):
 
 
 async def test_flooding_is_cut_off_with_a_single_warning(ai, user, monkeypatch):
-    monkeypatch.setattr(core, "RATE_LIMIT_MESSAGES", 3)
+    monkeypatch.setattr(ratelimit, "RATE_LIMIT_MESSAGES", 3)
     replies = [await say("hi") for _ in range(6)]
     assert replies[:3] == ["coached"] * 3
     assert "very fast" in replies[3] and replies[4:] == [None, None]

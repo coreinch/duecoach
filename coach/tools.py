@@ -133,8 +133,9 @@ def _set_timezone(uid: int, a: dict) -> str:
     except Exception:
         return "error: unknown timezone; use an IANA name like Europe/Athens"
     switched_on = db.confirm_timezone(uid, name)
-    if db.get_user(uid)["tz_state"] in ("asked", "verify", "time"):
-        db.set_fields(uid, tz_state="done", tz_candidate="")
+    from . import flows  # here, not at the top: flows uses the model, which uses these tools
+
+    flows.settle_timezone(uid)
     if switched_on:
         return f"ok: timezone set to {name}; check-ins were switched on automatically (about every {CHECKIN_INTERVAL_MINUTES} minutes of quiet): mention it briefly"
     return f"ok: timezone set to {name}"

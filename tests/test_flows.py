@@ -4,6 +4,7 @@ import time
 import pytest
 
 from coach import bot, channels, core, db, flows, llm, prompts
+from coach.flows import goals
 
 
 @pytest.fixture
@@ -79,7 +80,7 @@ async def test_the_draft_can_be_revised_and_a_plain_no_asks_what_to_change(perso
 async def test_after_a_few_revisions_the_current_draft_is_kept(person):
     await say("hello")
     await say("be calmer")
-    for i in range(flows.MAX_REVISIONS):
+    for i in range(goals.MAX_REVISIONS):
         assert "Here's how" in await say(f"change number {i}")
     assert "Goal saved" in await say("one more change please")
     assert len(db.active_goals(person)) == 1

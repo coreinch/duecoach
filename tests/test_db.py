@@ -135,3 +135,17 @@ def test_users_for_checkins_skips_those_who_cannot_be_due(user):
     assert db.users_for_checkins(100.0) == []
     db.set_fields(uid, interval_min=30, consent_at=0)
     assert db.users_for_checkins(100.0) == []
+
+
+def test_open_timezone_questions_become_flows_when_the_database_is_upgraded(user):
+    asking = db.get_or_create_user("telegram", "7001", "7001", "en")["user_id"]
+    verifying = db.get_or_create_user("telegram", "7002", "7002", "en")["user_id"]
+    db._conn.execute("UPDATE users SET tz_state='asked', tz_attempts=1 WHERE user_id=?", (asking,))
+    db._conn.execute("UPDATE users SET tz_state='verify', tz_candidate='Europe/Athens' WHERE user_id=?", (verifying,))
+    db._m8_timezone_as_flow()
+    import json
+
+    flow = json.loads(db.get_user(asking)["flow_state"])
+    assert (flow["flow"], flow["step"], flow["attempts"]) == ("timezone", "asked", 1) and db.get_user(asking)["tz_state"] == ""
+    flow = json.loads(db.get_user(verifying)["flow_state"])
+    assert (flow["step"], flow["candidate"]) == ("verify", "Europe/Athens") and db.get_user(verifying)["tz_state"] == "done"

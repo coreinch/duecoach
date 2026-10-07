@@ -94,11 +94,13 @@ python -m venv .venv && .venv/bin/pip install -r requirements-dev.txt
 .venv/bin/python -m coach.bot       # run locally (needs .env)
 ```
 
-Layout: `coach/core.py` (commands, consent, rate limit, timezone), `coach/flows.py` (the bot-led conversations: intake, goal, weekly
-step, follow-up, hand-over), `coach/llm.py` (model calls, fallback models, tool loop), `coach/tools.py` and `coach/playbook.py`
-(what the coach can do and the strategy cards), `coach/prompts.py` and `coach/strings.py` (model prompts, fixed texts in both
-languages), `coach/bot.py` (reminders, check-ins, housekeeping, startup), `coach/channels/` (Telegram, Viber, WhatsApp),
-`coach/db.py` (SQLite, numbered migrations). The Docker base image is pinned by digest; Dependabot proposes updates.
+Layout: `coach/core.py` (the order a message is handled in: rate limit, consent, crisis, commands, flows, coaching),
+`coach/commands.py` (slash commands), `coach/chat.py` (the coach's reply plus at most one question of the bot's own, and the
+crisis answer), `coach/flows/` (the bot-led conversations, one module each: `intake`, `goals`, `followup`, `timezone`, with
+`moments` deciding when to ask, `onboarding` the hand-over and `state` where a flow is stored), `coach/llm.py` (model calls,
+fallback models, tool loop), `coach/tools.py` and `coach/playbook.py` (what the coach can do and the strategy cards),
+`coach/prompts.py` and `coach/strings.py` (model prompts, fixed texts in both languages), `coach/bot.py` (reminders, check-ins,
+housekeeping, startup), `coach/channels/` (Telegram, Viber, WhatsApp), `coach/db.py` (SQLite, numbered migrations). The Docker base image is pinned by digest; Dependabot proposes updates.
 
 ## Licence
 

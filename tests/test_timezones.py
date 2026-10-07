@@ -4,7 +4,7 @@ from zoneinfo import ZoneInfo
 
 import pytest
 
-from coach import core, db, llm, timezones
+from coach import core, db, flows, llm, timezones
 
 
 @pytest.mark.parametrize(
@@ -84,7 +84,7 @@ async def test_the_question_is_asked_once_after_a_few_messages(new_user):
     seed_history(new_user)
     reply = await say("I can't focus")
     assert reply.startswith("coached") and "where do you live" in reply
-    assert db.get_user(new_user)["tz_state"] == "asked"
+    assert flows.get(new_user)["flow"] == "timezone" and flows.get(new_user)["step"] == "asked"
     assert "where do you live" not in await say("and my desk is a mess here")  # not asked twice
 
 
@@ -93,7 +93,11 @@ async def test_a_city_is_taken_as_correct_and_only_the_local_time_is_shown(new_u
     reply = await say("Athens")
     assert re.search(r"It's \d\d:\d\d where you are right now, right\?", reply) and "Europe/Athens" not in reply
     user = db.get_user(new_user)
-    assert (user["tz"], user["tz_set"], user["tz_state"]) == ("Europe/Athens", 1, "verify")  # in use immediately, not after a yes
+    assert (user["tz"], user["tz_set"], flows.get(new_user)["step"]) == (
+        "Europe/Athens",
+        1,
+        "verify",
+    )  # in use immediately, not after a yes
     assert user["interval_min"] == 30 and "30 minutes of quiet" in reply  # check-ins switch on, and the user is told how to change them
     assert "Great, thanks" in await say("yes")
     assert db.get_user(new_user)["tz_state"] == "done" and db.get_user(new_user)["tz"] == "Europe/Athens"
