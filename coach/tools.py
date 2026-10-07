@@ -6,6 +6,7 @@ from datetime import datetime
 from zoneinfo import ZoneInfo
 
 from . import db, playbook
+from .config import CHECKIN_INTERVAL_MINUTES
 
 MAX_REMINDER_MINUTES = 60 * 24 * 30
 BARRIERS = ["forgot", "didnt_know_how", "confused", "avoidance", "low_motivation", "other"]
@@ -141,7 +142,11 @@ def _set_timezone(uid: int, a: dict) -> str:
         ZoneInfo(name)
     except Exception:
         return "error: unknown timezone; use an IANA name like Europe/Athens"
-    db.set_fields(uid, tz=name, tz_set=1)
+    switched_on = db.confirm_timezone(uid, name)
+    if db.get_user(uid)["tz_state"] in ("asked", "verify", "time"):
+        db.set_fields(uid, tz_state="done", tz_candidate="")
+    if switched_on:
+        return f"ok: timezone set to {name}; check-ins were switched on automatically (about every {CHECKIN_INTERVAL_MINUTES} minutes of quiet): mention it briefly"
     return f"ok: timezone set to {name}"
 
 
@@ -236,7 +241,11 @@ def coaching_state(user_id: int) -> str:
         local = datetime.now(ZoneInfo(user["tz"]))
     except Exception:
         local = datetime.now(ZoneInfo("UTC"))
-    tz_note = "confirmed by the user" if user["tz_set"] else "NOT confirmed yet (the system asks for it; do not ask yourself)"
+    tz_note = (
+        "confirmed by the user"
+        if user["tz_set"]
+        else "NOT confirmed yet (the system asks for it and switches check-ins on once it is set; do not ask yourself)"
+    )
     checkins = (
         f"on, about every {user['interval_min']} min between {user['morning_hour']}:00 and {user['evening_hour']}:59"
         if user["interval_min"] and user["morning_hour"] >= 0 and user["evening_hour"] >= 0

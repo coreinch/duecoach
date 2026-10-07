@@ -74,44 +74,99 @@ async def _coach(uid: int, text: str, instruction: str | None = None, coach: boo
 # --- commands: async fn(uid, args) -> reply text ---
 
 
+OPEN_TZ_STATES = (
+    "asked",
+    "verify",
+    "time",
+)  # asked: waiting for a city; verify: assumed, waiting for "yes"; time: told "no", asking the time
+MAX_TZ_CORRECTIONS = 2
+LEADING_NO = {"no", "nope", "οχι", "λαθος"}
+
+
+def _assume_timezone(uid: int, zone: str, corrections: int) -> str:
+    """Take the zone as correct straight away and tell the user only the local time it implies, asking just whether that is right.
+
+    The first time a timezone is set, check-ins switch on by themselves.
+    """
+    switched_on = db.confirm_timezone(uid, zone)
+    db.set_fields(uid, tz_state="verify", tz_candidate=zone, tz_attempts=corrections)
+    reply = _t(uid, "TZ_ASSUMED", time=timezones.local_time(zone))
+    if switched_on:
+        reply += "\n\n" + _t(uid, "CHECKINS_ENABLED", minutes=CHECKIN_INTERVAL_MINUTES)
+    return reply
+
+
 async def _timezone_answer(uid: int, text: str) -> str | None:
     """Handle a reply to the bot's timezone question; None means the message is ordinary chat."""
     user = db.get_user(uid)
-    if user["tz_set"] or user["tz_state"] not in ("asked", "confirm"):
+    state = user["tz_state"]
+    if state not in OPEN_TZ_STATES:
         return None
     said = timezones.normalize(text)
-    if user["tz_state"] == "confirm":
-        if said in YES:
-            zone = user["tz_candidate"]
-            db.set_fields(uid, tz=zone, tz_set=1, tz_state="done", tz_candidate="")
-            return _t(uid, "TZ_DONE", zone=zone)
-        if said in NO:
-            db.set_fields(uid, tz_state="asked", tz_candidate="")
-            return _t(uid, "TZ_NO")
-        return None  # they moved on to something else; the question stays open
+    if state == "asked":
+        if user["tz_set"] or len(text.split()) > MAX_ANSWER_WORDS:
+            return None
+        if said in SKIP or said in NO:
+            db.set_fields(uid, tz_state="skipped")
+            return _t(uid, "TZ_SKIPPED")
+        found = timezones.resolve(text)
+        if found.zone:
+            return _assume_timezone(uid, found.zone, corrections=0)
+        if found.country:
+            return _t(uid, "TZ_MULTI", country=found.country)  # a follow-up question, not a failed attempt
+        attempts = (user["tz_attempts"] or 0) + 1
+        if attempts >= MAX_TZ_ATTEMPTS:
+            db.set_fields(uid, tz_state="skipped", tz_attempts=attempts)
+            return _t(uid, "TZ_SKIPPED")
+        db.set_field(uid, "tz_attempts", attempts)
+        return _t(uid, "TZ_RETRY")
+    if state == "time":  # they said the local time was wrong and were asked what time it is
+        return await _correct_timezone(uid, text)
+    # state == "verify": the zone is already in use; this is the answer to "it's 16:36 where you are, right?"
+    if said in YES:
+        db.set_fields(uid, tz_state="done")
+        return _t(uid, "TZ_VERIFIED")
+    if said in NO:
+        db.set_fields(uid, tz_state="time")
+        return _t(uid, "TZ_ASK_TIME")
     words = text.split()
-    if len(words) > MAX_ANSWER_WORDS:
-        return None
-    if said in SKIP or said in NO:
-        db.set_fields(uid, tz_state="skipped")
-        return _t(uid, "TZ_SKIPPED")
-    found = timezones.resolve(text)
-    if found.zone:
-        db.set_fields(uid, tz_state="confirm", tz_candidate=found.zone)
-        return _t(uid, "TZ_CONFIRM", zone=found.zone, time=timezones.local_time(found.zone))
-    if found.country:
-        return _t(uid, "TZ_MULTI", country=found.country)  # a follow-up question, not a failed attempt
-    attempts = (user["tz_attempts"] or 0) + 1
-    if attempts >= MAX_TZ_ATTEMPTS:
-        db.set_fields(uid, tz_state="skipped", tz_attempts=attempts)
-        return _t(uid, "TZ_SKIPPED")
-    db.set_field(uid, "tz_attempts", attempts)
-    return _t(uid, "TZ_RETRY")
+    if words and timezones.normalize(words[0]) in LEADING_NO and len(words) > 1:  # "no, I'm in Dubai" / "no it's 3pm"
+        return await _correct_timezone(uid, text.split(None, 1)[1])
+    found = timezones.resolve(text) if len(words) <= MAX_ANSWER_WORDS else timezones.Resolution()
+    if found.zone and found.zone != user["tz"]:  # they just named a different place
+        return await _correct_timezone(uid, text)
+    db.set_fields(uid, tz_state="done")  # they moved on without objecting: the assumption stands
+    return None
+
+
+async def _correct_timezone(uid: int, text: str) -> str:
+    """The assumed timezone was wrong: work out the right one from the time it is for them now, or from a place they name."""
+    user = db.get_user(uid)
+    corrections = (user["tz_attempts"] or 0) + 1
+    clock = timezones.parse_clock(text)
+    if clock:
+        zone = timezones.zone_for_offset(timezones.offset_from_clock(*clock), near=user["tz"])
+        if zone:
+            db.confirm_timezone(uid, zone)
+            db.set_fields(uid, tz_state="done", tz_candidate="", tz_attempts=0)
+            return _t(uid, "TZ_FIXED", time=timezones.local_time(zone))
+    else:
+        found = timezones.resolve(text)
+        if found.zone and corrections <= MAX_TZ_CORRECTIONS:
+            return _assume_timezone(uid, found.zone, corrections)
+        if found.country:
+            return _t(uid, "TZ_MULTI", country=found.country)
+    if corrections >= MAX_TZ_CORRECTIONS:  # we could not fix it: better no timezone (and no check-ins) than a wrong one
+        db.revoke_timezone(uid)
+        db.set_fields(uid, tz_state="skipped", tz_candidate="", tz_attempts=corrections)
+        return _t(uid, "TZ_GIVE_UP")
+    db.set_fields(uid, tz_state="time", tz_attempts=corrections)
+    return _t(uid, "TZ_TIME_RETRY")
 
 
 def _timezone_pending(uid: int) -> bool:
     user = db.get_user(uid)
-    return bool(user and not user["tz_set"] and user["tz_state"] in ("asked", "confirm"))
+    return bool(user and user["tz_state"] in OPEN_TZ_STATES)
 
 
 def _should_ask_timezone(uid: int) -> bool:
@@ -168,8 +223,10 @@ async def _crisis(uid: int, text: str) -> str:
     """
     flows.clear(uid)
     user = db.get_user(uid)
-    if user["tz_state"] in ("asked", "confirm"):
-        db.set_fields(uid, tz_state="", tz_candidate="")
+    if user["tz_state"] == "asked":
+        db.set_fields(uid, tz_state="", tz_candidate="")  # the question can be asked again later
+    elif user["tz_state"] in ("verify", "time"):
+        db.set_fields(uid, tz_state="done", tz_candidate="")  # the zone in use stays; correcting it can wait
     reply = _t(uid, "CRISIS", help=f" {CRISIS_HELP}" if CRISIS_HELP else "")
     db.add_message(uid, "user", text)
     db.add_message(uid, "assistant", reply)
@@ -261,8 +318,11 @@ async def _timezone(uid, args):
         ZoneInfo(args[0])
     except Exception:
         return _t(uid, "TZ_UNKNOWN")
-    db.set_fields(uid, tz=args[0], tz_set=1)
-    return _t(uid, "TZ_SET", tz=args[0])
+    switched_on = db.confirm_timezone(uid, args[0])
+    if db.get_user(uid)["tz_state"] in OPEN_TZ_STATES:
+        db.set_fields(uid, tz_state="done", tz_candidate="")  # answered by command: the question is over
+    note = "\n\n" + _t(uid, "CHECKINS_ENABLED", minutes=CHECKIN_INTERVAL_MINUTES) if switched_on else ""
+    return _t(uid, "TZ_SET", tz=args[0]) + note
 
 
 async def _privacy(uid, args):

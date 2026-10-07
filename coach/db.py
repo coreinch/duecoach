@@ -5,7 +5,7 @@ import os
 import sqlite3
 import time
 
-from .config import DB_PATH, EVENING_HOUR, MORNING_HOUR, TIMEZONE
+from .config import CHECKIN_INTERVAL_MINUTES, DB_PATH, EVENING_HOUR, MORNING_HOUR, TIMEZONE
 
 _conn: sqlite3.Connection | None = None
 
@@ -277,6 +277,26 @@ def set_fields(user_id: int, **fields: str | int | float) -> None:
 
 def set_field(user_id: int, field: str, value: str | int | float) -> None:
     set_fields(user_id, **{field: value})
+
+
+def confirm_timezone(user_id: int, zone: str) -> bool:
+    """Save the user's timezone as the one to use. The first time, check-ins are switched on at the default interval.
+
+    Returns True when check-ins were just switched on. Changing the timezone later never turns check-ins back on, so someone who
+    switched them off stays off.
+    """
+    user = get_user(user_id)
+    switched_on = not user["tz_set"] and not (user["interval_min"] or 0)
+    fields = {"tz": zone, "tz_set": 1}
+    if switched_on:
+        fields["interval_min"] = CHECKIN_INTERVAL_MINUTES
+    set_fields(user_id, **fields)
+    return switched_on
+
+
+def revoke_timezone(user_id: int) -> None:
+    """The user said the assumed timezone is wrong and we could not fix it: back to unconfirmed, with check-ins off again."""
+    set_fields(user_id, tz_set=0, interval_min=0)
 
 
 def get_profile(user_id: int) -> dict:
