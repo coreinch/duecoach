@@ -1,11 +1,17 @@
 # ADHD coach bot
 
 A chat coach for people with ADHD on Telegram, Viber and WhatsApp (Greek and English). It coaches with a structured method — goals,
-small weekly objectives, barrier analysis, a toolbox of what works, a weekly review — and reads a playbook of strategy cards
-before every reply. Check-ins are opt-in and back off when ignored.
+small weekly objectives, barrier analysis, a toolbox of what works, a weekly review — with a 54-card playbook of strategies in
+the prompt of every reply (one model call per message). New users are led through a short conversation (a few intake questions,
+a first goal, their timezone) and then talk freely. Once the timezone is known, the bot checks in after 30 minutes of silence
+during the day and backs off when ignored (`/interval off` turns it off).
 
 It is a coaching aid, not therapy or medical advice. Chats are stored in a local SQLite database and each message is sent to the
 language-model provider you configure, so users must agree to a privacy notice (`/agree`) before anything is processed.
+Messages older than `RETENTION_DAYS` (90) are deleted, people who have not written for `INACTIVE_DELETE_DAYS` (365) are deleted
+entirely, `/deletedata` erases everything at once, and writing about suicide or self-harm gets a fixed safety message with
+emergency numbers instead of a model reply (`CRISIS_HELP` can add a local helpline). Daily backups keep copies of the database for
+7 days, so a deletion leaves the backups within a week.
 
 ## Run it with Docker
 
@@ -16,7 +22,8 @@ docker compose logs -f
 ```
 
 - The database lives in the `coach-data` volume (`/data/coach.db`). Back that volume up.
-- `GET /healthz` on port 8080 reports 503 when the reminder or check-in loop stops; the container's healthcheck uses it.
+- `GET /healthz` on port 8080 reports 503 when the reminder or check-in loop stops (the container's healthcheck uses it) and shows
+  which models are cooling down after failures; a model outage alone does not fail it.
 - Viber and WhatsApp need a public HTTPS address in front of port 8080 (reverse proxy or tunnel) and `PUBLIC_URL` in `.env`.
   Telegram works without one.
 - Only one instance can use a database (a lock file enforces it). Don't run the bot twice with the same Telegram token.
@@ -36,7 +43,7 @@ docker compose up -d
 
 `.github/workflows/ci-cd.yml` runs on every push and pull request to `main`:
 
-1. **test**: `ruff check`, `ruff format --check`, `pytest`.
+1. **test**: `ruff check`, `ruff format --check`, `mypy`, `pip-audit` (known vulnerabilities in the pinned dependencies), `pytest`.
 2. **build-and-push**: builds the Docker image (always, so a broken Dockerfile fails CI) and, on `main` only, pushes it to
    `ghcr.io/coreinch/adhd-coach` tagged `main-<short sha>`.
 3. **deploy** (`main` only): installs Ansible, generates the inventory from the `DEPLOY_HOST` secret, and runs
@@ -56,7 +63,7 @@ Runs on the same branch are queued, never cancelled, so the newest commit is alw
 | `TELEGRAM_BOT_TOKEN`, `LLM_API_KEY` | the bot's credentials |
 | `ALLOWED_USERS` | who may use the bot, e.g. `telegram:123`. **Required**: the deploy refuses to run with it empty |
 | `LLM_MODEL` | optional, defaults to `kilo-auto/free` |
-| `LLM_FALLBACK_MODELS` | optional, comma-separated models to try in order when `LLM_MODEL` fails (they must support tool calling) |
+| `LLM_FALLBACK_MODELS` | optional, comma-separated models to try in order when `LLM_MODEL` fails (they must support tool calling); `LLM_BUDGET`, `LLM_MODEL_COOLDOWN` tune the fallback |
 | `VIBER_AUTH_TOKEN`, `WHATSAPP_*`, `PUBLIC_URL` | optional, only for those channels |
 
 Set them with `gh secret set NAME -R coreinch/adhd-coach`.
@@ -83,13 +90,15 @@ them off the box if the data matters.
 ```bash
 python -m venv .venv && .venv/bin/pip install -r requirements-dev.txt
 .venv/bin/python -m pytest          # unit and integration tests, no network needed
-.venv/bin/ruff check . && .venv/bin/ruff format .
+.venv/bin/ruff check . && .venv/bin/ruff format . && .venv/bin/mypy
 .venv/bin/python -m coach.bot       # run locally (needs .env)
 ```
 
-Layout: `coach/core.py` (commands, consent, rate limit), `coach/llm.py` (model loop and tools), `coach/tools.py` and
-`coach/playbook.py` (what the coach can do and the strategy cards), `coach/bot.py` (reminders, check-ins, startup),
-`coach/channels/` (Telegram, Viber, WhatsApp), `coach/db.py` (SQLite, numbered migrations).
+Layout: `coach/core.py` (commands, consent, rate limit, timezone), `coach/flows.py` (the bot-led conversations: intake, goal, weekly
+step, follow-up, hand-over), `coach/llm.py` (model calls, fallback models, tool loop), `coach/tools.py` and `coach/playbook.py`
+(what the coach can do and the strategy cards), `coach/prompts.py` and `coach/strings.py` (model prompts, fixed texts in both
+languages), `coach/bot.py` (reminders, check-ins, housekeeping, startup), `coach/channels/` (Telegram, Viber, WhatsApp),
+`coach/db.py` (SQLite, numbered migrations). The Docker base image is pinned by digest; Dependabot proposes updates.
 
 ## Licence
 
