@@ -2,13 +2,10 @@
 # Where the compose stack lives on the VPS.
 deploy_dir: /opt/adhd-coach
 
-# Host port for the bot's web server (the /healthz check and, for Viber and
-# WhatsApp, the webhooks). Bound to 127.0.0.1 only in
-# templates/docker-compose.prod.yml.j2: reachable from the VPS itself, via the
-# nginx vhost below when one is configured. Telegram needs no inbound traffic.
-# This box is shared: 8090/8091 are used by cicd-lab and 8092 by namernut, so
-# 8093 is the next one. Confirm it is free with `ss -tlnp` before the first
-# deploy.
+# Host port for the Viber/WhatsApp webhooks. Only used when custom_domain is
+# set (see below): a Telegram-only deployment publishes no port at all. Bound
+# to 127.0.0.1 and reached through the nginx vhost. This box is shared:
+# 8090/8091 are used by cicd-lab and 8092 by namernut, so 8093 is the next one.
 app_port: 8093
 
 # Must match the GHCR path GitHub Actions pushes to: lowercase "owner/repo",

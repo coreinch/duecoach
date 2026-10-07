@@ -66,15 +66,23 @@
 
     # A crashing bot (bad token, another instance holding the database lock,
     # a failed migration) must fail the deploy instead of looking green. The
-    # app answers /healthz as soon as its web server is up.
+    # image's HEALTHCHECK reports healthy only once the bot is up and its
+    # background loops are running; no host port is involved.
+    - name: Find the bot container
+      ansible.builtin.command: docker compose ps -q coach
+      args:
+        chdir: "{{ deploy_dir }}"
+      register: coach_container
+      changed_when: false
+      failed_when: coach_container.stdout | length == 0
+
     - name: Wait for the bot to report healthy
-      ansible.builtin.uri:
-        url: "http://127.0.0.1:{{ app_port }}/healthz"
-        status_code: 200
+      ansible.builtin.command: docker inspect --format "{{ '{{.State.Health.Status}}' }}" {{ coach_container.stdout }}
       register: health
-      until: health.status == 200
-      retries: 18
+      until: health.stdout == "healthy"
+      retries: 24
       delay: 5
+      changed_when: false
 
     # Daily online backup of the SQLite database (see keep_backups in
     # group_vars/production.yml for what this does and does not protect against).
