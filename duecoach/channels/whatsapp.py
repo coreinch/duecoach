@@ -13,7 +13,7 @@ from .. import core, db
 from ..config import WHATSAPP_API_VERSION
 from . import SendError, Unreachable
 
-log = logging.getLogger("coach.whatsapp")
+log = logging.getLogger("duecoach.whatsapp")
 IGNORED_TYPES = {"reaction", "unsupported", "system", "request_welcome", "ephemeral"}  # not messages the user expects a reply to
 UNDELIVERABLE_CODES = {131026}  # "message undeliverable": the number cannot receive WhatsApp messages
 WINDOW = 23.5 * 3600  # free-form replies are only allowed for 24h after the user's last message

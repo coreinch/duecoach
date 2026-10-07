@@ -2,7 +2,7 @@ import importlib
 
 import pytest
 
-from coach import config
+from duecoach import config
 
 
 def test_a_mistyped_number_names_the_setting(monkeypatch):

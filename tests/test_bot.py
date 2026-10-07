@@ -5,8 +5,8 @@ from types import SimpleNamespace
 
 import pytest
 
-from coach import bot, channels, db
-from coach.channels.telegram import TelegramChannel
+from duecoach import bot, channels, db
+from duecoach.channels.telegram import TelegramChannel
 
 
 class Recorder:
@@ -55,17 +55,17 @@ def test_maintenance_runs_at_most_once_an_hour(user, monkeypatch):
 
 
 def test_a_second_instance_on_the_same_database_refuses_to_start(tmp_path, monkeypatch):
-    monkeypatch.setattr(bot, "DB_PATH", str(tmp_path / "coach.db"))
+    monkeypatch.setattr(bot, "DB_PATH", str(tmp_path / "duecoach.db"))
     first = bot.acquire_instance_lock()
     with pytest.raises(SystemExit, match="already using"):
         bot.acquire_instance_lock()
     first.close()
     bot.acquire_instance_lock().close()  # free again once the first one is gone
-    assert os.path.exists(tmp_path / "coach.lock")
+    assert os.path.exists(tmp_path / "duecoach.lock")
 
 
 async def test_the_bot_refuses_to_start_without_a_channel(tmp_path, monkeypatch):
-    monkeypatch.setattr(bot, "DB_PATH", str(tmp_path / "coach.db"))
+    monkeypatch.setattr(bot, "DB_PATH", str(tmp_path / "duecoach.db"))
     monkeypatch.setattr(bot, "TELEGRAM_BOT_TOKEN", "")
     monkeypatch.setattr(bot, "VIBER_AUTH_TOKEN", "")
     monkeypatch.setattr(bot, "WHATSAPP_TOKEN", "")
@@ -76,7 +76,7 @@ async def test_the_bot_refuses_to_start_without_a_channel(tmp_path, monkeypatch)
 
 
 async def test_whatsapp_without_its_secrets_is_refused(tmp_path, monkeypatch):
-    monkeypatch.setattr(bot, "DB_PATH", str(tmp_path / "coach.db"))
+    monkeypatch.setattr(bot, "DB_PATH", str(tmp_path / "duecoach.db"))
     monkeypatch.setattr(bot, "TELEGRAM_BOT_TOKEN", "")
     monkeypatch.setattr(bot, "VIBER_AUTH_TOKEN", "")
     monkeypatch.setattr(bot, "WHATSAPP_TOKEN", "t")
@@ -89,7 +89,7 @@ async def test_whatsapp_without_its_secrets_is_refused(tmp_path, monkeypatch):
 
 
 async def test_the_bot_starts_serves_health_and_shuts_down_cleanly(tmp_path, monkeypatch):
-    monkeypatch.setattr(bot, "DB_PATH", str(tmp_path / "coach.db"))
+    monkeypatch.setattr(bot, "DB_PATH", str(tmp_path / "duecoach.db"))
     monkeypatch.setattr(bot, "TELEGRAM_BOT_TOKEN", "")
     monkeypatch.setattr(bot, "VIBER_AUTH_TOKEN", "viber-token")
     monkeypatch.setattr(bot, "PUBLIC_URL", "")

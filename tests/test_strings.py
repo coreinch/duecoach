@@ -1,6 +1,6 @@
 from string import Formatter
 
-from coach import strings
+from duecoach import strings
 
 
 def fields(text: str) -> set[str]:

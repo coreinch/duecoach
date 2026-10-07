@@ -8,9 +8,9 @@ import pytest
 from aiohttp import web
 from aiohttp.test_utils import TestClient, TestServer
 
-from coach import bot, channels, core, db
-from coach.channels.viber import ViberChannel
-from coach.channels.whatsapp import WhatsAppChannel
+from duecoach import bot, channels, core, db
+from duecoach.channels.viber import ViberChannel
+from duecoach.channels.whatsapp import WhatsAppChannel
 
 
 @pytest.fixture
@@ -122,7 +122,7 @@ async def test_health_endpoint_reports_stale_loops(monkeypatch):
 
 
 def test_telegram_channel_builds_with_concurrent_updates_and_handles_media():
-    from coach.channels.telegram import TelegramChannel
+    from duecoach.channels.telegram import TelegramChannel
 
     channel = TelegramChannel("123456:TEST-TOKEN")
     assert channel.app.concurrent_updates  # one user's slow reply must not block the others
@@ -130,7 +130,7 @@ def test_telegram_channel_builds_with_concurrent_updates_and_handles_media():
 
 
 async def test_health_endpoint_shows_models_cooling_down_without_failing(monkeypatch):
-    from coach import llm
+    from duecoach import llm
 
     monkeypatch.setattr(llm, "_down_until", {llm.MODELS[0]: __import__("time").time() + 100})
     monkeypatch.setattr(bot, "_heartbeat", {})

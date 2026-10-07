@@ -4,7 +4,7 @@ from zoneinfo import ZoneInfo
 
 import pytest
 
-from coach import backoff, bot, channels, db, llm, prompts
+from duecoach import backoff, bot, channels, db, llm, prompts
 
 TZ = ZoneInfo("Europe/Athens")
 
@@ -154,7 +154,7 @@ async def test_user_writing_during_generation_is_not_counted_as_ignoring(clock, 
 
 
 async def test_no_check_in_talks_over_a_conversation_in_progress(clock, outbox, user):
-    from coach import core
+    from duecoach import core
 
     uid = user["user_id"]
     enable_checkins(uid)

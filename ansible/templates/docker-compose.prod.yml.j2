@@ -1,5 +1,5 @@
 services:
-  coach:
+  duecoach:
     image: "{{ ghcr_image }}:{{ image_tag }}"
     restart: unless-stopped
     init: true
@@ -11,7 +11,7 @@ services:
       WEB_HOST: 0.0.0.0
     volumes:
       # The database. Named volume: survives redeploys and image updates.
-      - coach-data:/data
+      - data:/data
 {% if custom_domain | length > 0 %}
     ports:
       # Only for the Viber/WhatsApp webhooks, and 127.0.0.1-only: the nginx
@@ -38,4 +38,4 @@ services:
         max-file: "5"
 
 volumes:
-  coach-data:
+  data:

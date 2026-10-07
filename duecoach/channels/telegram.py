@@ -9,7 +9,7 @@ from .. import core, strings
 from ..config import is_allowed
 from . import Unreachable
 
-log = logging.getLogger("coach.telegram")
+log = logging.getLogger("duecoach.telegram")
 
 
 class TelegramChannel:

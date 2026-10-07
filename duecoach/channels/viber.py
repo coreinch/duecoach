@@ -11,7 +11,7 @@ from .. import core, db, strings
 from ..config import is_allowed
 from . import SendError, Unreachable
 
-log = logging.getLogger("coach.viber")
+log = logging.getLogger("duecoach.viber")
 API = "https://chatapi.viber.com/pa"
 UNREACHABLE_STATUSES = {5, 6}  # receiver not registered / not subscribed
 

@@ -20,7 +20,7 @@ def _number(name: str, default: float, kind: type = int, low: float | None = Non
 # --- channels: a channel is enabled when its credentials are set ---
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "")
 VIBER_AUTH_TOKEN = os.getenv("VIBER_AUTH_TOKEN", "")
-VIBER_BOT_NAME = os.getenv("VIBER_BOT_NAME", "ADHD Coach")[:28]
+VIBER_BOT_NAME = os.getenv("VIBER_BOT_NAME", "duecoach")[:28]
 WHATSAPP_TOKEN = os.getenv("WHATSAPP_TOKEN", "")
 WHATSAPP_PHONE_NUMBER_ID = os.getenv("WHATSAPP_PHONE_NUMBER_ID", "")
 WHATSAPP_VERIFY_TOKEN = os.getenv("WHATSAPP_VERIFY_TOKEN", "")
@@ -89,7 +89,7 @@ try:
 except ValueError:
     raise SystemExit("BACKOFF_MINUTES must be comma-separated numbers") from None
 REVIEW_WEEKDAY = _number("REVIEW_WEEKDAY", 6, low=0, high=6)  # evening check-in on this weekday (Mon=0) becomes the weekly review
-DB_PATH = os.getenv("DB_PATH", "coach.db")
+DB_PATH = os.getenv("DB_PATH", "duecoach.db")
 HISTORY_TURNS = 20
 # Privacy: chat messages older than this are deleted (each user's latest 40 are kept). 0 keeps everything.
 # Extra text appended to the safety message sent when someone writes about suicide or self-harm, e.g. a local helpline:

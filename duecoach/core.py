@@ -14,7 +14,7 @@ from .chat import say
 from .commands import BEFORE_CONSENT, COMMANDS, agree
 from .config import is_allowed
 
-log = logging.getLogger("coach.core")
+log = logging.getLogger("duecoach.core")
 _locks: dict[int, asyncio.Lock] = {}
 
 

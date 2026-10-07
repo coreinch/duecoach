@@ -3,7 +3,7 @@
 # playbook. Uses SQLite's backup API, so it is safe while the bot is running.
 set -eu
 cd {{ deploy_dir }}
-docker compose exec -T coach python - <<'PY'
+docker compose exec -T duecoach python - <<'PY'
 import datetime
 import glob
 import os

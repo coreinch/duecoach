@@ -5,11 +5,11 @@ import httpx
 import pytest
 import telegram.error
 
-from coach import bot, channels, core, db, flows, llm
-from coach.channels import SendError, Unreachable
-from coach.channels.telegram import TelegramChannel
-from coach.channels.viber import ViberChannel
-from coach.channels.whatsapp import WhatsAppChannel
+from duecoach import bot, channels, core, db, flows, llm
+from duecoach.channels import SendError, Unreachable
+from duecoach.channels.telegram import TelegramChannel
+from duecoach.channels.viber import ViberChannel
+from duecoach.channels.whatsapp import WhatsAppChannel
 
 
 @pytest.fixture

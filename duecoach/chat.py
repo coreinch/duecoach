@@ -9,7 +9,7 @@ from . import db, flows, llm, prompts
 from .config import CRISIS_HELP
 from .flows.state import say  # noqa: F401  (the fixed texts, in the user's language; re-exported for the commands)
 
-log = logging.getLogger("coach.chat")
+log = logging.getLogger("duecoach.chat")
 background: set[asyncio.Task] = set()  # fire-and-forget jobs (notes refresh); shutdown waits for them
 CRISIS_QUIET_SECONDS = 24 * 3600  # no proactive check-ins for a day after someone writes about harming themselves
 

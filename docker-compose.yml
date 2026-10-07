@@ -1,7 +1,7 @@
 services:
-  coach:
+  duecoach:
     build: .
-    image: adhd-coach
+    image: duecoach
     restart: unless-stopped
     init: true                # reaps child processes and forwards SIGTERM so the bot can shut down cleanly
     stop_grace_period: 30s
@@ -10,7 +10,7 @@ services:
       DB_PATH: /data/coach.db
       WEB_HOST: 0.0.0.0
     volumes:
-      - coach-data:/data      # the database lives here: back this volume up
+      - data:/data            # the database lives here: back this volume up
     ports:
       # webhooks for Viber / WhatsApp (put a TLS reverse proxy or tunnel in front); not needed for Telegram only
       - "127.0.0.1:8080:8080"
@@ -28,4 +28,4 @@ services:
         max-file: "5"
 
 volumes:
-  coach-data:
+  data:

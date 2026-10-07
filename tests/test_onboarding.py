@@ -1,6 +1,6 @@
 import pytest
 
-from coach import core, db, flows, llm
+from duecoach import core, db, flows, llm
 
 IDEAS = [
     "Put my keys in one bowl by the door every evening for the next four weeks.",
