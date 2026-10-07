@@ -122,6 +122,42 @@ COUNTRY_ALIASES = {
     "south korea": "KR",
     "korea": "KR",
 }
+# big places first: when several zones share today's clock offset, the likeliest one is chosen
+PREFERRED = [
+    "Europe/Athens",
+    "Europe/London",
+    "Europe/Berlin",
+    "Europe/Paris",
+    "Europe/Madrid",
+    "Europe/Rome",
+    "Europe/Amsterdam",
+    "Europe/Istanbul",
+    "Europe/Moscow",
+    "Europe/Kyiv",
+    "Asia/Dubai",
+    "Asia/Kolkata",
+    "Asia/Bangkok",
+    "Asia/Shanghai",
+    "Asia/Tokyo",
+    "Australia/Sydney",
+    "Pacific/Auckland",
+    "America/New_York",
+    "America/Chicago",
+    "America/Denver",
+    "America/Los_Angeles",
+    "America/Sao_Paulo",
+    "America/Argentina/Buenos_Aires",
+    "America/Mexico_City",
+    "America/Toronto",
+    "Africa/Cairo",
+    "Africa/Johannesburg",
+    "Africa/Lagos",
+    "Asia/Jerusalem",
+    "Asia/Singapore",
+    "Asia/Seoul",
+    "Asia/Karachi",
+    "Asia/Dhaka",
+]
 MAX_PHRASE = 3  # longest place name we try to recognise inside a short answer, in words
 
 
@@ -209,3 +245,57 @@ def resolve(text: str) -> Resolution:
 
 def local_time(zone: str) -> str:
     return datetime.now(zoneinfo.ZoneInfo(zone)).strftime("%H:%M")
+
+
+_MERIDIEM = r"(a\.?\s?m\.?|p\.?\s?m\.?|πμ|μμ)"
+_CLOCK = re.compile(rf"(?<!\d)(\d{{1,2}})\s*[:.h]\s*(\d{{2}})\s*{_MERIDIEM}?(?!\d)", re.IGNORECASE)
+_CLOCK_HOUR = re.compile(rf"(?<!\d)(\d{{1,2}})\s*{_MERIDIEM}(?![a-z])", re.IGNORECASE)
+
+
+def parse_clock(text: str) -> tuple[int, int] | None:
+    """A time of day in a short answer ("15:30", "3.30pm", "3 pm", "15h20"), as (hour, minute) on a 24-hour clock, or None."""
+    match = _CLOCK.search(text)
+    if match:
+        hour, minute, meridiem = int(match.group(1)), int(match.group(2)), re.sub(r"[.\s]", "", match.group(3) or "").lower()
+    elif match := _CLOCK_HOUR.search(text):
+        hour, minute, meridiem = int(match.group(1)), 0, re.sub(r"[.\s]", "", match.group(2)).lower()
+    else:
+        return None
+    if meridiem:
+        if not 1 <= hour <= 12:
+            return None
+        hour = hour % 12 + (12 if meridiem in ("pm", "μμ") else 0)
+    if hour > 23 or minute > 59:
+        return None
+    return hour, minute
+
+
+def offset_from_clock(hour: int, minute: int, now_utc: datetime | None = None) -> int:
+    """UTC offset, in minutes (a multiple of 15), of someone for whom it is hour:minute right now."""
+    now = now_utc or datetime.now(zoneinfo.ZoneInfo("UTC"))
+    diff = (hour * 60 + minute - (now.hour * 60 + now.minute)) % 1440  # 0..1439 minutes ahead of UTC, going round the clock
+    if diff > 14 * 60:
+        diff -= 1440  # offsets run from UTC-12 to UTC+14
+    return round(diff / 15) * 15
+
+
+@lru_cache(maxsize=1)
+def _zone_countries() -> dict[str, str]:
+    return {row[2]: row[0] for row in _tab("zone.tab") if len(row) >= 3}
+
+
+def zone_for_offset(offset_minutes: int, near: str | None = None, now_utc: datetime | None = None) -> str | None:
+    """A real timezone whose clock is `offset_minutes` from UTC right now.
+
+    Prefers a zone in the same country as `near` (the zone we had assumed, so "no, it's an hour earlier" stays in the same country),
+    then the likeliest of the well-known places, then any.
+    """
+    now = now_utc or datetime.now(zoneinfo.ZoneInfo("UTC"))
+    matching = [z for z in _zone_countries() if now.astimezone(zoneinfo.ZoneInfo(z)).utcoffset().total_seconds() / 60 == offset_minutes]
+    if not matching:
+        return None
+    country = _zone_countries().get(near or "")
+    same_country = [z for z in matching if country and _zone_countries()[z] == country]
+    if same_country:
+        return same_country[0]
+    return next((z for z in PREFERRED if z in matching), sorted(matching)[0])
