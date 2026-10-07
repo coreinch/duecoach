@@ -2,12 +2,13 @@
 
 import asyncio
 import logging
+import re
 import time
 from collections import deque
 from zoneinfo import ZoneInfo
 
 from . import db, flows, llm, prompts, strings, timezones
-from .config import CHECKIN_INTERVAL_MINUTES, RATE_LIMIT_MESSAGES, RATE_LIMIT_WINDOW, is_allowed
+from .config import CHECKIN_INTERVAL_MINUTES, CRISIS_HELP, RATE_LIMIT_MESSAGES, RATE_LIMIT_WINDOW, is_allowed
 from .flows import NO, SKIP, YES
 
 log = logging.getLogger("coach.core")
@@ -21,6 +22,21 @@ _warned: set[int] = set()
 ASK_TIMEZONE_AFTER_MESSAGES = 6  # chat messages stored (both sides), i.e. about three exchanges
 MAX_ANSWER_WORDS = 5  # longer messages are treated as ordinary chat, not as an answer to the question
 MAX_TZ_ATTEMPTS = 3
+
+
+_SENTENCE_BREAK = re.compile(r"(?<=[.!?;\u037e])\s+")
+_QUESTION_MARKS = ("?", ";", "\u037e")  # the last one is the Greek question mark
+
+
+def without_trailing_question(reply: str) -> str:
+    """Drop the coach's closing question(s): when the bot adds a question of its own, the user must not get two in a row."""
+    text = reply.rstrip()
+    while text.endswith(_QUESTION_MARKS):
+        start_of_last = max((m.end() for m in _SENTENCE_BREAK.finditer(text)), default=0)
+        if start_of_last == 0:
+            break  # a single sentence: keep it rather than send an empty reply
+        text = text[:start_of_last].rstrip()
+    return text
 
 
 def user_lock(uid: int) -> asyncio.Lock:
@@ -128,7 +144,7 @@ async def _coach_with_question(uid: int, text: str) -> str:
     if question is None:
         return reply
     flows.note_question_asked(uid)
-    return f"{reply}\n\n{question}"
+    return f"{without_trailing_question(reply)}\n\n{question}"
 
 
 async def _goal(uid, args):
@@ -139,6 +155,27 @@ async def _goal(uid, args):
 
 async def _step(uid, args):
     return flows.start_objective(uid)
+
+
+CRISIS_QUIET_SECONDS = 24 * 3600  # no proactive check-ins for a day after someone writes about harming themselves
+
+
+async def _crisis(uid: int, text: str) -> str:
+    """Someone wrote about suicide or self-harm: a fixed, immediate safety message that does not depend on the model.
+
+    Any question the bot had open is dropped (it must never treat this as an answer), proactive check-ins pause, and no new bot
+    question is asked for a while. The exchange is stored, so the coach has the context when the conversation continues.
+    """
+    flows.clear(uid)
+    user = db.get_user(uid)
+    if user["tz_state"] in ("asked", "confirm"):
+        db.set_fields(uid, tz_state="", tz_candidate="")
+    reply = _t(uid, "CRISIS", help=f" {CRISIS_HELP}" if CRISIS_HELP else "")
+    db.add_message(uid, "user", text)
+    db.add_message(uid, "assistant", reply)
+    db.set_field(uid, "snooze_until", time.time() + CRISIS_QUIET_SECONDS)
+    flows.note_question_asked(uid)
+    return reply
 
 
 async def _help(uid, args):
@@ -355,6 +392,9 @@ async def handle_text(channel: str, ext_id: str, chat_id: str, text: str, lang_h
     async with user_lock(uid):
         if not user["consent_at"]:
             # health-related chat goes to a third-party AI provider: nothing is processed before the user has agreed
+            if command is None and flows.is_crisis(text):
+                # safety first, ahead of the privacy notice; nothing is stored or sent to a model
+                return _t(uid, "CRISIS", help=f" {CRISIS_HELP}" if CRISIS_HELP else "")
             if command == "agree":
                 return await _agree(uid, args)
             if command in BEFORE_CONSENT:
@@ -363,6 +403,8 @@ async def handle_text(channel: str, ext_id: str, chat_id: str, text: str, lang_h
         handler = COMMANDS.get(command) if command else None
         if handler:
             return await handler(uid, args)
+        if flows.is_crisis(text):
+            return await _crisis(uid, text)  # before any pending question can mistake this for its answer
         if (answer := await _flow_answer(uid, text)) is not None:
             return answer
         if (answer := await _timezone_answer(uid, text)) is not None:

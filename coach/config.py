@@ -74,6 +74,9 @@ REVIEW_WEEKDAY = int(os.getenv("REVIEW_WEEKDAY", "6"))  # evening check-in on th
 DB_PATH = os.getenv("DB_PATH", "coach.db")
 HISTORY_TURNS = 20
 # Privacy: chat messages older than this are deleted (each user's latest 40 are kept). 0 keeps everything.
+# Extra text appended to the safety message sent when someone writes about suicide or self-harm, e.g. a local helpline:
+# "In Greece you can also call 1018." (the message always includes the emergency number 112 and a pointer to professional help)
+CRISIS_HELP = os.getenv("CRISIS_HELP", "").strip()
 RETENTION_DAYS = int(os.getenv("RETENTION_DAYS", "90"))
 # Abuse guard: at most this many messages per user inside the window (seconds).
 RATE_LIMIT_MESSAGES = int(os.getenv("RATE_LIMIT_MESSAGES", "20"))

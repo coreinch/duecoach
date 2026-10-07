@@ -106,6 +106,13 @@ STRINGS = {
         "FU_AGAIN": "Απάντησε 1 (έγινε), 2 (κατά μέρος) ή 3 (όχι ακόμα).",
         "FU_BARRIER": "Τι εμπόδισε;\n1 = ξέχασα\n2 = δεν ήξερα πώς\n3 = μπερδεύτηκα\n4 = το απέφευγα\n5 = δεν είχα κίνητρο\nΑπάντησε με αριθμό ή πες το με δικά σου λόγια.",
         "FU_LATER": "Εντάξει, θα το ξαναδούμε.",
+        "CRISIS": (
+            "Λυπάμαι πολύ που νιώθεις έτσι, και χαίρομαι που μου το είπες. Μετράς και δεν χρειάζεται να το αντιμετωπίσεις μόνος ή μόνη. "
+            "Αν υπάρχει πιθανότητα να πράξεις σύμφωνα με αυτές τις σκέψεις ή βρίσκεσαι σε κίνδυνο, κάλεσε τώρα τον τοπικό αριθμό έκτακτης "
+            "ανάγκης (112 στην ΕΕ) ή πήγαινε στο κοντινότερο τμήμα επειγόντων. Αν μπορείς, πες το σε κάποιον που εμπιστεύεσαι και σκέψου "
+            "να μιλήσεις με επαγγελματία ψυχικής υγείας ή με μια γραμμή βοήθειας στη χώρα σου.{help}\n\n"
+            "Είσαι ασφαλής αυτή τη στιγμή; Είμαι εδώ και μπορούμε να συνεχίσουμε να μιλάμε."
+        ),
         "UNSUPPORTED": "Προς το παρόν διαβάζω μόνο γραπτά μηνύματα. Γράψε μου τι σκέφτεσαι;",
     },
     "en": {
@@ -200,6 +207,13 @@ STRINGS = {
         "FU_AGAIN": "Please reply 1 (done), 2 (partly) or 3 (not yet).",
         "FU_BARRIER": "What got in the way?\n1 = I forgot\n2 = I didn't know how\n3 = I got confused about it\n4 = I was avoiding it\n5 = I wasn't motivated\nReply with a number, or tell me in your own words.",
         "FU_LATER": "Okay, we'll come back to it.",
+        "CRISIS": (
+            "I'm really sorry you're feeling this way, and I'm glad you told me. You matter, and you don't have to face this alone. "
+            "If you might act on these thoughts or you're in danger, please call your local emergency number now (112 in the EU) or go to "
+            "the nearest emergency department. If you can, tell someone you trust how you're feeling, and consider reaching out to a "
+            "mental-health professional or a helpline in your country.{help}\n\n"
+            "Are you safe right now? I'm here, and we can keep talking."
+        ),
         "UNSUPPORTED": "I can only read text messages for now. Could you type it out?",
     },
 }

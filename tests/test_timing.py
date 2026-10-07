@@ -106,7 +106,7 @@ async def test_nothing_is_asked_in_the_very_first_exchange(model):
 async def test_never_during_a_crisis_even_with_a_problem_named(model):
     uid = make_user(8)
     reply = await say("I always feel like this and I want to die")
-    assert reply == "coached" and flows.get(uid) is None
+    assert "112" in reply and flows.get(uid) is None  # the safety message, not a coaching reply with a question attached
 
 
 async def test_never_when_the_coach_is_helping_with_distress(model):
@@ -160,7 +160,7 @@ async def test_a_followup_waits_for_a_calmer_moment(model):
     db.add_goal(uid, "g")
     db.add_objective(uid, None, "tidy the desk", "")
     db._conn.execute("UPDATE objectives SET created=?", (time.time() - 3 * 86400,))
-    assert await say("I want to die") == "coached" and flows.get(uid) is None
+    assert "112" in await say("I want to die") and flows.get(uid) is None
     for i in range(flows.QUESTION_GAP):
         db.add_message(uid, "user", f"x{i}")
     assert "How did this go" in await say("hi again")
@@ -210,3 +210,69 @@ async def test_a_question_that_was_due_is_dropped_if_the_coach_ended_up_helping_
     reply = await say("I always mess everything up")
     assert reply == "coached" and flows.get(uid) is None and db.get_user(uid)["question_at_count"] == -100
     model["cards"] = original
+
+
+@pytest.mark.parametrize(
+    ("reply", "expected"),
+    [
+        ("Put keys by the door. Do you have a bowl?", "Put keys by the door."),
+        ("Good start. Try a bowl. What would work for you? And when?", "Good start. Try a bowl."),
+        ("Βάλε τα κλειδιά στην πόρτα. Έχεις μπολ;", "Βάλε τα κλειδιά στην πόρτα."),
+        ("A tip.\n\nWhat is your setup?", "A tip."),
+        ("Do you have a bowl?", "Do you have a bowl?"),  # a lone question is kept: never send nothing
+        ("Put keys by the door.", "Put keys by the door."),
+    ],
+)
+def test_the_coachs_closing_question_is_dropped_when_ours_follows(reply, expected):
+    assert core.without_trailing_question(reply) == expected
+
+
+async def test_the_reply_and_our_question_do_not_both_end_with_a_question(model, monkeypatch):
+    async def asks_anyway(uid, text, instruction=None, coach=True):
+        db.add_message(uid, "user", text)
+        db.add_message(uid, "assistant", "x")
+        return "Keep them in a bowl by the door. Do you have one?"
+
+    monkeypatch.setattr(llm, "reply", asks_anyway)
+    make_user(2)
+    reply = await say("I always forget my keys")
+    assert reply.startswith("Keep them in a bowl by the door.\n\n") and "Do you have one" not in reply and ASKS_FOR_GOAL in reply
+
+
+async def test_crisis_wording_never_becomes_the_answer_to_a_pending_question(model, monkeypatch):
+    uid = make_user(2)
+    assert ASKS_FOR_GOAL in await say("I always forget my keys")  # a goal question is now waiting for an answer
+    assert flows.get(uid) is not None
+
+    async def must_not_be_called(*args, **kwargs):
+        raise AssertionError("the safety reply must not depend on the model")
+
+    monkeypatch.setattr(llm, "reply", must_not_be_called)
+    monkeypatch.setattr(llm, "draft", must_not_be_called)
+    reply = await say("I want to die")
+    assert "112" in reply and "Are you safe right now" in reply and "goal" not in reply.lower()
+    assert flows.get(uid) is None and db.active_goals(uid) == []
+    user = db.get_user(uid)
+    assert user["snooze_until"] > time.time() + 20 * 3600  # proactive check-ins pause for a day
+    assert db.recent_messages(uid, 2)[-1]["content"] == reply  # the coach will see it when the conversation continues
+
+
+async def test_crisis_wording_also_cancels_the_timezone_question_and_works_in_greek(model):
+    uid = make_user(8)
+    db.set_fields(uid, tz_set=0, tz_state="asked", lang="el")
+    reply = await say("δεν αντέχω άλλο")
+    assert "112" in reply and "ασφαλής" in reply
+    assert db.get_user(uid)["tz_state"] == ""
+
+
+async def test_a_configured_local_helpline_is_added(model, monkeypatch):
+    make_user(8)
+    monkeypatch.setattr(core, "CRISIS_HELP", "In Greece you can also call 1018.")
+    assert "In Greece you can also call 1018." in await say("I want to kill myself")
+
+
+async def test_someone_in_crisis_gets_the_safety_message_even_before_agreeing_and_nothing_is_stored(model):
+    row = db.get_or_create_user("telegram", "6006", "6006", "en")  # new: has not agreed to the privacy notice yet
+    reply = await say("I want to end my life", "6006")
+    assert "112" in reply and "AI coaching assistant" not in reply
+    assert db.message_count(row["user_id"]) == 0
