@@ -56,6 +56,7 @@ Runs on the same branch are queued, never cancelled, so the newest commit is alw
 | `TELEGRAM_BOT_TOKEN`, `LLM_API_KEY` | the bot's credentials |
 | `ALLOWED_USERS` | who may use the bot, e.g. `telegram:123`. **Required**: the deploy refuses to run with it empty |
 | `LLM_MODEL` | optional, defaults to `kilo-auto/free` |
+| `LLM_FALLBACK_MODELS` | optional, comma-separated models to try in order when `LLM_MODEL` fails (they must support tool calling) |
 | `VIBER_AUTH_TOKEN`, `WHATSAPP_*`, `PUBLIC_URL` | optional, only for those channels |
 
 Set them with `gh secret set NAME -R coreinch/adhd-coach`.

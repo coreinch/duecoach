@@ -127,6 +127,7 @@ jobs:
           ALLOWED_USERS: ${{ secrets.ALLOWED_USERS }}
           LLM_API_KEY: ${{ secrets.LLM_API_KEY }}
           LLM_MODEL: ${{ secrets.LLM_MODEL }}
+          LLM_FALLBACK_MODELS: ${{ secrets.LLM_FALLBACK_MODELS }}
           VIBER_AUTH_TOKEN: ${{ secrets.VIBER_AUTH_TOKEN }}
           WHATSAPP_TOKEN: ${{ secrets.WHATSAPP_TOKEN }}
           WHATSAPP_PHONE_NUMBER_ID: ${{ secrets.WHATSAPP_PHONE_NUMBER_ID }}
@@ -145,6 +146,7 @@ jobs:
             --arg allowed_users "$ALLOWED_USERS" \
             --arg llm_api_key "$LLM_API_KEY" \
             --arg llm_model "$LLM_MODEL" \
+            --arg llm_fallback_models "$LLM_FALLBACK_MODELS" \
             --arg viber_auth_token "$VIBER_AUTH_TOKEN" \
             --arg whatsapp_token "$WHATSAPP_TOKEN" \
             --arg whatsapp_phone_number_id "$WHATSAPP_PHONE_NUMBER_ID" \
