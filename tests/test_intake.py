@@ -197,7 +197,7 @@ async def test_the_interview_ends_by_continuing_the_conversation_not_with_a_dead
         await say(answer)
     reply = await say(ANSWERS[-1])
     assert model[-1] is not None and "just finished the getting-to-know-you interview" in model[-1]  # the coach was told to wrap up
-    assert "Do NOT end with a question" in model[-1] and "Let's turn that into a goal" in reply
+    assert "Do NOT end with a question" in model[-1] and "Let's set a goal together" in reply and "1) " in reply
     assert flows.get(uid)["step"] == "asked" and db.get_user(uid)["intake_state"] == "done"
     assert "Here's how I'd write that as a goal" in await say("I want to stop being late")
 
@@ -213,7 +213,7 @@ async def test_if_the_model_is_down_the_fixed_closing_still_explains_how_this_wo
 
     monkeypatch.setattr(llm, "reply", broken)
     reply = await say(ANSWERS[-1])
-    assert "Here's how this works" in reply and "Let's turn that into a goal" in reply
+    assert "Here's how this works" in reply and "Let's set a goal together" in reply and "3) " in reply
     assert flows.get(uid)["flow"] == "goal"
 
 
@@ -239,7 +239,7 @@ async def test_a_heavy_mood_answer_is_not_followed_by_a_goal_question(model):
     for answer in ANSWERS[:-1]:
         await say(answer)
     reply = await say("honestly I'm really low and anxious")
-    assert "doctor or therapist" in reply and "turn that into a goal" not in reply and flows.get(uid) is None
+    assert "doctor or therapist" in reply and "set a goal together" not in reply and flows.get(uid) is None
 
 
 async def test_redoing_the_interview_with_goals_already_set_does_not_push_another_goal(model):
@@ -248,7 +248,7 @@ async def test_redoing_the_interview_with_goals_already_set_does_not_push_anothe
     await say("/intake")
     for answer in ANSWERS:
         reply = await say(answer)
-    assert "Here's how this works" in reply and "turn that into a goal" not in reply and flows.get(uid) is None
+    assert "Here's how this works" in reply and "set a goal together" not in reply and flows.get(uid) is None
 
 
 async def test_without_an_obstacle_answer_the_goal_question_is_the_general_one(model):

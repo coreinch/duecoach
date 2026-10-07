@@ -208,11 +208,11 @@ async def _coach_with_question(uid: int, text: str) -> str:
 async def _goal(uid, args):
     if len(db.active_goals(uid)) >= db.MAX_GOALS:
         return _t(uid, "GOAL_FULL")
-    return flows.start_goal(uid)
+    return await flows.start_goal(uid)
 
 
 async def _step(uid, args):
-    return flows.start_objective(uid)
+    return await flows.start_objective(uid)
 
 
 CRISIS_QUIET_SECONDS = 24 * 3600  # no proactive check-ins for a day after someone writes about harming themselves

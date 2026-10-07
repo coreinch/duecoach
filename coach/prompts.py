@@ -145,6 +145,13 @@ keep what they did not object to and apply their change; add when and where only
 
 Current draft: {previous}"""
 
+SUGGEST_GOALS = """Suggest 3 different coaching goals for this person, in {language}, first person, each at most 22 words.
+Each must be measurable, say HOW it will be done, include a time frame (for example "for the next month") and be small enough to
+start this week. Base them on what the person said below and cover different angles. Output exactly three lines, no numbering,
+no quotes, nothing else.
+
+{material}"""
+
 INTAKE_WRAPUP = (
     "The user has just finished the getting-to-know-you interview; their answers are in the record under 'What they told you at "
     "intake'. In 2-3 short sentences: show you listened by reflecting back what you understood in their own words (the main "

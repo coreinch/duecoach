@@ -7,6 +7,7 @@ A flow's state is one small JSON value on the user row (`flow_state`). It expire
 never blocks anything for long.
 """
 
+import asyncio
 import json
 import re
 import time
@@ -55,6 +56,112 @@ BARRIER_LABELS = {
     "low_motivation": "low motivation",
     "other": "something else",
 }
+
+
+SUGGEST_TIMEOUT = 20  # seconds to wait for the model's goal ideas before using the built-in ones
+OPTION_WORDS = {
+    "1": 0,
+    "one": 0,
+    "first": 0,
+    "a": 0,
+    "πρωτο": 0,
+    "πρωτη": 0,
+    "ενα": 0,
+    "2": 1,
+    "two": 1,
+    "second": 1,
+    "b": 1,
+    "δευτερο": 1,
+    "δευτερη": 1,
+    "δυο": 1,
+    "3": 2,
+    "three": 2,
+    "third": 2,
+    "c": 2,
+    "τριτο": 2,
+    "τριτη": 2,
+    "τρια": 2,
+}
+OPTION_FILLERS = {"option", "number", "no", "the", "idea", "αριθμος", "επιλογη", "ιδεα", "το", "τη", "την"}
+
+# Built-in goal ideas, used when the model can't suggest any. Each is measurable, says how and has a time frame. Keywords are
+# matched against the user's interview answers and recent messages after normalize() (so no accents).
+GOAL_IDEAS = [
+    (
+        r"start|begin|procrastin|put off|ξεκιν|αναβαλ",
+        "Start my most important task within 10 minutes of sitting down to work, on at least 4 days a week for the next month.",
+        "Να ξεκινάω την πιο σημαντική εργασία μου μέσα σε 10 λεπτά από τη στιγμή που κάθομαι να δουλέψω, τουλάχιστον 4 μέρες την εβδομάδα για τον επόμενο μήνα.",
+    ),
+    (
+        r"time|late|punctual|deadline|rush|χρον|αργ|ωρα|προθεσμ",
+        "Leave the house 10 minutes earlier than I need to, on at least 4 days a week for the next month.",
+        "Να φεύγω από το σπίτι 10 λεπτά νωρίτερα από όσο χρειάζεται, τουλάχιστον 4 μέρες την εβδομάδα για τον επόμενο μήνα.",
+    ),
+    (
+        r"organi[sz]|keys|lose|lost|forget|remember|clutter|mess|οργαν|κλειδ|χανω|χαν|ξεχν|θυμ|ατακτ",
+        "Put my keys, phone and wallet in one fixed place every time I come home, every day for the next four weeks.",
+        "Να βάζω κλειδιά, κινητό και πορτοφόλι πάντα στο ίδιο σημείο όταν γυρνάω σπίτι, κάθε μέρα για τις επόμενες τέσσερις εβδομάδες.",
+    ),
+    (
+        r"focus|distract|concentrat|attention|phone|συγκεντρ|αποσπ|προσοχ|κινητο",
+        "Work in one focused 25-minute block with my phone out of reach, on at least 4 days a week for the next month.",
+        "Να δουλεύω σε ένα συγκεντρωμένο μπλοκ 25 λεπτών με το κινητό μακριά μου, τουλάχιστον 4 μέρες την εβδομάδα για τον επόμενο μήνα.",
+    ),
+    (
+        r"sleep|bed|tired|exhaust|insomnia|υπν|κοιμ|κουρασ",
+        "Start winding down at a fixed time and be in bed by it on at least 5 nights a week for the next month.",
+        "Να αρχίζω να ηρεμώ σε σταθερή ώρα και να είμαι στο κρεβάτι μέχρι τότε τουλάχιστον 5 βράδια την εβδομάδα για τον επόμενο μήνα.",
+    ),
+    (
+        r"stress|anxi|overwhelm|pressure|burn|αγχ|πιεσ|εξαντλ",
+        "Take a 10-minute break to reset every weekday afternoon for the next four weeks.",
+        "Να κάνω ένα διάλειμμα 10 λεπτών για να ηρεμήσω κάθε απόγευμα των καθημερινών για τις επόμενες τέσσερις εβδομάδες.",
+    ),
+    (
+        r"plan|priorit|to do|todo|list|schedule|routine|προγραμμα|λιστα|προτεραι|ρουτινα",
+        "Write my top three things for the day each morning and tick them off, on at least 5 days a week for the next month.",
+        "Να γράφω κάθε πρωί τα τρία σημαντικότερα της ημέρας και να τα τσεκάρω, τουλάχιστον 5 μέρες την εβδομάδα για τον επόμενο μήνα.",
+    ),
+]
+DEFAULT_IDEAS = (0, 1, 2)  # indexes into GOAL_IDEAS used to fill up to three when the text matched fewer
+
+
+def fallback_goal_options(uid: int) -> list[str]:
+    """Three built-in goal ideas, the ones whose keywords best match what the user has said (generic ones fill the gaps)."""
+    profile = db.get_profile(uid)
+    said = " ".join(m["content"] for m in db.recent_messages(uid, 12) if m["role"] == "user")
+    text = normalize(" ".join([profile.get("obstacle", ""), profile.get("why", ""), profile.get("tried", ""), said]))
+    scored = sorted(((len(re.findall(pattern, text)), -index, index) for index, (pattern, _, _) in enumerate(GOAL_IDEAS)), reverse=True)
+    chosen = [index for score, _, index in scored if score > 0][:3]
+    chosen += [i for i in DEFAULT_IDEAS if i not in chosen][: 3 - len(chosen)]
+    greek = db.get_user(uid)["lang"] == "el"
+    return [GOAL_IDEAS[i][2 if greek else 1] for i in chosen]
+
+
+async def goal_options(uid: int) -> list[str]:
+    """Three goal ideas: the model's, drawn from what the user said, or the built-in ones if it is slow, down or unsure."""
+    try:
+        options = await asyncio.wait_for(llm.suggest_goals(uid), SUGGEST_TIMEOUT)
+    except Exception:
+        options = []
+    return options if len(options) == 3 else fallback_goal_options(uid)
+
+
+def _picked_option(text: str, count: int) -> tuple[int, str] | None:
+    """If the reply starts by choosing a numbered idea ("2", "option 2", "the second one"): its index and any words after it."""
+    words = text.split()
+    skipped = 0
+    while skipped < len(words) - 1 and normalize(words[skipped]) in OPTION_FILLERS:
+        skipped += 1
+    if not words or len(words) > 12:
+        return None
+    index = OPTION_WORDS.get(normalize(words[skipped]))
+    if index is None or index >= count:
+        return None
+    rest = words[skipped + 1 :]
+    if rest and normalize(rest[0]) in {"one", "idea", "option", "ενα"}:  # "the second one"
+        rest = rest[1:]
+    return index, " ".join(rest)
 
 
 @dataclass
@@ -201,21 +308,24 @@ def start_intake(uid: int, restart: bool = False) -> str | None:
     return intro + _t(uid, f"INTAKE_Q_{step}")
 
 
-def start_goal(uid: int, after_intake: bool = False) -> str:
-    """Ask for a goal. Right after the interview the question picks up what they said got in their way."""
-    put(uid, "goal", "asked", started=time.time(), vague=0)
+async def start_goal(uid: int, after_intake: bool = False) -> str:
+    """Ask for a goal by offering three ideas to pick from (or the user's own). Right after the interview the question picks up
+    what they said got in their way."""
+    options = await goal_options(uid)
+    put(uid, "goal", "asked", started=time.time(), vague=0, options=options)
     db.set_field(uid, "goal_asked_at", time.time())
+    a, b, c = options
     obstacle = db.get_profile(uid).get("obstacle", "") if after_intake else ""
     if obstacle:
-        return _t(uid, "GOAL_ASK_INTAKE", obstacle=obstacle[:100].rstrip(" .,;"))
-    return _t(uid, "GOAL_ASK")
+        return _t(uid, "GOAL_ASK_INTAKE", obstacle=obstacle[:100].rstrip(" .,;"), a=a, b=b, c=c)
+    return _t(uid, "GOAL_ASK", a=a, b=b, c=c)
 
 
-def start_objective(uid: int) -> str:
+async def start_objective(uid: int) -> str:
     """Ask for this week's step; goes to the goal question first if there is no goal yet."""
     goals = db.active_goals(uid)
     if not goals:
-        return start_goal(uid)
+        return await start_goal(uid)
     if len(db.open_objectives(uid)) >= db.MAX_OPEN_OBJECTIVES:
         return _t(uid, "OBJ_FULL")
     put(uid, "objective", "asked", started=time.time(), goal_id=goals[0]["id"], goal=goals[0]["text"], vague=0)
@@ -268,8 +378,11 @@ async def start_question(uid: int, kind: str, text: str) -> str | None:
     """Start the flow for a question chosen by question_due() and return the text to send (None if it turned out not to apply)."""
     if kind == "step_offer":
         return await offer_step(uid, text)
-    starters = {"followup": start_followup, "goal": start_goal, "step": start_objective, "intake": start_intake}
-    return starters[kind](uid)
+    if kind == "goal":
+        return await start_goal(uid)
+    if kind == "step":
+        return await start_objective(uid)
+    return {"followup": start_followup, "intake": start_intake}[kind](uid)
 
 
 async def offer_step(uid: int, text: str) -> str | None:
@@ -325,7 +438,7 @@ async def _intake_answer(uid: int, state: dict, text: str, said: str):
         closing = _finish_intake(uid, profile)
         if note or db.active_goals(uid):
             return closing + note  # after a heavy answer, or when redoing the interview with goals already set: nothing more is pushed
-        question = start_goal(uid, after_intake=True)
+        question = await start_goal(uid, after_intake=True)
         # carry on straight away: the coach says what it understood and how this works, then the first goal question follows
         return CoachTurn("(finished the intake interview)", prompts.INTAKE_WRAPUP, follow_up=question, fallback=f"{closing}\n\n{question}")
     put(uid, "intake", following[0])
@@ -353,6 +466,14 @@ async def _drafting(uid: int, state: dict, text: str, said: str):
     if said in SKIP or said in NO:
         return _decline(uid, state)
     kind = state["flow"]
+    if kind == "goal" and state.get("options") and (pick := _picked_option(text, len(state["options"]))):
+        index, rest = pick
+        chosen = state["options"][index]
+        if not rest:  # choosing one of the offered ideas is a yes: save it now
+            return await _accept(uid, {**state, "candidate": chosen})
+        revised = await llm.draft(uid, "goal", rest, previous=chosen)  # "2, but only on weekdays": their change applied to that idea
+        _ask_to_confirm(uid, state, revised or chosen, revisions=1)
+        return _t(uid, "GOAL_CONFIRM", goal=revised or chosen)
     draft = await llm.draft(uid, kind, text, goal=state.get("goal", "")) if _word_count(text) >= 2 else None
     if draft is None:
         vague = state.get("vague", 0) + 1  # a greeting, thanks, or one word: ask for more once, then treat it as ordinary chat
@@ -375,19 +496,19 @@ async def _confirming(uid: int, state: dict, text: str, said: str):
     if said in SKIP:
         return _decline(uid, state)
     if said in YES:
-        return _accept(uid, state)
+        return await _accept(uid, state)
     if said in NO and state["step"] == "confirm":
         put(uid, kind, "revise", **{k: v for k, v in state.items() if k not in ("flow", "step", "started")})
         return _t(uid, "REVISE")
     revisions = state.get("revisions", 0) + 1
     if revisions > MAX_REVISIONS:  # enough rounds: take the current draft, it can be changed later
-        return _accept(uid, state)
+        return await _accept(uid, state)
     revised = await llm.draft(uid, kind, text, previous=candidate, goal=state.get("goal", ""))
     _ask_to_confirm(uid, state, revised or candidate, revisions)
     return _t(uid, "GOAL_CONFIRM" if kind == "goal" else "OBJ_CONFIRM", goal=revised or candidate, step=revised or candidate)
 
 
-def _accept(uid: int, state: dict) -> str:
+async def _accept(uid: int, state: dict) -> str:
     """The user agreed to the wording: a goal is saved now, a weekly step first asks for a reward."""
     candidate = state["candidate"]
     if state["flow"] == "goal":
@@ -395,7 +516,7 @@ def _accept(uid: int, state: dict) -> str:
         already = candidate.casefold() in {g["text"].casefold() for g in db.active_goals(uid)}
         if not already and db.add_goal(uid, candidate) is None:
             return _t(uid, "GOAL_FULL")
-        return f"{_t(uid, 'GOAL_SAVED', goal=candidate)}\n\n{start_objective(uid)}"  # the natural next question: a first small step
+        return f"{_t(uid, 'GOAL_SAVED', goal=candidate)}\n\n{await start_objective(uid)}"  # the natural next question: a first small step
     put(uid, "objective", "reward", **{k: v for k, v in state.items() if k not in ("flow", "step", "started")})
     return _t(uid, "OBJ_REWARD")
 
