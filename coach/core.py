@@ -113,13 +113,18 @@ async def _flow_answer(uid: int, text: str) -> str | None:
 
 async def _coach_with_question(uid: int, text: str) -> str:
     """The coach's reply, plus at most one question from the bot (follow-up, goal, weekly step or timezone)."""
-    reply = await _coach(uid, text)
-    if reply == _t(uid, "LLM_ERROR") or flows.get(uid) or _timezone_pending(uid) or flows.question_blocked(uid, text):
+    # Decide before the coach writes: if a question of ours will follow, the coach must not end with one of its own.
+    kind = None
+    if not (flows.get(uid) or _timezone_pending(uid) or flows.question_blocked(uid, text)):
+        kind = flows.question_due(uid, text) or ("timezone" if _should_ask_timezone(uid) else None)
+    reply = await _coach(uid, text, prompts.QUESTION_FOLLOWS if kind else None)
+    if kind is None or reply == _t(uid, "LLM_ERROR") or flows.distress_in_reply(uid):
         return reply
-    question = await flows.next_question(uid, text)
-    if question is None and _should_ask_timezone(uid):
+    if kind == "timezone":
         db.set_field(uid, "tz_state", "asked")
         question = _t(uid, "TZ_ASK")
+    else:
+        question = await flows.start_question(uid, kind, text)
     if question is None:
         return reply
     flows.note_question_asked(uid)

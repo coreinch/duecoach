@@ -18,7 +18,7 @@ from .timezones import normalize
 FLOW_TTL = 24 * 3600
 MAX_REVISIONS = 3
 MAX_VAGUE_ANSWERS = 2
-GOAL_MIN_MESSAGES = 2  # stored chat messages (both sides): not before the coach has answered once...
+GOAL_MIN_MESSAGES = 2  # stored chat messages (both sides) before this exchange: the coach has answered once already...
 GOAL_FALLBACK_MESSAGES = 6  # ...and if the user never states a problem or wish, ask anyway after about three exchanges
 QUESTION_GAP = 4  # stored chat messages that must pass after any question of ours before the next one (two exchanges)
 STEP_OFFER_COOLDOWN = 6 * 3600  # after "skip" on a step, don't offer to save one they agreed to for a few hours
@@ -149,13 +149,18 @@ def is_crisis(text: str) -> bool:
 
 
 def question_blocked(uid: int, text: str) -> bool:
-    """True when this is not the moment for a question of the bot's own."""
-    if is_crisis(text) or llm.cards_read(uid) & DISTRESS_CARDS:
+    """True when this is not the moment for a question of the bot's own (known before the coach writes its reply)."""
+    if is_crisis(text):
         return True  # someone in distress needs the coach, not a form
     if text.strip().endswith(("?", ";", "\u037e")):
         return True  # they asked something themselves: answer it and stop
     user = db.get_user(uid)
     return db.message_count(uid) - (user["question_at_count"] if user["question_at_count"] is not None else -100) < QUESTION_GAP
+
+
+def distress_in_reply(uid: int) -> bool:
+    """The coach just read a card about distress, which only shows once the reply is written: drop the question then."""
+    return bool(llm.cards_read(uid) & DISTRESS_CARDS)
 
 
 def note_question_asked(uid: int) -> None:
@@ -201,27 +206,38 @@ def start_followup(uid: int) -> str | None:
     return _t(uid, "FU_ASK", step=objective["text"])
 
 
-async def next_question(uid: int, text: str) -> str | None:
-    """Which question (if any) to add to this reply. At most one question is ever pending: callers check get() first."""
+def question_due(uid: int, text: str) -> str | None:
+    """Which question would suit this moment: 'followup', 'goal', 'step_offer', 'step', or None. Changes nothing."""
     if get(uid):
         return None
-    if (question := start_followup(uid)) is not None:
-        return question
+    if _due_followup(uid) is not None:
+        return "followup"
     user = db.get_user(uid)
     now = time.time()
     goals, opens = db.active_goals(uid), db.open_objectives(uid)
     signal = signal_in(text)
-    count = db.message_count(uid)
+    prior = db.message_count(uid)  # messages stored before this exchange; it will add the user's message and the coach's reply
     if not goals:
-        ready = (signal is not None and count >= GOAL_MIN_MESSAGES) or count >= GOAL_FALLBACK_MESSAGES
-        if ready and now - (user["goal_asked_at"] or 0) > GOAL_COOLDOWN:
-            return start_goal(uid)
-    elif not opens:
-        if signal == "step" and now - (user["obj_asked_at"] or 0) > STEP_OFFER_COOLDOWN:
-            return await offer_step(uid, text)  # they just agreed to something: offer to keep it as this week's step
-        if now - (user["obj_asked_at"] or 0) > OBJECTIVE_COOLDOWN:
-            return start_objective(uid)
-    return None
+        ready = (signal is not None and prior >= GOAL_MIN_MESSAGES) or prior + 2 >= GOAL_FALLBACK_MESSAGES
+        return "goal" if ready and now - (user["goal_asked_at"] or 0) > GOAL_COOLDOWN else None
+    if opens:
+        return None
+    if signal == "step" and now - (user["obj_asked_at"] or 0) > STEP_OFFER_COOLDOWN:
+        return "step_offer"  # they just agreed to something: offer to keep it as this week's step
+    return "step" if now - (user["obj_asked_at"] or 0) > OBJECTIVE_COOLDOWN else None
+
+
+async def start_question(uid: int, kind: str, text: str) -> str | None:
+    """Start the flow for a question chosen by question_due() and return the text to send (None if it turned out not to apply)."""
+    return (
+        {
+            "followup": lambda: start_followup(uid),
+            "goal": lambda: start_goal(uid),
+            "step": lambda: start_objective(uid),
+        }[kind]()
+        if kind != "step_offer"
+        else await offer_step(uid, text)
+    )
 
 
 async def offer_step(uid: int, text: str) -> str | None:

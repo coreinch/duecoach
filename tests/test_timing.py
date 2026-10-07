@@ -96,11 +96,11 @@ async def test_without_a_signal_the_count_fallback_asks_after_about_three_exchan
     assert flows.get(uid) is not None  # asked once the fallback count was reached (the third reply)
 
 
-async def test_nothing_is_asked_before_the_coach_has_answered_once(model):
+async def test_nothing_is_asked_in_the_very_first_exchange(model):
     uid = make_user(0)
-    # signal in the very first message: the coach's reply is stored first, so two messages exist by the time we decide
-    assert ASKS_FOR_GOAL in await say("I want to stop being late")
+    assert await say("I want to stop being late") == "coached"  # the coach answers first, with nothing added
     assert db.message_count(uid) >= flows.GOAL_MIN_MESSAGES
+    assert ASKS_FOR_GOAL in await say("I always forget my keys")  # a full exchange has happened: now it fits
 
 
 async def test_never_during_a_crisis_even_with_a_problem_named(model):
@@ -124,7 +124,7 @@ async def test_not_when_the_user_asked_a_question_themselves(model, question_mar
 
 
 async def test_questions_are_never_back_to_back(model):
-    uid = make_user(0)
+    uid = make_user(2)
     assert ASKS_FOR_GOAL in await say("I always forget my keys")
     await say("skip")
     assert await say("I keep losing my wallet too") == "coached"  # too soon after our last question
@@ -176,8 +176,37 @@ async def test_the_timezone_question_respects_the_same_rules(model):
 
 
 async def test_the_fixed_questions_from_before_still_work_end_to_end(model):
-    uid = make_user(0)
+    uid = make_user(2)
     assert ASKS_FOR_GOAL in await say("I keep forgetting my keys")
     assert "Does that fit" in await say("keys by the door")
     assert "Goal saved" in await say("yes")
     assert db.active_goals(uid)
+
+
+async def test_the_coach_is_told_not_to_ask_its_own_question_when_ours_follows(model, monkeypatch):
+    seen = []
+
+    async def recording_reply(uid, text, instruction=None, coach=True):
+        seen.append(instruction)
+        db.add_message(uid, "user", text)
+        db.add_message(uid, "assistant", "coached")
+        return "coached"
+
+    monkeypatch.setattr(llm, "reply", recording_reply)
+    make_user(2)
+    await say("hello there")  # nothing due: no instruction
+    assert seen[-1] is None
+    reply = await say("I always forget my keys")  # the goal question will follow
+    assert ASKS_FOR_GOAL in reply and "Do NOT end your reply with a question" in seen[-1]
+    await say("skip")
+    await say("I keep losing my wallet")  # too soon after our question: nothing follows, so the coach may ask its own
+    assert seen[-1] is None
+
+
+async def test_a_question_that_was_due_is_dropped_if_the_coach_ended_up_helping_with_distress(model):
+    uid = make_user(2)
+    original = model["cards"]
+    model["cards"] = {"self_talk"}  # the coach turns out to read a distress card while writing its reply
+    reply = await say("I always mess everything up")
+    assert reply == "coached" and flows.get(uid) is None and db.get_user(uid)["question_at_count"] == -100
+    model["cards"] = original
