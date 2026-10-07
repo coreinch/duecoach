@@ -30,7 +30,7 @@ def model(monkeypatch):
 def person(model):
     """Agreed, timezone confirmed, three exchanges of chat so far (so the count-based fallback applies), no goals yet."""
     row = db.get_or_create_user("telegram", "4004", "4004", "en")
-    db.set_fields(row["user_id"], consent_at=1.0, tz_set=1)
+    db.set_fields(row["user_id"], consent_at=1.0, tz_set=1, intake_state="done")
     for i in range(6):
         db.add_message(row["user_id"], "user" if i % 2 == 0 else "assistant", f"m{i}")
     return row["user_id"]

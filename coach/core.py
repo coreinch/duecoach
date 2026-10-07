@@ -234,12 +234,23 @@ async def _progress(uid, args):
     return await _coach(uid, "/progress", prompts.PROGRESS, coach=False)  # a written note, not a coaching turn
 
 
+def _profile_text(uid: int) -> str:
+    profile = db.get_profile(uid)
+    lines = [f"{_t(uid, f'PROFILE_{topic}')}: {profile[topic]}" for topic in flows.INTAKE_STEPS if profile.get(topic)]
+    return f"{_t(uid, 'PROFILE_HEADER')}:\n" + "\n".join(lines) if lines else ""
+
+
 async def _notes(uid, args):
-    return db.get_notes(uid) or _t(uid, "NOTES_EMPTY")
+    parts = [part for part in (_profile_text(uid), db.get_notes(uid)) if part]
+    return "\n\n".join(parts) or _t(uid, "NOTES_EMPTY")
+
+
+async def _intake(uid, args):
+    return flows.start_intake(uid, restart=True)
 
 
 async def _forget(uid, args):
-    db.set_field(uid, "notes", "")
+    db.set_fields(uid, notes="", profile="")
     return _t(uid, "NOTES_CLEARED")
 
 
@@ -341,6 +352,7 @@ COMMANDS = {
     "interval": _interval,
     "goal": _goal,
     "step": _step,
+    "intake": _intake,
     "morning": _checkin("morning"),
     "evening": _checkin("evening"),
     "privacy": _privacy,

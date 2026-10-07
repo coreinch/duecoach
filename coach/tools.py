@@ -258,6 +258,21 @@ def coaching_state(user_id: int) -> str:
         for o in closed:
             detail = ", ".join(x for x in (o["barrier"], o["note"]) if x)
             lines.append(f"  #{o['id']} {o['status']}: {o['text']}" + (f" ({detail})" if detail else ""))
+    profile = db.get_profile(user_id)
+    told = {
+        "why they came": profile.get("why"),
+        "what they have tried": profile.get("tried"),
+        "main obstacle": profile.get("obstacle"),
+        "strengths": profile.get("strength"),
+        "daily rhythm": profile.get("rhythm"),
+        "mood lately": profile.get("mood"),
+    }
+    told = {label: answer for label, answer in told.items() if answer}
+    if told:
+        lines.append("What they told you at intake (their words; use it, don't re-ask):")
+        lines += [f"  {label}: {answer}" for label, answer in told.items()]
+        if profile.get("mood_heavy"):
+            lines.append("  (they described a heavy mood: stay gentle, and encourage professional support if it persists)")
     tools = db.toolbox(user_id, 8)
     if tools:
         lines.append("Toolbox (what has worked for them):")

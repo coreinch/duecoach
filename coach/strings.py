@@ -31,6 +31,7 @@ STRINGS = {
             "/toolbox - τι έχει δουλέψει για σένα\n"
             "/language <el|en> - γλώσσα\n"
             "/notes - τι θυμάμαι για σένα\n"
+            "/intake - ξανακάνε τις ερωτήσεις γνωριμίας\n"
             "/privacy - πώς χρησιμοποιώ τα δεδομένα σου\n"
             "/deletedata - σβήσε τα πάντα για σένα\n"
             "/forget - σβήσε τις σημειώσεις μου για σένα"
@@ -113,6 +114,24 @@ STRINGS = {
             "να μιλήσεις με επαγγελματία ψυχικής υγείας ή με μια γραμμή βοήθειας στη χώρα σου.{help}\n\n"
             "Είσαι ασφαλής αυτή τη στιγμή; Είμαι εδώ και μπορούμε να συνεχίσουμε να μιλάμε."
         ),
+        "INTAKE_INTRO": "Για να σε βοηθήσω σωστά, θα σου κάνω μερικές γρήγορες ερωτήσεις (περίπου 6). Μπορείς να παραλείψεις όποια θες γράφοντας «παράλειψη», ή να πεις «αρκετά» για να σταματήσουμε.",
+        "INTAKE_Q_why": "Πρώτα: τι σε έκανε να ψάξεις υποστήριξη αυτή την περίοδο;",
+        "INTAKE_Q_tried": "Τι έχεις ήδη δοκιμάσει και τι σε βοήθησε, έστω και λίγο;",
+        "INTAKE_Q_obstacle": "Τι σε δυσκολεύει περισσότερο; Για παράδειγμα: να ξεκινήσεις πράγματα, ο χρόνος, η οργάνωση, η συγκέντρωση, να θυμάσαι, το κίνητρο, ο ύπνος ή το άγχος. Με δικά σου λόγια.",
+        "INTAKE_Q_strength": "Σε τι είσαι καλός ή καλή, ή τι σε έχει βοηθήσει να τα καταφέρνεις στο παρελθόν;",
+        "INTAKE_Q_rhythm": "Πώς είναι μια συνηθισμένη μέρα σου; Πότε ξυπνάς και κοιμάσαι, και τι πιάνει το μεγαλύτερο μέρος της μέρας σου;",
+        "INTAKE_Q_mood": "Τελευταία: πώς νιώθεις τον τελευταίο καιρό, σε διάθεση και άγχος; Αν ήταν βαρύς, είναι εντάξει να το πεις.",
+        "INTAKE_ACK": "Ευχαριστώ.",
+        "INTAKE_DONE": "Ευχαριστώ, αυτό βοηθά πολύ. Κράτησα ένα σύντομο προφίλ (δες /notes) και θα το έχω υπόψη μου. Μπορείς να το ξαναπείς με /intake.",
+        "INTAKE_STOPPED": "Εντάξει, σταματάμε εδώ. Ό,τι μου είπες το κράτησα (δες /notes). Μπορείς να συνεχίσεις όποτε θες με /intake.",
+        "INTAKE_MOOD_HEAVY": "Ευχαριστώ που μου το είπες. Ακούγεται βαρύ. Το coaching βοηθά στο πρακτικό κομμάτι, αλλά δεν αντικαθιστά τη θεραπεία: αν κρατά καιρό, σκέψου να μιλήσεις και με γιατρό ή ψυχολόγο. Είμαι εδώ έτσι κι αλλιώς.",
+        "PROFILE_HEADER": "Για σένα (από την πρώτη μας κουβέντα)",
+        "PROFILE_why": "Γιατί ήρθες",
+        "PROFILE_tried": "Τι έχεις δοκιμάσει",
+        "PROFILE_obstacle": "Τι σε δυσκολεύει",
+        "PROFILE_strength": "Δυνατά σου σημεία",
+        "PROFILE_rhythm": "Η μέρα σου",
+        "PROFILE_mood": "Διάθεση",
         "UNSUPPORTED": "Προς το παρόν διαβάζω μόνο γραπτά μηνύματα. Γράψε μου τι σκέφτεσαι;",
     },
     "en": {
@@ -133,6 +152,7 @@ STRINGS = {
             "/toolbox - what has worked for you\n"
             "/language <el|en> - language\n"
             "/notes - see what I remember about you\n"
+            "/intake - redo the getting-to-know-you questions\n"
             "/privacy - how your data is used\n"
             "/deletedata - erase everything about you\n"
             "/forget - wipe my memory of you"
@@ -214,6 +234,24 @@ STRINGS = {
             "mental-health professional or a helpline in your country.{help}\n\n"
             "Are you safe right now? I'm here, and we can keep talking."
         ),
+        "INTAKE_INTRO": 'To help you properly, I\'d like to ask a few quick questions (about 6). You can skip any by saying "skip", or say "enough" to stop.',
+        "INTAKE_Q_why": "First: what made you look for support at this point?",
+        "INTAKE_Q_tried": "What have you already tried, and did anything help, even a little?",
+        "INTAKE_Q_obstacle": "What gets in your way most? For example: starting things, time, organising, focus, remembering, motivation, sleep or stress. Your own words are fine.",
+        "INTAKE_Q_strength": "What are you good at, or what has helped you get things done in the past?",
+        "INTAKE_Q_rhythm": "What does a typical day look like: when do you wake up and go to bed, and what takes most of your day?",
+        "INTAKE_Q_mood": "Last one: how have you been feeling lately, mood and stress wise? If it has been heavy, it's okay to say so.",
+        "INTAKE_ACK": "Thanks.",
+        "INTAKE_DONE": "Thanks, that helps a lot. I've kept a short profile (see /notes) and I'll keep it in mind. You can redo it any time with /intake.",
+        "INTAKE_STOPPED": "Okay, we'll stop here. What you told me is saved (see /notes). Pick it up whenever you like with /intake.",
+        "INTAKE_MOOD_HEAVY": "Thank you for telling me. That sounds heavy. Coaching can help with the practical side, but it isn't a substitute for treatment: if this has lasted a while, please consider talking to a doctor or therapist as well. I'm here either way.",
+        "PROFILE_HEADER": "About you (from our first chat)",
+        "PROFILE_why": "Why you came",
+        "PROFILE_tried": "What you've tried",
+        "PROFILE_obstacle": "What gets in your way",
+        "PROFILE_strength": "Your strengths",
+        "PROFILE_rhythm": "Your day",
+        "PROFILE_mood": "Mood",
         "UNSUPPORTED": "I can only read text messages for now. Could you type it out?",
     },
 }
