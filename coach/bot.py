@@ -196,7 +196,12 @@ async def maintenance_job() -> None:
 async def healthz(request: web.Request) -> web.Response:
     now = time.time()
     stale = [name for name, t in _heartbeat.items() if now - t > STALE_AFTER]
-    body = {"ok": not stale, "channels": list(channels.REGISTRY), "stale_loops": stale}
+    body = {
+        "ok": not stale,
+        "channels": list(channels.REGISTRY),
+        "stale_loops": stale,
+        "llm": llm.status(),
+    }  # model trouble is shown, not failed on: a gateway outage is not a reason to restart
     return web.json_response(body, status=200 if not stale else 503)
 
 
