@@ -7,7 +7,11 @@ from coach import core, db, flows, llm, tools
 
 @pytest.fixture
 def model(monkeypatch):
+    """The model is replaced; `asked` records the instruction each coaching reply was given."""
+    asked = []
+
     async def fake_reply(uid, text, instruction=None, coach=True):
+        asked.append(instruction)
         if text:
             db.add_message(uid, "user", text)
         db.add_message(uid, "assistant", "coached")
@@ -19,6 +23,7 @@ def model(monkeypatch):
     monkeypatch.setattr(llm, "reply", fake_reply)
     monkeypatch.setattr(llm, "draft", fake_draft)
     monkeypatch.setattr(llm, "cards_read", lambda uid: set())
+    return asked
 
 
 def new_user(ext="7007", messages=0):
@@ -56,11 +61,13 @@ async def test_the_whole_interview_is_saved_as_a_profile_and_shown_back(model):
     uid = new_user(messages=2)
     await say("hello")  # triggers the first question
     replies = [await say(answer) for answer in ANSWERS]
-    assert all(r.startswith("Thanks.") for r in replies[:-1]) and "short profile" in replies[-1]
+    assert all(r.startswith("Thanks.") for r in replies[:-1])
+    assert replies[-1].startswith("coached")  # the coach carries on from what it learned...
+    assert 'You mentioned: "starting tasks and keeping track of time"' in replies[-1]  # ...and the first goal question picks up their words
     profile = db.get_profile(uid)
     assert [profile[t] for t in flows.INTAKE_STEPS] == ANSWERS
     user = db.get_user(uid)
-    assert user["intake_state"] == "done" and flows.get(uid) is None
+    assert user["intake_state"] == "done" and flows.get(uid)["flow"] == "goal"  # the interview hands over to the first goal
     shown = await say("/notes")
     assert "About you" in shown and "Why you came: my mornings fall apart" in shown and "Your strengths: I'm creative" in shown
     state = tools.coaching_state(uid)
@@ -99,11 +106,10 @@ async def test_goals_wait_for_the_interview(model):
     uid = new_user(messages=2)
     reply = await say("I always forget my keys")  # a problem is named, but the interview comes first
     assert "a few quick questions" in reply and "set a goal together" not in reply
-    for answer in ANSWERS:  # the interview is answered...
+    for answer in ANSWERS:
         await say(answer)
-    for i in range(flows.QUESTION_GAP):
-        db.add_message(uid, "user" if i % 2 == 0 else "assistant", f"gap {i}")
-    assert "set a goal together" in await say("I keep losing my wallet")  # ...and now the goal question fits
+    assert flows.get(uid)["flow"] == "goal"  # the interview leads straight into the goal question
+    assert "Here's how I'd write that as a goal" in await say("I keep losing my wallet")
 
 
 async def test_an_abandoned_interview_resumes_where_it_stopped_and_is_dropped_after_three_tries(model):
@@ -184,9 +190,80 @@ async def test_notes_refresh_runs_every_twenty_new_messages_even_when_the_count_
     assert len(calls) == 1  # and not again until twenty more have arrived
 
 
-async def test_a_goal_named_right_after_the_interview_gets_the_goal_question(model):
+async def test_the_interview_ends_by_continuing_the_conversation_not_with_a_dead_end(model):
+    uid = new_user(messages=2)
+    await say("hello")
+    for answer in ANSWERS[:-1]:
+        await say(answer)
+    reply = await say(ANSWERS[-1])
+    assert model[-1] is not None and "just finished the getting-to-know-you interview" in model[-1]  # the coach was told to wrap up
+    assert "Do NOT end with a question" in model[-1] and "Let's turn that into a goal" in reply
+    assert flows.get(uid)["step"] == "asked" and db.get_user(uid)["intake_state"] == "done"
+    assert "Here's how I'd write that as a goal" in await say("I want to stop being late")
+
+
+async def test_if_the_model_is_down_the_fixed_closing_still_explains_how_this_works_and_asks_the_goal_question(model, monkeypatch):
+    uid = new_user(messages=2)
+    await say("hello")
+    for answer in ANSWERS[:-1]:
+        await say(answer)
+
+    async def broken(uid, text, instruction=None, coach=True):
+        raise RuntimeError("down")
+
+    monkeypatch.setattr(llm, "reply", broken)
+    reply = await say(ANSWERS[-1])
+    assert "Here's how this works" in reply and "Let's turn that into a goal" in reply
+    assert flows.get(uid)["flow"] == "goal"
+
+
+async def test_the_coachs_closing_question_is_dropped_so_the_goal_question_is_the_only_one(model, monkeypatch):
     new_user(messages=2)
     await say("hello")
-    for answer in ANSWERS:
+    for answer in ANSWERS[:-1]:
         await say(answer)
-    assert "set a goal together" in await say("I want to stop being late")  # no waiting out the spacing: the interview was the spacing
+
+    async def asks(uid, text, instruction=None, coach=True):
+        db.add_message(uid, "user", text)
+        db.add_message(uid, "assistant", "x")
+        return "Mornings and starting are the heart of it. Shall we begin?"
+
+    monkeypatch.setattr(llm, "reply", asks)
+    reply = await say(ANSWERS[-1])
+    assert "Shall we begin" not in reply and "Mornings and starting are the heart of it." in reply
+
+
+async def test_a_heavy_mood_answer_is_not_followed_by_a_goal_question(model):
+    uid = new_user(messages=2)
+    await say("hello")
+    for answer in ANSWERS[:-1]:
+        await say(answer)
+    reply = await say("honestly I'm really low and anxious")
+    assert "doctor or therapist" in reply and "turn that into a goal" not in reply and flows.get(uid) is None
+
+
+async def test_redoing_the_interview_with_goals_already_set_does_not_push_another_goal(model):
+    uid = new_user()
+    db.add_goal(uid, "an existing goal")
+    await say("/intake")
+    for answer in ANSWERS:
+        reply = await say(answer)
+    assert "Here's how this works" in reply and "turn that into a goal" not in reply and flows.get(uid) is None
+
+
+async def test_without_an_obstacle_answer_the_goal_question_is_the_general_one(model):
+    new_user(messages=2)
+    await say("hello")
+    await say(ANSWERS[0])
+    await say(ANSWERS[1])
+    await say("skip")  # the obstacle topic
+    for answer in ANSWERS[3:]:
+        reply = await say(answer)
+    assert "set a goal together" in reply and "You mentioned" not in reply
+
+
+async def test_stopping_early_still_says_what_to_do_next(model):
+    new_user(messages=2)
+    await say("hello")
+    reply = await say("stop")
+    assert "/goal" in reply and "what's on your mind" in reply

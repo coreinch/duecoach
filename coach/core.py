@@ -177,8 +177,11 @@ def _should_ask_timezone(uid: int) -> bool:
 async def _flow_answer(uid: int, text: str) -> str | None:
     """Reply to the goal / weekly-step / follow-up question in progress, if any. None: ordinary chat."""
     result = await flows.answer(uid, text)
-    if isinstance(result, flows.CoachTurn):  # the user reported how a step went: coach that now
-        return await _coach(uid, result.text, result.instruction)
+    if isinstance(result, flows.CoachTurn):  # the user reported how a step went, or finished the interview: coach that now
+        reply = await _coach(uid, result.text, result.instruction)
+        if reply == _t(uid, "LLM_ERROR") and result.fallback:
+            return result.fallback
+        return f"{without_trailing_question(reply)}\n\n{result.follow_up}" if result.follow_up else reply
     return result
 
 
