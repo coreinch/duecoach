@@ -156,6 +156,14 @@ def _m6_intake_and_notes() -> None:
         _conn.execute("UPDATE users SET intake_state='skipped' WHERE intake_state=''")
 
 
+def _m7_onboarded() -> None:
+    """Whether the setup conversation (interview, goal, first step, timezone) has been handed over to normal coaching."""
+    had_users = _conn.execute("SELECT COUNT(*) FROM users").fetchone()[0]
+    _ensure_columns("users", {"onboarded": "INTEGER DEFAULT 0"})
+    if had_users:  # people already using the bot never saw the setup, so they are not handed anything over
+        _conn.execute("UPDATE users SET onboarded=1")
+
+
 MIGRATIONS = [
     _m1_baseline,
     _m2_consent_and_resilience,
@@ -163,6 +171,7 @@ MIGRATIONS = [
     _m4_coaching_flows,
     _m5_question_spacing,
     _m6_intake_and_notes,
+    _m7_onboarded,
 ]
 
 
@@ -224,6 +233,7 @@ USER_FIELDS = {
     "intake_state",
     "intake_asked_at",
     "notes_at_count",
+    "onboarded",
 }
 
 
