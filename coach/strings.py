@@ -70,13 +70,13 @@ STRINGS = {
             "Πριν ξεκινήσουμε: είμαι βοηθός coaching με τεχνητή νοημοσύνη, όχι θεραπευτής ή ιατρική υπηρεσία. "
             "Όσα μου γράφεις (και οι στόχοι και η πρόοδός σου) αποθηκεύονται για να σε καθοδηγώ, και κάθε μήνυμα "
             "στέλνεται σε πάροχο μοντέλου τεχνητής νοημοσύνης για να φτιαχτεί η απάντηση. Μην μοιράζεσαι κάτι που δεν θα ήθελες "
-            "να επεξεργαστεί έτσι. Βλέπεις τι κρατάω με /notes και /goals και σβήνεις τα πάντα με /deletedata. "
+            "να επεξεργαστεί έτσι. Βλέπεις τι κρατάω με /notes και /goals και σβήνεις τα πάντα με /deletedata· σβήνονται επίσης αυτόματα μετά από ένα χρόνο χωρίς μήνυμά σου. "
             "Αν βρίσκεσαι σε κρίση ή κίνδυνο, κάλεσε τον τοπικό αριθμό έκτακτης ανάγκης (112 στην ΕΕ) αντί για εμένα.\n\n"
             "Στείλε /agree για να συνεχίσουμε."
         ),
         "AGREED": "Ευχαριστώ, είμαστε έτοιμοι. Να πώς θα πάει: μερικές γρήγορες ερωτήσεις για σένα, μετά διαλέγουμε έναν στόχο και ένα μικρό βήμα για αυτή την εβδομάδα, και θα είμαι δίπλα σου στην πορεία. Για αρχή, πες μου τι σε έφερε εδώ.",
         "DELETE_CONFIRM": "Αυτό σβήνει οριστικά ό,τι έχω για σένα: ιστορικό συνομιλίας, σημειώσεις, στόχους, εβδομαδιαίους στόχους, εργαλειοκουτί και υπενθυμίσεις. Στείλε /deletedata confirm για να προχωρήσω.",
-        "DELETED": "Έγινε. Όλα όσα είχα για σένα σβήστηκαν. Μπορείς να ξεκινήσεις από την αρχή όποτε θέλεις.",
+        "DELETED": "Έγινε. Όλα όσα είχα για σένα σβήστηκαν (τα αντίγραφα ασφαλείας αντικαθίστανται μέσα σε περίπου μία εβδομάδα). Μπορείς να ξεκινήσεις από την αρχή όποτε θέλεις.",
         "RATE_LIMITED": "Στέλνεις μηνύματα πολύ γρήγορα. Θα κάνω μια παύση λίγων λεπτών για να προλαβαίνω.",
         "EMPTY_REPLY": "Είμαι εδώ. Θέλεις να μου πεις τι συμβαίνει;",
         "CHECKIN_ORDER": "Η ώρα έναρξης πρέπει να είναι πριν την ώρα λήξης (π.χ. /morning 9 και /evening 21).",
@@ -205,12 +205,12 @@ STRINGS = {
             "Before we start: I'm an AI coaching assistant, not a therapist or a medical service. What you write to me (including your "
             "goals and progress) is stored so I can coach you, and each message is sent to an AI model provider to generate the reply. "
             "Please don't share anything you wouldn't want processed that way. You can see what I keep with /notes and /goals, and "
-            "erase everything with /deletedata. If you're in crisis or danger, contact your local emergency number (112 in the EU) "
+            "erase everything with /deletedata; it is also deleted automatically after a year without a message from you. If you're in crisis or danger, contact your local emergency number (112 in the EU) "
             "instead of me.\n\nSend /agree to continue."
         ),
         "AGREED": "Thanks, you're set. Here's how this goes: a few quick questions about you, then we pick a goal and one small step for this week, and I'll be with you along the way. To start, tell me what brought you here.",
         "DELETE_CONFIRM": "This permanently erases everything I have about you: chat history, notes, goals, objectives, toolbox and reminders. Send /deletedata confirm to go ahead.",
-        "DELETED": "Done. Everything I had about you has been erased. You're welcome to start fresh any time.",
+        "DELETED": "Done. Everything I had about you has been erased (backup copies are overwritten within about a week). You're welcome to start fresh any time.",
         "RATE_LIMITED": "You're sending messages very fast. I'll pause for a few minutes so I can keep up.",
         "EMPTY_REPLY": "I'm here. Want to tell me what's going on?",
         "CHECKIN_ORDER": "The start hour must be earlier than the end hour (for example /morning 9 and /evening 21).",

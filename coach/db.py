@@ -344,6 +344,17 @@ def record_checkin_failed(user_id: int) -> None:
     set_fields(user_id, checkin_failures=failures, checkin_retry_at=time.time() + min(60 * 2 ** (failures - 1), 1800))
 
 
+def delete_inactive_users(days: int) -> int:
+    """Erase everyone who has not written for `days` days (measured from sign-up for people who never wrote). Returns how many."""
+    cutoff = time.time() - days * 86400
+    stale = _conn.execute(
+        "SELECT user_id FROM users WHERE MAX(COALESCE(last_inbound, 0), COALESCE(created_at, 0)) < ?", (cutoff,)
+    ).fetchall()
+    for row in stale:
+        delete_user_data(row["user_id"])
+    return len(stale)
+
+
 def delete_user_data(user_id: int) -> None:
     """Erase everything stored about this user."""
     for table in ("messages", "reminders", "goals", "objectives", "toolbox"):
@@ -400,6 +411,13 @@ def add_reminder(user_id: int, due: float, text: str) -> None:
 def due_reminders() -> list[sqlite3.Row]:
     now = time.time()
     return _conn.execute("SELECT id, text, user_id FROM reminders WHERE sent=0 AND due<=? AND retry_at<=?", (now, now)).fetchall()
+
+
+def abandon_stale_reminders(overdue_hours: int) -> int:
+    """Drop reminders that are still undelivered long after they were due: they are useless by now."""
+    cur = _conn.execute("UPDATE reminders SET sent=1 WHERE sent=0 AND due<?", (time.time() - overdue_hours * 3600,))
+    _conn.commit()
+    return cur.rowcount
 
 
 def mark_failed(reminder_id: int) -> None:

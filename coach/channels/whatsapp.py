@@ -11,10 +11,11 @@ from aiohttp import web
 
 from .. import core, db
 from ..config import WHATSAPP_API_VERSION
-from . import SendError
+from . import SendError, Unreachable
 
 log = logging.getLogger("coach.whatsapp")
 IGNORED_TYPES = {"reaction", "unsupported", "system", "request_welcome", "ephemeral"}  # not messages the user expects a reply to
+UNDELIVERABLE_CODES = {131026}  # "message undeliverable": the number cannot receive WhatsApp messages
 WINDOW = 23.5 * 3600  # free-form replies are only allowed for 24h after the user's last message
 
 
@@ -40,7 +41,12 @@ class WhatsAppChannel:
             headers={"Authorization": f"Bearer {self.token}"},
         )
         if r.status_code >= 400:
-            raise SendError(f"whatsapp {r.status_code}: {r.text[:300]}")
+            try:
+                code = r.json().get("error", {}).get("code")
+            except ValueError:
+                code = None
+            error = Unreachable if code in UNDELIVERABLE_CODES else SendError
+            raise error(f"whatsapp {r.status_code}: {r.text[:300]}")
 
     async def send(self, user, text: str) -> None:
         to = re.sub(r"\D", "", str(user["chat_id"]))

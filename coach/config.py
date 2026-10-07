@@ -78,6 +78,10 @@ HISTORY_TURNS = 20
 # "In Greece you can also call 1018." (the message always includes the emergency number 112 and a pointer to professional help)
 CRISIS_HELP = os.getenv("CRISIS_HELP", "").strip()
 RETENTION_DAYS = int(os.getenv("RETENTION_DAYS", "90"))
+# Everything stored about someone who has not written for this many days is deleted (0 keeps it for good).
+INACTIVE_DELETE_DAYS = int(os.getenv("INACTIVE_DELETE_DAYS", "365"))
+# A reminder that could not be delivered is dropped once it is this many hours overdue.
+REMINDER_GIVE_UP_HOURS = int(os.getenv("REMINDER_GIVE_UP_HOURS", "24"))
 # Abuse guard: at most this many messages per user inside the window (seconds).
 RATE_LIMIT_MESSAGES = int(os.getenv("RATE_LIMIT_MESSAGES", "20"))
 RATE_LIMIT_WINDOW = int(os.getenv("RATE_LIMIT_WINDOW", "600"))

@@ -16,7 +16,9 @@ from .channels.viber import ViberChannel
 from .channels.whatsapp import WhatsAppChannel
 from .config import (
     DB_PATH,
+    INACTIVE_DELETE_DAYS,
     PUBLIC_URL,
+    REMINDER_GIVE_UP_HOURS,
     RETENTION_DAYS,
     REVIEW_WEEKDAY,
     TELEGRAM_BOT_TOKEN,
@@ -53,11 +55,13 @@ async def deliver_reminders() -> None:
             continue  # e.g. WhatsApp 24h window closed: stays pending until the user writes again
         try:
             await channels.send(user, strings.t(user["lang"], "REMIND_PREFIX", text=r["text"]))
+        except channels.Unreachable:
+            log.info("reminder %s dropped: user %s cannot be messaged", r["id"], user["user_id"])
         except Exception:
             log.exception("reminder %s failed, will retry later", r["id"])
             db.mark_failed(r["id"])
             continue
-        db.mark_sent(r["id"])
+        db.mark_sent(r["id"])  # delivered, or dropped because it never can be
 
 
 # --- check-ins ---
@@ -126,6 +130,12 @@ async def checkin(u) -> None:
             # a weekly step that is due for follow-up becomes a short fixed question instead of a free-form check-in
             message = flows.start_followup(uid) if (u["unanswered"] or 0) == 0 else None
             await channels.send(u, message or await llm.reply(uid, "", instruction))
+        except channels.Unreachable:
+            # they blocked the bot or left: stop spending model calls on a check-in nobody can receive
+            log.info("user %s cannot be messaged: check-ins switched off", uid)
+            db.set_fields(uid, interval_min=0)
+            flows.clear(uid)
+            return
         except Exception:
             log.exception("check-in failed for %s, backing off", uid)
             db.record_checkin_failed(uid)
@@ -155,8 +165,16 @@ def maintain() -> None:
     _last_maintenance = time.time()
     expired = db.expire_stale_objectives()
     pruned = db.prune_messages(RETENTION_DAYS) if RETENTION_DAYS > 0 else 0
-    if expired or pruned:
-        log.info("maintenance: %d objectives expired, %d old messages deleted", expired, pruned)
+    gone = db.delete_inactive_users(INACTIVE_DELETE_DAYS) if INACTIVE_DELETE_DAYS > 0 else 0
+    abandoned = db.abandon_stale_reminders(REMINDER_GIVE_UP_HOURS)
+    if expired or pruned or gone or abandoned:
+        log.info(
+            "maintenance: %d objectives expired, %d old messages deleted, %d inactive users deleted, %d stale reminders dropped",
+            expired,
+            pruned,
+            gone,
+            abandoned,
+        )
 
 
 async def forever(name: str, job) -> None:

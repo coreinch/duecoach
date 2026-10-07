@@ -1,11 +1,13 @@
 import asyncio
 import logging
 
+import telegram.error
 from telegram import Update
 from telegram.ext import Application, ContextTypes, MessageHandler, filters
 
 from .. import core, strings
 from ..config import is_allowed
+from . import Unreachable
 
 log = logging.getLogger("coach.telegram")
 
@@ -61,7 +63,14 @@ class TelegramChannel:
         return True
 
     async def send(self, user, text: str) -> None:
-        await self.app.bot.send_message(int(user["chat_id"]), text)
+        try:
+            await self.app.bot.send_message(int(user["chat_id"]), text)
+        except telegram.error.Forbidden as error:  # blocked the bot, left the chat, or deleted their account
+            raise Unreachable(str(error)) from error
+        except telegram.error.BadRequest as error:
+            if "chat not found" in str(error).lower():
+                raise Unreachable(str(error)) from error
+            raise
 
     async def start(self) -> None:
         await self.app.initialize()
