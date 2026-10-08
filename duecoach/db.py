@@ -4,7 +4,9 @@ import json
 import os
 import sqlite3
 import time
+from datetime import datetime, timedelta
 from typing import Any
+from zoneinfo import ZoneInfo
 
 from .config import CHECKIN_INTERVAL_MINUTES, DB_PATH, EVENING_HOUR, MORNING_HOUR, TIMEZONE
 
@@ -191,6 +193,11 @@ def _m8_timezone_as_flow() -> None:
         )
 
 
+def _m9_daily_reminders() -> None:
+    """Reminders that repeat every day at the same local time (medication, routines)."""
+    _ensure_columns("reminders", {"repeat_daily": "INTEGER DEFAULT 0"})
+
+
 MIGRATIONS = [
     _m1_baseline,
     _m2_consent_and_resilience,
@@ -200,6 +207,7 @@ MIGRATIONS = [
     _m6_intake_and_notes,
     _m7_onboarded,
     _m8_timezone_as_flow,
+    _m9_daily_reminders,
 ]
 
 
@@ -440,9 +448,41 @@ def mark_seen(key: str) -> bool:
 # --- reminders ---
 
 
-def add_reminder(user_id: int, due: float, text: str) -> None:
-    _conn.execute("INSERT INTO reminders (user_id, due, text) VALUES (?,?,?)", (user_id, due, text))
+MAX_PENDING_REMINDERS = 12
+
+
+def add_reminder(user_id: int, due: float, text: str, repeat_daily: bool = False) -> int | None:
+    """Schedule a reminder; None if the user already has MAX_PENDING_REMINDERS waiting."""
+    if len(pending_reminders(user_id)) >= MAX_PENDING_REMINDERS:
+        return None
+    cur = _conn.execute(
+        "INSERT INTO reminders (user_id, due, text, repeat_daily) VALUES (?,?,?,?)", (user_id, due, text, int(repeat_daily))
+    )
     _conn.commit()
+    return cur.lastrowid
+
+
+def pending_reminders(user_id: int) -> list[sqlite3.Row]:
+    return _conn.execute("SELECT id, due, text, repeat_daily FROM reminders WHERE user_id=? AND sent=0 ORDER BY due", (user_id,)).fetchall()
+
+
+def cancel_reminder(user_id: int, reminder_id: int) -> bool:
+    cur = _conn.execute("UPDATE reminders SET sent=1, repeat_daily=0 WHERE id=? AND user_id=? AND sent=0", (reminder_id, user_id))
+    _conn.commit()
+    return cur.rowcount > 0
+
+
+def _next_daily(due: float, user_id: int) -> float:
+    """The same local wall-clock time on the next day that is still in the future."""
+    row = _conn.execute("SELECT tz FROM users WHERE user_id=?", (user_id,)).fetchone()
+    try:
+        zone = ZoneInfo(row["tz"])
+    except Exception:
+        zone = ZoneInfo("UTC")
+    when, now = datetime.fromtimestamp(due, zone), time.time()
+    while when.timestamp() <= now:
+        when = when + timedelta(days=1)  # aware-datetime arithmetic keeps the wall-clock time across DST changes
+    return when.timestamp()
 
 
 def due_reminders() -> list[sqlite3.Row]:
@@ -451,8 +491,14 @@ def due_reminders() -> list[sqlite3.Row]:
 
 
 def abandon_stale_reminders(overdue_hours: int) -> int:
-    """Drop reminders that are still undelivered long after they were due: they are useless by now."""
-    cur = _conn.execute("UPDATE reminders SET sent=1 WHERE sent=0 AND due<?", (time.time() - overdue_hours * 3600,))
+    """Drop one-off reminders that are still undelivered long after they were due: they are useless by now.
+
+    Daily ones are not dropped: they skip to their next occurrence.
+    """
+    cutoff = time.time() - overdue_hours * 3600
+    for r in _conn.execute("SELECT id, due, user_id FROM reminders WHERE sent=0 AND due<? AND repeat_daily=1", (cutoff,)).fetchall():
+        _conn.execute("UPDATE reminders SET due=?, attempts=0, retry_at=0 WHERE id=?", (_next_daily(r["due"], r["user_id"]), r["id"]))
+    cur = _conn.execute("UPDATE reminders SET sent=1 WHERE sent=0 AND due<? AND repeat_daily=0", (cutoff,))
     _conn.commit()
     return cur.rowcount
 
@@ -467,7 +513,13 @@ def mark_failed(reminder_id: int) -> None:
 
 
 def mark_sent(reminder_id: int) -> None:
-    _conn.execute("UPDATE reminders SET sent=1 WHERE id=?", (reminder_id,))
+    row = _conn.execute("SELECT due, user_id, repeat_daily FROM reminders WHERE id=?", (reminder_id,)).fetchone()
+    if row and row["repeat_daily"]:  # a daily reminder is rescheduled instead of finished
+        _conn.execute(
+            "UPDATE reminders SET due=?, attempts=0, retry_at=0 WHERE id=?", (_next_daily(row["due"], row["user_id"]), reminder_id)
+        )
+    else:
+        _conn.execute("UPDATE reminders SET sent=1 WHERE id=?", (reminder_id,))
     _conn.commit()
 
 

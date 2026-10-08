@@ -24,6 +24,7 @@ log = logging.getLogger("duecoach.llm")
 
 MAX_TOOL_ROUNDS = 4
 MAX_EMPTY_RETRIES = 2
+REPLY_TOKENS = 3000  # reasoning models spend part of this thinking; too small a limit cuts the answer off mid-sentence
 MAX_CONSECUTIVE_ASSISTANT = 2  # in the history sent to the model: proactive check-ins pile up while a user is silent
 MODEL_ATTEMPTS = 2  # tries per call when there is only one model to use
 NOTES_EVERY = 20  # new chat messages between refreshes of the long-term notes
@@ -105,7 +106,9 @@ async def _chat(messages: Any, tool_defs: list[dict] | None = None, max_tokens: 
                     _down_until.pop(model, None)
                     if model != MODELS[0]:
                         log.warning("answered by fallback model %s", model)
-                    return resp.choices[0].message
+                    choice = resp.choices[0]
+                    choice.message.finish_reason = getattr(choice, "finish_reason", None)  # "length": the answer was cut off
+                    return choice.message
                 # free routes answer HTTP 200 with {"error": {...}} when the provider behind them is down
                 error_body = getattr(resp, "error", None) or (getattr(resp, "model_extra", None) or {}).get("error")
                 problem, rejected = str(error_body or "empty response")[:200], False
@@ -134,13 +137,14 @@ async def reply(user_id: int, user_text: str, instruction: str | None = None) ->
         messages.append({"role": "system", "content": instruction})
     text, empty_retries = "", 0
     for _ in range(MAX_TOOL_ROUNDS + MAX_EMPTY_RETRIES):
-        msg = await _chat(messages, tools.TOOLS)
+        msg = await _chat(messages, tools.TOOLS, max_tokens=REPLY_TOKENS)
         text = (msg.content or "").strip()
+        truncated = getattr(msg, "finish_reason", None) == "length"
         if not msg.tool_calls:
-            if text or empty_retries >= MAX_EMPTY_RETRIES:
+            if (text and not truncated) or empty_retries >= MAX_EMPTY_RETRIES:
                 break
-            empty_retries += 1  # the free models sometimes return only hidden reasoning: ask again
-            log.warning("empty model reply, retrying (%d)", empty_retries)
+            empty_retries += 1  # the free models sometimes return only hidden reasoning, or stop mid-sentence: ask again
+            log.warning("%s model reply, retrying (%d)", "cut-off" if text else "empty", empty_retries)
             continue
         messages.append(
             {
@@ -157,9 +161,19 @@ async def reply(user_id: int, user_text: str, instruction: str | None = None) ->
             # log the outcome, not the arguments: they contain what the user wrote about their life
             log.info("tool %s -> %s", call.function.name, result.split(":", 1)[0])
             messages.append({"role": "tool", "tool_call_id": call.id, "content": result})
-    text = text or strings.t(db.get_user(user_id)["lang"], "EMPTY_REPLY")
+    if truncated and text:
+        text = _trim_to_sentence(text)
+    if not text:
+        # Say so honestly, and keep it out of the history: stored as the coach's own words it makes the model imitate it.
+        return strings.t(db.get_user(user_id)["lang"], "EMPTY_REPLY")
     db.add_message(user_id, "assistant", text)
     return text
+
+
+def _trim_to_sentence(text: str) -> str:
+    """Cut a reply that ran out of tokens back to its last complete sentence (the whole text if there is none)."""
+    cut = max(text.rfind(c) for c in ".!?;\u037e\u2026")
+    return text[: cut + 1] if cut >= len(text) // 3 else text
 
 
 async def refresh_notes(user_id: int) -> None:

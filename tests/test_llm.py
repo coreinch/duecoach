@@ -51,8 +51,21 @@ async def test_empty_answers_are_retried_then_fall_back_in_the_users_language(mo
     model.queue += [message(None), message("  "), message("")]
     db.set_field(1001, "lang", "el")
     out = await llm.reply(1001, "hi")
-    assert out == "Είμαι εδώ. Θέλεις να μου πεις τι συμβαίνει;"
+    assert out == llm.strings.t("el", "EMPTY_REPLY") and "Δεν κατάφερα" in out
     assert len(model.calls) == 3  # the answer, retried twice
+    assert [m["role"] for m in db.recent_messages(1001, 5)] == ["user"]  # the apology is not stored as the coach's own words
+
+
+async def test_a_reply_cut_off_by_the_token_limit_is_retried_then_trimmed(model, user):
+    cut = message("Try a timer. Then Ο")
+    cut.finish_reason = "length"
+    model.queue += [cut, message("Try a 5-minute timer.")]
+    assert await llm.reply(1001, "I can't start") == "Try a 5-minute timer."
+    cut2 = [message("Try a timer for five minutes. Then Ο") for _ in range(3)]
+    for m in cut2:
+        m.finish_reason = "length"
+    model.queue += cut2
+    assert await llm.reply(1001, "again") == "Try a timer for five minutes."
 
 
 async def test_check_ins_send_the_instruction_but_store_only_the_reply(model, user):

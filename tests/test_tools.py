@@ -54,6 +54,37 @@ def test_set_reminder_schedules_in_the_future(user):
     assert 590 < due - time.time() < 610
 
 
+def test_set_reminder_at_a_local_time_and_daily_repeat(user):
+    from datetime import datetime, timedelta
+    from zoneinfo import ZoneInfo
+
+    uid = user["user_id"]
+    zone = ZoneInfo(db.get_user(uid)["tz"])
+    tomorrow = (datetime.now(zone) + timedelta(days=1)).replace(hour=9, minute=0, second=0, microsecond=0)
+    out = run(uid, "set_reminder", at=tomorrow.strftime("%Y-%m-%d %H:%M"), message="meds", daily=True)
+    assert out.startswith("ok") and "every day" in out
+    (rem,) = db.pending_reminders(uid)
+    assert rem["due"] == tomorrow.timestamp() and rem["repeat_daily"]
+    db._conn.execute(
+        "UPDATE reminders SET due=?", ((tomorrow - timedelta(days=2)).timestamp(),)
+    )  # now due: delivering it schedules the next day instead
+    db.mark_sent(rem["id"])
+    (rem,) = db.pending_reminders(uid)
+    assert rem["due"] > time.time() and datetime.fromtimestamp(rem["due"], zone).hour == 9
+    assert "daily" in tools.coaching_state(uid) and "meds" in tools.coaching_state(uid)
+    assert run(uid, "cancel_reminder", reminder_id=rem["id"]).startswith("ok") and db.pending_reminders(uid) == []
+
+
+def test_set_reminder_rejects_bad_times_with_a_helpful_error(user):
+    uid = user["user_id"]
+    assert "already passed" in run(uid, "set_reminder", at="2020-01-01 09:00", message="x")
+    assert "YYYY-MM-DD" in run(uid, "set_reminder", at="9 o'clock", message="x")
+    assert "give `at`" in run(uid, "set_reminder", message="x")
+    for i in range(db.MAX_PENDING_REMINDERS):
+        assert run(uid, "set_reminder", minutes=10 + i, message=f"r{i}").startswith("ok")
+    assert "cancel one first" in run(uid, "set_reminder", minutes=5, message="one too many")
+
+
 def test_checkins_need_a_confirmed_timezone():
     uid = db.get_or_create_user("telegram", "3003", "3003")["user_id"]
     assert "set_timezone first" in run(uid, "set_checkins", interval_minutes=30)

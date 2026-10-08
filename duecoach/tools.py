@@ -2,7 +2,7 @@
 
 import json
 import time
-from datetime import datetime
+from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 
 from . import db
@@ -26,12 +26,26 @@ def _fn(name: str, description: str, properties: dict, required: list[str]) -> d
 TOOLS = [
     _fn(
         "set_reminder",
-        "Send the user a message after a delay: a timer, a nudge, or a reminder. Call it once per reminder.",
+        "Send the user a message later: a timer, a nudge, or a reminder. Call it once per reminder (one call per time of day). "
+        "Give EITHER `at` (a clock time in the user's local time, best for anything tied to the time of day) OR `minutes` "
+        "(a short timer). Set daily=true for something that repeats every day, like medication.",
         {
-            "minutes": {"type": "number", "description": "Minutes from now until the message is sent (1 to 43200)."},
+            "at": {
+                "type": "string",
+                "description": "Local date and time as 'YYYY-MM-DD HH:MM' (24h). Use the 'Now' line to work out the date; "
+                "for a daily reminder give its next occurrence.",
+            },
+            "minutes": {"type": "number", "description": "Alternative to `at`: minutes from now (1 to 43200)."},
             "message": {"type": "string", "description": "Short message to send, in the user's language."},
+            "daily": {"type": "boolean", "description": "Repeat every day at the same local time."},
         },
-        ["minutes", "message"],
+        ["message"],
+    ),
+    _fn(
+        "cancel_reminder",
+        "Cancel a pending reminder (by the id in the reminders list) when it is wrong or no longer wanted.",
+        {"reminder_id": {"type": "integer"}},
+        ["reminder_id"],
     ),
     _fn(
         "snooze_checkins",
@@ -118,12 +132,45 @@ def _text(args: dict, key: str = "text") -> str:
     return value[:500]
 
 
+def _local_zone(uid: int) -> ZoneInfo:
+    try:
+        return ZoneInfo(db.get_user(uid)["tz"])
+    except Exception:
+        return ZoneInfo("UTC")
+
+
 def _set_reminder(uid: int, a: dict) -> str:
-    minutes = float(a["minutes"])
-    if not 0 < minutes <= MAX_REMINDER_MINUTES:
-        return f"error: minutes must be between 0 and {MAX_REMINDER_MINUTES}"
-    db.add_reminder(uid, time.time() + minutes * 60, _text(a, "message"))
-    return f"ok: reminder set for {minutes:g} minutes from now"
+    message, daily = _text(a, "message"), bool(a.get("daily"))
+    if a.get("at"):
+        zone = _local_zone(uid)
+        try:
+            when = datetime.strptime(str(a["at"]).strip().replace("T", " ")[:16], "%Y-%m-%d %H:%M").replace(tzinfo=zone)
+        except ValueError:
+            return "error: `at` must look like 'YYYY-MM-DD HH:MM' (24h, the user's local time)"
+        if when.timestamp() <= time.time():
+            if not daily:
+                return "error: that time has already passed; check the 'Now' line and use a future date and time"
+            while when.timestamp() <= time.time():  # a daily reminder given today's already-passed time starts tomorrow
+                when += timedelta(days=1)
+        if when.timestamp() - time.time() > MAX_REMINDER_MINUTES * 60:
+            return "error: too far ahead; the limit is 30 days"
+        due = when.timestamp()
+    elif a.get("minutes") is not None:
+        minutes = float(a["minutes"])
+        if not 0 < minutes <= MAX_REMINDER_MINUTES:
+            return f"error: minutes must be between 0 and {MAX_REMINDER_MINUTES}"
+        due = time.time() + minutes * 60
+    else:
+        return "error: give `at` (local 'YYYY-MM-DD HH:MM') or `minutes`"
+    rid = db.add_reminder(uid, due, message, daily)
+    if rid is None:
+        return f"error: already {db.MAX_PENDING_REMINDERS} reminders waiting; cancel one first"
+    shown = datetime.fromtimestamp(due, _local_zone(uid)).strftime("%a %H:%M")
+    return f"ok: reminder #{rid} set for {shown} local time" + (", repeating every day" if daily else "")
+
+
+def _cancel_reminder(uid: int, a: dict) -> str:
+    return "ok: reminder cancelled" if db.cancel_reminder(uid, int(a["reminder_id"])) else "error: no such pending reminder"
 
 
 def _set_timezone(uid: int, a: dict) -> str:
@@ -209,6 +256,7 @@ _DISPATCH = {
     "set_checkins": _set_checkins,
     "snooze_checkins": _snooze_checkins,
     "set_reminder": _set_reminder,
+    "cancel_reminder": _cancel_reminder,
     "add_goal": _add_goal,
     "retire_goal": _retire_goal,
     "add_objective": _add_objective,
@@ -217,9 +265,9 @@ _DISPATCH = {
 }
 
 
-def _ago(ts: float) -> str:
+def _ago(ts: float, zone: ZoneInfo) -> str:
     days = int((time.time() - ts) // 86400)
-    return "today" if days < 1 else f"{days}d ago"
+    return f"{datetime.fromtimestamp(ts, zone).strftime('%a %Y-%m-%d')}, " + ("today" if days < 1 else f"{days}d ago")
 
 
 def coaching_state(user_id: int) -> str:
@@ -227,10 +275,8 @@ def coaching_state(user_id: int) -> str:
     user = db.get_user(user_id)
     weeks = int((time.time() - (user["created_at"] or time.time())) // (7 * 86400)) + 1
     goals, open_obj = db.active_goals(user_id), db.open_objectives(user_id)
-    try:
-        local = datetime.now(ZoneInfo(user["tz"]))
-    except Exception:
-        local = datetime.now(ZoneInfo("UTC"))
+    zone = _local_zone(user_id)
+    local = datetime.now(zone)
     tz_note = (
         "confirmed by the user"
         if user["tz_set"]
@@ -250,13 +296,18 @@ def coaching_state(user_id: int) -> str:
     lines.append("Open objectives:" if open_obj else "Open objectives: none.")
     for o in open_obj:
         extra = f" (incentive: {o['incentive']})" if o["incentive"] else ""
-        lines.append(f"  #{o['id']} [goal #{o['goal_id'] or '-'}] {o['text']}{extra}, set {_ago(o['created'])}")
+        lines.append(f"  #{o['id']} [goal #{o['goal_id'] or '-'}] {o['text']}{extra}, set {_ago(o['created'], zone)}")
     closed = db.recent_closed_objectives(user_id)
     if closed:
         lines.append("Closed in the last 7 days:")
         for o in closed:
             detail = ", ".join(x for x in (o["barrier"], o["note"]) if x)
             lines.append(f"  #{o['id']} {o['status']}: {o['text']}" + (f" ({detail})" if detail else ""))
+    reminders = db.pending_reminders(user_id)
+    lines.append("Reminders waiting (already set, don't set them again):" if reminders else "Reminders waiting: none.")
+    for r in reminders:
+        when = datetime.fromtimestamp(r["due"], zone).strftime("%a %Y-%m-%d %H:%M")
+        lines.append(f"  #{r['id']} {when}{' daily' if r['repeat_daily'] else ''}: {r['text']}")
     profile = db.get_profile(user_id)
     told = {
         "why they came": profile.get("why"),
