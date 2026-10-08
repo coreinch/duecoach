@@ -37,7 +37,7 @@ STRINGS = {
             "/forget - σβήσε τις σημειώσεις μου για σένα"
         ),
         "LLM_ERROR": "Το μυαλό μου κόλλησε για λίγο. Δοκίμασε ξανά σε λίγο;",
-        "REMIND_DEFAULT": "Ο χρόνος τελείωσε!",
+        "REMIND_DEFAULT": "Ώρα να ξεκινήσεις!",
         "REMIND_PREFIX": "Υπενθύμιση: {text}",
         "REMIND_USAGE": "Χρήση: /remind 25 ξεκίνα την αναφορά",
         "REMIND_OK": "Εντάξει. Θα σου θυμίσω σε {minutes:g} λεπτά.",
@@ -67,17 +67,20 @@ STRINGS = {
         "INTERVAL_SET": "Εντάξει, κάθε {minutes} λεπτά περίπου (πιο αραιά αν δεν απαντάς).",
         "INTERVAL_BAD": "Δώσε αριθμό από 15 έως 240, ή on/off. Παράδειγμα: /interval 30",
         "PRIVACY": (
+            "Γεια, είμαι το Duecoach. Σε βοηθάω να ολοκληρώνεις όσα σκοπεύεις να κάνεις: διαλέγεις στόχο, κάνεις ένα μικρό βήμα την εβδομάδα και παίρνεις ώθηση όταν κολλάς.\n\n"
             "Πριν ξεκινήσουμε: είμαι βοηθός coaching με τεχνητή νοημοσύνη, όχι θεραπευτής ή ιατρική υπηρεσία. "
             "Όσα μου γράφεις (και οι στόχοι και η πρόοδός σου) αποθηκεύονται για να σε καθοδηγώ, και κάθε μήνυμα "
             "στέλνεται σε πάροχο μοντέλου τεχνητής νοημοσύνης για να φτιαχτεί η απάντηση. Μην μοιράζεσαι κάτι που δεν θα ήθελες "
-            "να επεξεργαστεί έτσι. Βλέπεις τι κρατάω με /notes και /goals και σβήνεις τα πάντα με /deletedata· σβήνονται επίσης αυτόματα μετά από ένα χρόνο χωρίς μήνυμά σου. "
+            "να επεξεργαστεί έτσι. Βλέπεις τι κρατάω με /notes και /goals και σβήνεις τα πάντα με /deletedata, και τα αντίγραφα ασφαλείας αντικαθίστανται μέσα σε περίπου μία εβδομάδα.{keeping} "
             "Αν βρίσκεσαι σε κρίση ή κίνδυνο, κάλεσε τον τοπικό αριθμό έκτακτης ανάγκης (112 στην ΕΕ) αντί για εμένα.\n\n"
             "Στείλε /agree για να συνεχίσουμε."
         ),
+        "KEEP_MESSAGES": " Τα μηνύματα της συνομιλίας σβήνονται μετά από {days} ημέρες.",
+        "KEEP_INACTIVE": " Όλα όσα έχω για σένα σβήνονται μετά από {days} ημέρες χωρίς μήνυμά σου.",
         "AGREED": "Ευχαριστώ, είμαστε έτοιμοι. Να πώς θα πάει: μερικές γρήγορες ερωτήσεις για σένα, μετά διαλέγουμε έναν στόχο και ένα μικρό βήμα για αυτή την εβδομάδα, και θα είμαι δίπλα σου στην πορεία. Για αρχή, πες μου τι σε έφερε εδώ.",
-        "DELETE_CONFIRM": "Αυτό σβήνει οριστικά ό,τι έχω για σένα: ιστορικό συνομιλίας, σημειώσεις, στόχους, εβδομαδιαίους στόχους, εργαλειοκουτί και υπενθυμίσεις. Στείλε /deletedata confirm για να προχωρήσω.",
+        "DELETE_CONFIRM": "Αυτό σβήνει οριστικά ό,τι έχω για σένα: ιστορικό συνομιλίας, σημειώσεις, στόχους, εβδομαδιαία βήματα, εργαλειοκουτί και υπενθυμίσεις. Στείλε /deletedata confirm για να προχωρήσω.",
         "DELETED": "Έγινε. Όλα όσα είχα για σένα σβήστηκαν (τα αντίγραφα ασφαλείας αντικαθίστανται μέσα σε περίπου μία εβδομάδα). Μπορείς να ξεκινήσεις από την αρχή όποτε θέλεις.",
-        "RATE_LIMITED": "Στέλνεις μηνύματα πολύ γρήγορα. Θα κάνω μια παύση λίγων λεπτών για να προλαβαίνω.",
+        "RATE_LIMITED": "Είναι πολλά μαζί. Θα κάνω μια παύση λίγων λεπτών για να προλάβω.",
         "EMPTY_REPLY": "Είμαι εδώ. Θέλεις να μου πεις τι συμβαίνει;",
         "CHECKIN_ORDER": "Η ώρα έναρξης πρέπει να είναι πριν την ώρα λήξης (π.χ. /morning 9 και /evening 21).",
         "NEED_TZ": "Πρώτα πες μου τη ζώνη ώρας σου για να έρχονται τα check-in σε λογικές ώρες: /timezone Europe/Athens (ή πες μου απλώς την πόλη σου).",
@@ -172,7 +175,7 @@ STRINGS = {
             "/forget - wipe my memory of you"
         ),
         "LLM_ERROR": "My brain glitched for a sec. Try again in a moment?",
-        "REMIND_DEFAULT": "Time's up!",
+        "REMIND_DEFAULT": "Time to start!",
         "REMIND_PREFIX": "Reminder: {text}",
         "REMIND_USAGE": "Usage: /remind 25 start the report",
         "REMIND_OK": "Got it. I'll nudge you in {minutes:g} min.",
@@ -202,16 +205,19 @@ STRINGS = {
         "INTERVAL_SET": "Okay, about every {minutes} minutes (further apart if you go quiet).",
         "INTERVAL_BAD": "Use a number from 15 to 240, or on/off. Example: /interval 30",
         "PRIVACY": (
+            "Hi, I'm Duecoach. I help you follow through on what you mean to do: pick a goal, take one small step a week, and get a nudge when you get stuck.\n\n"
             "Before we start: I'm an AI coaching assistant, not a therapist or a medical service. What you write to me (including your "
             "goals and progress) is stored so I can coach you, and each message is sent to an AI model provider to generate the reply. "
             "Please don't share anything you wouldn't want processed that way. You can see what I keep with /notes and /goals, and "
-            "erase everything with /deletedata; it is also deleted automatically after a year without a message from you. If you're in crisis or danger, contact your local emergency number (112 in the EU) "
+            "erase everything with /deletedata, and backup copies are overwritten within about a week.{keeping} If you're in crisis or danger, contact your local emergency number (112 in the EU) "
             "instead of me.\n\nSend /agree to continue."
         ),
+        "KEEP_MESSAGES": " Chat messages are deleted after {days} days.",
+        "KEEP_INACTIVE": " Everything about you is deleted after {days} days without a message from you.",
         "AGREED": "Thanks, you're set. Here's how this goes: a few quick questions about you, then we pick a goal and one small step for this week, and I'll be with you along the way. To start, tell me what brought you here.",
-        "DELETE_CONFIRM": "This permanently erases everything I have about you: chat history, notes, goals, objectives, toolbox and reminders. Send /deletedata confirm to go ahead.",
+        "DELETE_CONFIRM": "This permanently erases everything I have about you: chat history, notes, goals, weekly steps, toolbox and reminders. Send /deletedata confirm to go ahead.",
         "DELETED": "Done. Everything I had about you has been erased (backup copies are overwritten within about a week). You're welcome to start fresh any time.",
-        "RATE_LIMITED": "You're sending messages very fast. I'll pause for a few minutes so I can keep up.",
+        "RATE_LIMITED": "That's a lot at once. I'll pause for a few minutes to catch up.",
         "EMPTY_REPLY": "I'm here. Want to tell me what's going on?",
         "CHECKIN_ORDER": "The start hour must be earlier than the end hour (for example /morning 9 and /evening 21).",
         "NEED_TZ": "First tell me your timezone so check-ins arrive at sensible times: /timezone Europe/Athens (or just tell me your city).",

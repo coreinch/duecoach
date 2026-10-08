@@ -4,7 +4,7 @@ import time
 from zoneinfo import ZoneInfo
 
 from . import db, flows, prompts, ratelimit, strings
-from .chat import coach, say
+from .chat import coach, privacy, say
 from .config import CHECKIN_INTERVAL_MINUTES
 
 
@@ -110,7 +110,7 @@ async def _timezone(uid, args):
 
 
 async def _privacy(uid, args):
-    return say(uid, "PRIVACY")
+    return privacy(uid)
 
 
 async def agree(uid, args):

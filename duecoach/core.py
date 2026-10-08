@@ -60,8 +60,8 @@ async def handle_text(channel: str, ext_id: str, chat_id: str, text: str, lang_h
             if command == "agree":
                 return await agree(uid, args)
             if command in BEFORE_CONSENT:
-                return await COMMANDS[command](uid, args) if command not in ("start", "help") else say(uid, "PRIVACY")
-            return say(uid, "PRIVACY")
+                return await COMMANDS[command](uid, args) if command not in ("start", "help") else chat.privacy(uid)
+            return chat.privacy(uid)
         if crisis:
             return await chat.crisis(uid, text)
         handler = COMMANDS.get(command) if command else None
@@ -77,4 +77,4 @@ async def handle_unsupported(channel: str, ext_id: str, chat_id: str, lang_hint:
     user = _user_for(channel, ext_id, chat_id, lang_hint)
     if user is None:
         return None
-    return say(user["user_id"], "UNSUPPORTED" if user["consent_at"] else "PRIVACY")
+    return say(user["user_id"], "UNSUPPORTED") if user["consent_at"] else chat.privacy(user["user_id"])

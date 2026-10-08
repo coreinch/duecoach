@@ -85,7 +85,7 @@ async def test_flooding_is_cut_off_with_a_single_warning(ai, user, monkeypatch):
     monkeypatch.setattr(ratelimit, "RATE_LIMIT_MESSAGES", 3)
     replies = [await say("hi") for _ in range(6)]
     assert replies[:3] == ["coached"] * 3
-    assert "very fast" in replies[3] and replies[4:] == [None, None]
+    assert "a lot at once" in replies[3] and replies[4:] == [None, None]
 
 
 async def test_messages_from_one_user_are_handled_one_at_a_time(user, monkeypatch):

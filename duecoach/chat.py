@@ -6,7 +6,7 @@ import re
 import time
 
 from . import db, flows, llm, prompts
-from .config import CRISIS_HELP
+from .config import CRISIS_HELP, INACTIVE_DELETE_DAYS, RETENTION_DAYS
 from .flows.state import say  # noqa: F401  (the fixed texts, in the user's language; re-exported for the commands)
 
 log = logging.getLogger("duecoach.chat")
@@ -91,6 +91,16 @@ async def coach_with_question(uid: int, text: str) -> str:
         return reply
     flows.note_question_asked(uid)
     return f"{without_trailing_question(reply)}\n\n{question}"
+
+
+def privacy(uid: int) -> str:
+    """The privacy notice, with the retention periods this deployment actually uses (0 means kept for good, so not mentioned)."""
+    keeping = ""
+    if RETENTION_DAYS > 0:
+        keeping += say(uid, "KEEP_MESSAGES", days=RETENTION_DAYS)
+    if INACTIVE_DELETE_DAYS > 0:
+        keeping += say(uid, "KEEP_INACTIVE", days=INACTIVE_DELETE_DAYS)
+    return say(uid, "PRIVACY", keeping=keeping)
 
 
 def crisis_message(uid: int) -> str:
