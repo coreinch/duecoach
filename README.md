@@ -82,13 +82,6 @@ Set them with `gh secret set NAME -R coreinch/duecoach`.
 Backups land in the volume's `backups/` folder (7 daily copies). They survive a bad deploy but not the loss of the VPS, so copy
 them off the box if the data matters.
 
-### Upgrading from the old name (adhd-coach)
-
-The first deploy under the name `duecoach` moves the database by itself: it stops the old stack in `/opt/adhd-coach`, copies the
-old volume (`adhd-coach_coach-data`) into the new one (`duecoach_data`) with its ownership, and starts the new stack. If the copy
-fails, the old bot is started again and the deploy fails. The old folder and volume are left as a backup; delete them by hand
-(`docker volume rm adhd-coach_coach-data`, `rm -r /opt/adhd-coach`) once the new bot has run for a while.
-
 ## Commands
 
 `/help` lists them. Highlights: `/stuck`, `/plan`, `/overwhelm`, `/goals`, `/goal`, `/step`, `/toolbox`, `/progress`, `/remind`, `/timezone`,
