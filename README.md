@@ -1,8 +1,8 @@
 # duecoach
 
-An ADHD coach bot.
+From what you meant to do to what you did.
 
-A chat coach for people with ADHD on Telegram, Viber and WhatsApp (Greek and English). It coaches with a structured method — goals,
+duecoach is an ADHD coach in your chat app, on Telegram, Viber and WhatsApp (Greek and English), built around follow-through. It coaches with a structured method — goals,
 small weekly objectives, barrier analysis, a toolbox of what works, a weekly review — with a 54-card playbook of strategies in
 the prompt of every reply (one model call per message). New users are led through a short conversation (a few intake questions,
 a first goal, their timezone) and then talk freely. Once the timezone is known, the bot checks in after 30 minutes of silence
@@ -93,6 +93,12 @@ fails, the old bot is started again and the deploy fails. The old folder and vol
 
 `/help` lists them. Highlights: `/stuck`, `/plan`, `/overwhelm`, `/goals`, `/goal`, `/step`, `/toolbox`, `/progress`, `/remind`, `/timezone`,
 `/interval on|off|<minutes>`, `/morning`, `/evening`, `/language`, `/privacy`, `/deletedata`.
+
+## Telegram profile
+
+The bot's name, descriptions and command menu (English and Greek) live in `duecoach/telegram_profile.py`. Apply them with
+`python -m duecoach.telegram_profile` (needs `TELEGRAM_BOT_TOKEN`; run it again after editing the texts). Telegram limits how often the name can
+change, so this is not done at start-up. The avatar is set in BotFather with `/setuserpic`.
 
 ## Development
 
