@@ -127,6 +127,9 @@ jobs:
           GHCR_PAT: ${{ secrets.GHCR_PULL_PAT }}
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           ALLOWED_USERS: ${{ secrets.ALLOWED_USERS }}
+          # Repository variable (Settings > Secrets and variables > Actions > Variables).
+          # Set it to "true" to open the bot to everyone; it overrides ALLOWED_USERS.
+          OPEN_ACCESS: ${{ vars.OPEN_ACCESS }}
           LLM_API_KEY: ${{ secrets.LLM_API_KEY }}
           LLM_MODEL: ${{ secrets.LLM_MODEL }}
           LLM_FALLBACK_MODELS: ${{ secrets.LLM_FALLBACK_MODELS }}
@@ -141,11 +144,18 @@ jobs:
           # Built via jq rather than interpolated into the ansible-playbook
           # command line: tokens can contain shell metacharacters, and
           # jq --arg escapes arbitrary content safely.
+          if [ "$OPEN_ACCESS" = "true" ]; then
+            ALLOWED_USERS=""
+          else
+            OPEN_ACCESS="false"
+          fi
+
           jq -n \
             --arg image_tag "$IMAGE_TAG" \
             --arg ghcr_pat "$GHCR_PAT" \
             --arg telegram_bot_token "$TELEGRAM_BOT_TOKEN" \
             --arg allowed_users "$ALLOWED_USERS" \
+            --arg open_access "$OPEN_ACCESS" \
             --arg llm_api_key "$LLM_API_KEY" \
             --arg llm_model "$LLM_MODEL" \
             --arg llm_fallback_models "$LLM_FALLBACK_MODELS" \
