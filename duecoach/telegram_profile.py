@@ -10,7 +10,7 @@ from telegram import Bot, BotCommand
 
 from .config import TELEGRAM_BOT_TOKEN
 
-NAME = "duecoach"
+NAME = "Duecoach"
 
 # language_code None is what Telegram shows to everyone without a more specific translation
 SHORT = {
@@ -19,11 +19,11 @@ SHORT = {
 }
 ABOUT = {
     "en": (
-        "duecoach is an ADHD coach that helps you follow through: pick a goal, take one small step a week, "
+        "Duecoach is an ADHD coach that helps you follow through: pick a goal, take one small step a week, "
         "and get nudged when you get stuck. Not therapy or medical advice. Send /start to begin."
     ),
     "el": (
-        "Το duecoach είναι coach για ADHD που σε βοηθάει να ολοκληρώνεις: διαλέγεις στόχο, κάνεις ένα μικρό βήμα "
+        "Το Duecoach είναι coach για ADHD που σε βοηθάει να ολοκληρώνεις: διαλέγεις στόχο, κάνεις ένα μικρό βήμα "
         "την εβδομάδα και παίρνεις ώθηση όταν κολλάς. Δεν αντικαθιστά θεραπεία ή ιατρική συμβουλή. Στείλε /start."
     ),
 }

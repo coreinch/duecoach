@@ -19,6 +19,6 @@ def test_texts_fit_telegram_limits():
 async def test_apply_sets_default_and_each_language():
     bot = AsyncMock()
     await telegram_profile.apply(bot)
-    bot.set_my_name.assert_awaited_once_with("duecoach")
+    bot.set_my_name.assert_awaited_once_with("Duecoach")
     languages = [call.kwargs["language_code"] for call in bot.set_my_commands.await_args_list]
     assert languages == [None, "en", "el"]

@@ -1,8 +1,8 @@
-# duecoach
+# Duecoach
 
 From what you meant to do to what you did.
 
-duecoach is an ADHD coach in your chat app, on Telegram, Viber and WhatsApp (Greek and English), built around follow-through. It coaches with a structured method — goals,
+Duecoach is an ADHD coach in your chat app, on Telegram, Viber and WhatsApp (Greek and English), built around follow-through. It coaches with a structured method — goals,
 small weekly objectives, barrier analysis, a toolbox of what works, a weekly review — with a 54-card playbook of strategies in
 the prompt of every reply (one model call per message). New users are led through a short conversation (a few intake questions,
 a first goal, their timezone) and then talk freely. Once the timezone is known, the bot checks in after 30 minutes of silence

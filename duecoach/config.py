@@ -20,7 +20,7 @@ def _number(name: str, default: float, kind: type = int, low: float | None = Non
 # --- channels: a channel is enabled when its credentials are set ---
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "")
 VIBER_AUTH_TOKEN = os.getenv("VIBER_AUTH_TOKEN", "")
-VIBER_BOT_NAME = os.getenv("VIBER_BOT_NAME", "duecoach")[:28]
+VIBER_BOT_NAME = os.getenv("VIBER_BOT_NAME", "Duecoach")[:28]
 WHATSAPP_TOKEN = os.getenv("WHATSAPP_TOKEN", "")
 WHATSAPP_PHONE_NUMBER_ID = os.getenv("WHATSAPP_PHONE_NUMBER_ID", "")
 WHATSAPP_VERIFY_TOKEN = os.getenv("WHATSAPP_VERIFY_TOKEN", "")

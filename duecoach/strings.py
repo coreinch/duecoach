@@ -15,7 +15,7 @@ def t(lang: str, key: str, **kw) -> str:
 STRINGS = {
     "el": {
         "HELP": (
-            "Είμαι το duecoach, ο coach σου για ADHD: σε βοηθάω να περνάς από την πρόθεση στην πράξη. Μίλα μου ελεύθερα ή χρησιμοποίησε:\n"
+            "Είμαι το Duecoach, ο coach σου για ADHD: σε βοηθάω να περνάς από την πρόθεση στην πράξη. Μίλα μου ελεύθερα ή χρησιμοποίησε:\n"
             "/stuck [εργασία] - δεν μπορείς να ξεκινήσεις; θα τη μικρύνω\n"
             "/plan [πλαίσιο] - σχεδιάζουμε τη μέρα\n"
             "/overwhelm [πλαίσιο] - είναι πολλά, βοήθησέ με να τα μαζέψω\n"
@@ -150,7 +150,7 @@ STRINGS = {
     },
     "en": {
         "HELP": (
-            "I'm duecoach, your ADHD coach. I help you get from meaning to do it to having done it. Just talk to me, or use:\n"
+            "I'm Duecoach, your ADHD coach. I help you get from meaning to do it to having done it. Just talk to me, or use:\n"
             "/stuck [task] - can't start? I'll shrink it\n"
             "/plan [context] - plan today\n"
             "/overwhelm [context] - too much, help me reduce\n"
