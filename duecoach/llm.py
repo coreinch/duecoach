@@ -20,6 +20,8 @@ from .config import (
     LLM_MODEL,
     LLM_MODEL_COOLDOWN,
     LLM_TIMEOUT,
+    MINIMAX_API_KEY,
+    MINIMAX_BASE_URL,
 )
 
 log = logging.getLogger("duecoach.llm")
@@ -48,12 +50,28 @@ _cf_client = (
 )
 
 
+# Models named "MiniMax-..." run on MiniMax. It puts its reasoning inside the reply as <think>...</think> unless asked to split it off.
+_mm_client = (
+    AsyncOpenAI(api_key=MINIMAX_API_KEY, base_url=MINIMAX_BASE_URL, timeout=LLM_TIMEOUT, max_retries=2) if MINIMAX_API_KEY else None
+)
+_THINK = re.compile(r"<think>.*?</think>\s*", re.DOTALL)
+
+
 def _client_for(model: str) -> AsyncOpenAI:
+    if _mm_client is not None and model.startswith("MiniMax-"):
+        return _mm_client
     return _cf_client if _cf_client is not None and model.startswith("@cf/") else _client
 
 
 def _usable(model: str) -> bool:
-    return _cf_client is not None or not model.startswith("@cf/")  # a Cloudflare model without Cloudflare credentials can't run
+    """A model whose provider has no credentials can't run (it is left out of the list instead of failing every time)."""
+    if model.startswith("MiniMax-"):
+        return _mm_client is not None
+    return _cf_client is not None or not model.startswith("@cf/")
+
+
+def _extra(model: str) -> dict[str, Any]:
+    return {"extra_body": {"reasoning_split": True}} if model.startswith("MiniMax-") else {}
 
 
 MODELS = [m for m in [LLM_MODEL, *[m for m in LLM_FALLBACK_MODELS if m != LLM_MODEL]] if _usable(m)]  # in order of preference
@@ -132,7 +150,9 @@ async def _chat(messages: Any, tool_defs: list[dict] | None = None, max_tokens: 
         for attempt in range(attempts):
             try:
                 async with _slots:
-                    resp = await _client_for(model).chat.completions.create(model=model, messages=messages, max_tokens=max_tokens, **kwargs)
+                    resp = await _client_for(model).chat.completions.create(
+                        model=model, messages=messages, max_tokens=max_tokens, **kwargs, **_extra(model)
+                    )
             except openai.OpenAIError as error:  # connection, timeout, rate limit, server error, or a request this model rejects
                 problem = f"{type(error).__name__}: {error}"[:200]
                 rejected = isinstance(error, (openai.BadRequestError, openai.UnprocessableEntityError))
@@ -143,6 +163,8 @@ async def _chat(messages: Any, tool_defs: list[dict] | None = None, max_tokens: 
                         log.warning("answered by fallback model %s", model)
                     choice = resp.choices[0]
                     choice.message.finish_reason = getattr(choice, "finish_reason", None)  # "length": the answer was cut off
+                    if choice.message.content and "<think>" in choice.message.content:  # reasoning must never reach the user
+                        choice.message.content = _THINK.sub("", choice.message.content).strip()
                     return choice.message
                 # free routes answer HTTP 200 with {"error": {...}} when the provider behind them is down
                 error_body = getattr(resp, "error", None) or (getattr(resp, "model_extra", None) or {}).get("error")

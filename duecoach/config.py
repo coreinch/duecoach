@@ -67,11 +67,18 @@ LLM_BASE_URL = os.getenv("LLM_BASE_URL", "https://generativelanguage.googleapis.
 # Both values are needed; without them such models are ignored.
 CLOUDFLARE_API_TOKEN = os.getenv("CLOUDFLARE_API_TOKEN", "")
 CLOUDFLARE_ACCOUNT_ID = os.getenv("CLOUDFLARE_ACCOUNT_ID", "")
-if not LLM_API_KEY and not (CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID):
-    raise SystemExit("No model provider is set: set LLM_API_KEY, or CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID (see .env.example)")
-# The default model follows the provider that is set up: Cloudflare's free llama-4-scout, else Gemini.
+# MiniMax (OpenAI-compatible): models whose id starts with "MiniMax-" go there.
+MINIMAX_API_KEY = os.getenv("MINIMAX_API_KEY", "")
+MINIMAX_BASE_URL = os.getenv("MINIMAX_BASE_URL") or "https://api.minimax.io/v1"
+if not (LLM_API_KEY or MINIMAX_API_KEY or (CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID)):
+    raise SystemExit("No model provider is set: set LLM_API_KEY, MINIMAX_API_KEY, or CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID")
+# The default model follows the provider that is set up: MiniMax-M3, else Cloudflare's free llama-4-scout, else Gemini.
 LLM_MODEL = os.getenv("LLM_MODEL") or (
-    "@cf/meta/llama-4-scout-17b-16e-instruct" if CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID else "gemini-3.5-flash-lite"
+    "MiniMax-M3"
+    if MINIMAX_API_KEY
+    else "@cf/meta/llama-4-scout-17b-16e-instruct"
+    if CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID
+    else "gemini-3.5-flash-lite"
 )
 # Models to try, in order, when LLM_MODEL fails (an outage, a rate limit, a timeout, or a model that rejects a request).
 # Comma-separated. They must support tool calling (reminders, goals and the like are tools).

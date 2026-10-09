@@ -133,6 +133,7 @@ jobs:
           LLM_API_KEY: ${{ secrets.LLM_API_KEY }}
           LLM_BASE_URL: ${{ vars.LLM_BASE_URL }}
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          MINIMAX_API_KEY: ${{ secrets.MINIMAX_API_KEY }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           LLM_MODEL: ${{ secrets.LLM_MODEL }}
           LLM_FALLBACK_MODELS: ${{ secrets.LLM_FALLBACK_MODELS }}
@@ -162,6 +163,7 @@ jobs:
             --arg llm_api_key "$LLM_API_KEY" \
             --arg llm_base_url "$LLM_BASE_URL" \
             --arg cloudflare_api_token "$CLOUDFLARE_API_TOKEN" \
+            --arg minimax_api_key "$MINIMAX_API_KEY" \
             --arg cloudflare_account_id "$CLOUDFLARE_ACCOUNT_ID" \
             --arg llm_model "$LLM_MODEL" \
             --arg llm_fallback_models "$LLM_FALLBACK_MODELS" \

@@ -11,11 +11,11 @@
     - name: Check the required settings are present
       ansible.builtin.assert:
         that:
-          - (llm_api_key | default('') | length > 0) or ((cloudflare_api_token | default('') | length > 0) and (cloudflare_account_id | default('') | length > 0))
+          - (llm_api_key | default('') | length > 0) or (minimax_api_key | default('') | length > 0) or ((cloudflare_api_token | default('') | length > 0) and (cloudflare_account_id | default('') | length > 0))
           - (telegram_bot_token | default('') | length > 0) or (viber_auth_token | default('') | length > 0) or (whatsapp_token | default('') | length > 0)
           - (allowed_users | default('') | length > 0) or (open_access | default(false) | bool)
         fail_msg: >-
-          Missing settings. Set the LLM_API_KEY secret (or CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID), at least one channel token (TELEGRAM_BOT_TOKEN, VIBER_AUTH_TOKEN
+          Missing settings. Set the LLM_API_KEY secret (or MINIMAX_API_KEY, or CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID), at least one channel token (TELEGRAM_BOT_TOKEN, VIBER_AUTH_TOKEN
           or WHATSAPP_TOKEN) and ALLOWED_USERS (or deliberately pass -e open_access=true).
       no_log: true
 

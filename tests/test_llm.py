@@ -251,3 +251,24 @@ def test_cloudflare_models_use_their_own_client_and_are_ignored_without_credenti
     monkeypatch.setattr(llm, "_cf_client", None)
     assert llm._client_for("@cf/meta/llama-4-scout-17b-16e-instruct") is llm._client
     assert not llm._usable("@cf/meta/llama-4-scout-17b-16e-instruct") and llm._usable("gemini-3.5-flash-lite")
+
+
+def test_minimax_models_use_their_own_client_ask_for_split_reasoning_and_need_a_key(monkeypatch):
+    mm = object()
+    monkeypatch.setattr(llm, "_mm_client", mm)
+    assert llm._client_for("MiniMax-M3") is mm and llm._usable("MiniMax-M3")
+    assert llm._extra("MiniMax-M3") == {"extra_body": {"reasoning_split": True}} and llm._extra("gemini-3.5-flash-lite") == {}
+    monkeypatch.setattr(llm, "_mm_client", None)
+    assert not llm._usable("MiniMax-M3") and llm._client_for("MiniMax-M3") is llm._client
+
+
+async def test_leaked_reasoning_is_stripped_from_a_reply(monkeypatch):
+    msg = NS(content="<think>\nthe user greets me\n</think>\n\nΓεια σου!", finish_reason=None, tool_calls=None)
+    fake = NS(create=lambda **kw: _as_awaitable(NS(choices=[NS(message=msg, finish_reason="stop")])))
+    monkeypatch.setattr(llm._client, "chat", NS(completions=fake))
+    monkeypatch.setattr(llm, "MODELS", ["primary"])
+    assert (await llm._chat([{"role": "user", "content": "hi"}])).content == "Γεια σου!"
+
+
+async def _as_awaitable(value):
+    return value
