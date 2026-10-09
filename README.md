@@ -67,6 +67,7 @@ Runs on the same branch are queued, never cancelled, so the newest commit is alw
 | `OPEN_ACCESS` (repository *variable*, not secret) | set to `true` to let everyone use the bot in production; it overrides `ALLOWED_USERS`. Everyone then shares your model quota and their chats are stored |
 | `LLM_MODEL` | optional, defaults to `nvidia/nemotron-3-ultra-550b-a55b:free` |
 | `LLM_FALLBACK_MODELS` | optional, comma-separated models to try in order when `LLM_MODEL` fails (they must support tool calling); `LLM_BUDGET`, `LLM_MODEL_COOLDOWN` tune the fallback |
+| `LLM_REFRESH_HOURS`, `LLM_POOL_SIZE` | optional: every `LLM_REFRESH_HOURS` (default 6, 0 = off) the free `:free` models on the gateway are probed with a Greek reply and a reminder tool call, and the `LLM_POOL_SIZE` fastest that pass are used first (auto-routers like `kilo-auto/free` are never picked). `LLM_MODEL` and `LLM_FALLBACK_MODELS` are the seed and the last resort. Preview it with `python -m duecoach.modelpicker`; `/healthz` shows the last result |
 | `VIBER_AUTH_TOKEN`, `WHATSAPP_*`, `PUBLIC_URL` | optional, only for those channels |
 
 Set them with `gh secret set NAME -R coreinch/duecoach`.

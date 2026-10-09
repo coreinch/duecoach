@@ -68,6 +68,14 @@ LLM_MODEL = os.getenv("LLM_MODEL", "nvidia/nemotron-3-ultra-550b-a55b:free")
 # Models to try, in order, when LLM_MODEL fails (an outage, a rate limit, a timeout, or a model that rejects a request).
 # Comma-separated. They must support tool calling (reminders, goals and the like are tools).
 LLM_FALLBACK_MODELS = [m.strip() for m in os.getenv("LLM_FALLBACK_MODELS", "").split(",") if m.strip()]
+# Automatic model selection (see modelpicker.py): every LLM_REFRESH_HOURS the gateway's free models are probed and the fastest ones
+# that answer in clean Greek and call tools correctly become the model list. 0 turns it off (only LLM_MODEL and the fallbacks are used).
+# LLM_MODEL / LLM_FALLBACK_MODELS stay as the seed before the first check and as the last resort behind the picked models.
+LLM_REFRESH_HOURS = _number("LLM_REFRESH_HOURS", 6, float, low=0, high=None)
+LLM_POOL_SIZE = _number("LLM_POOL_SIZE", 4, low=1, high=10)  # how many picked models to keep, fastest first
+LLM_MIN_CONTEXT = _number("LLM_MIN_CONTEXT", 32000, low=1000, high=None)  # tokens a candidate must accept
+# Candidates whose id matches this regex are never probed (code, safety, audio and similar models).
+LLM_MODEL_DENYLIST = os.getenv("LLM_MODEL_DENYLIST", r"code|safety|guard|moderat|embed|rerank|lyria|image|audio|tts|vision|ocr")
 # Seconds a model that just failed is skipped, so each message doesn't wait on a model that is down.
 LLM_MODEL_COOLDOWN = _number("LLM_MODEL_COOLDOWN", 120, low=0, high=None)
 # Stop trying further models once a request has taken this many seconds (each model can use up to LLM_TIMEOUT).

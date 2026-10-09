@@ -10,7 +10,7 @@ from zoneinfo import ZoneInfo
 import httpx
 from aiohttp import web
 
-from . import backoff, channels, chat, core, db, flows, llm, prompts, strings
+from . import backoff, channels, chat, core, db, flows, llm, modelpicker, prompts, strings
 from .channels.telegram import TelegramChannel
 from .channels.viber import ViberChannel
 from .channels.whatsapp import WhatsAppChannel
@@ -267,6 +267,7 @@ async def main(stop: asyncio.Event | None = None) -> None:
         asyncio.create_task(forever("reminders", deliver_reminders)),
         asyncio.create_task(forever("checkins", run_checkins)),
         asyncio.create_task(forever("maintenance", maintenance_job)),
+        asyncio.create_task(modelpicker.run()),
     ]
     await stop.wait()
 

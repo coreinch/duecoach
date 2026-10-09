@@ -33,6 +33,8 @@ NOTES_EVERY = 20  # new chat messages between refreshes of the long-term notes
 SHORT_JOB_TOKENS = 2000
 
 MODELS = [LLM_MODEL, *[m for m in LLM_FALLBACK_MODELS if m != LLM_MODEL]]  # in order of preference
+SEED_MODELS = list(MODELS)  # from the environment: used until the first automatic check, and as the last resort after it
+auto_info: dict = {}  # the last automatic model check, for /healthz (set by modelpicker)
 _down_until: dict[str, float] = {}  # model -> time before which it is skipped (it failed recently)
 _client = AsyncOpenAI(api_key=LLM_API_KEY, base_url=LLM_BASE_URL, timeout=LLM_TIMEOUT, max_retries=2)
 _slots = asyncio.Semaphore(LLM_CONCURRENCY)  # one slow or rate-limited gateway must not be hammered by every user at once
@@ -79,10 +81,19 @@ def _order() -> list[str]:
     return [m for m in MODELS if _down_until.get(m, 0) <= now] or list(MODELS)
 
 
+def set_models(picked: list[str]) -> None:
+    """Use `picked` first (in order), then the configured models as a last resort. Changes the shared list in place."""
+    MODELS[:] = [*picked, *[m for m in SEED_MODELS if m not in picked]]
+
+
 def status() -> dict:
     """For /healthz: which models are configured and which are cooling down after a failure (seconds left)."""
     now = time.time()
-    return {"models": list(MODELS), "cooling_down": {m: round(t - now) for m, t in _down_until.items() if t > now}}
+    return {
+        "models": list(MODELS),
+        "cooling_down": {m: round(t - now) for m, t in _down_until.items() if t > now},
+        "auto": dict(auto_info),
+    }
 
 
 async def _chat(messages: Any, tool_defs: list[dict] | None = None, max_tokens: int = 1500):
