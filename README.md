@@ -65,7 +65,7 @@ Runs on the same branch are queued, never cancelled, so the newest commit is alw
 | `TELEGRAM_BOT_TOKEN`, `LLM_API_KEY` | the bot's credentials |
 | `ALLOWED_USERS` | who may use the bot, e.g. `telegram:123`. **Required** unless the `OPEN_ACCESS` variable is `true`: the deploy refuses to run with it empty |
 | `OPEN_ACCESS` (repository *variable*, not secret) | set to `true` to let everyone use the bot in production; it overrides `ALLOWED_USERS`. Everyone then shares your model quota and their chats are stored |
-| `LLM_MODEL` | optional, defaults to `nvidia/nemotron-3-super-120b-a12b:free` |
+| `LLM_MODEL` | optional, defaults to `nvidia/nemotron-3-ultra-550b-a55b:free` |
 | `LLM_FALLBACK_MODELS` | optional, comma-separated models to try in order when `LLM_MODEL` fails (they must support tool calling); `LLM_BUDGET`, `LLM_MODEL_COOLDOWN` tune the fallback |
 | `VIBER_AUTH_TOKEN`, `WHATSAPP_*`, `PUBLIC_URL` | optional, only for those channels |
 

@@ -64,7 +64,7 @@ LLM_API_KEY = os.getenv("LLM_API_KEY", "")
 if not LLM_API_KEY:
     raise SystemExit("LLM_API_KEY is not set (see .env.example)")
 LLM_BASE_URL = os.getenv("LLM_BASE_URL", "https://api.kilo.ai/api/gateway")
-LLM_MODEL = os.getenv("LLM_MODEL", "nvidia/nemotron-3-super-120b-a12b:free")
+LLM_MODEL = os.getenv("LLM_MODEL", "nvidia/nemotron-3-ultra-550b-a55b:free")
 # Models to try, in order, when LLM_MODEL fails (an outage, a rate limit, a timeout, or a model that rejects a request).
 # Comma-separated. They must support tool calling (reminders, goals and the like are tools).
 LLM_FALLBACK_MODELS = [m.strip() for m in os.getenv("LLM_FALLBACK_MODELS", "").split(",") if m.strip()]
