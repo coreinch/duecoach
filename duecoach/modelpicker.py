@@ -14,6 +14,7 @@ import re
 import time
 import unicodedata
 from dataclasses import dataclass
+from typing import Any
 
 import httpx
 
@@ -42,7 +43,7 @@ SYSTEM = (
 )
 CHAT = "Θέλω να οργανώσουμε τη μέρα μου. Ξυπνάω, πίνω καφέ, παίρνω τα φάρμακα και πάω για δουλειά."
 REMIND = "Βάλε μου υπενθύμιση για τα φάρμακα κάθε μέρα στις 9 το πρωί."
-TOOL = {
+TOOL: Any = {
     "type": "function",
     "function": {
         "name": "set_reminder",
