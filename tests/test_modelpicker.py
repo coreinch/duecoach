@@ -1,6 +1,8 @@
 import json
 from types import SimpleNamespace as NS
 
+import httpx
+import openai
 import pytest
 
 from duecoach import llm
@@ -69,11 +71,21 @@ class FakeCompletions:
 
     def __init__(self, broken):
         self.broken = broken
+        self.calls = {}
 
     async def create(self, model, messages, tools=None, **kwargs):
         how = self.broken.get(model)
+        self.calls[model] = self.calls.get(model, 0) + 1
         if how == "error":
-            raise RuntimeError("503 overloaded")
+            raise RuntimeError("bad request")
+        if how == "busy":
+            raise openai.APITimeoutError(request=httpx.Request("POST", "http://gateway"))
+        if how == "busy-once" and self.calls[model] == 1:
+            raise openai.APITimeoutError(request=httpx.Request("POST", "http://gateway"))
+        if how == "limited":
+            raise openai.RateLimitError("429", response=httpx.Response(429, request=httpx.Request("POST", "http://gateway")), body=None)
+        if how == "second-round-garbled" and self.calls[model] > 2:
+            how = "garbled"
         if tools:
             args = {"at": "2026-10-09 09:00", "daily": True, "message": "φάρμακα"} if how != "no-tool" else None
             msg = NS(content="", tool_calls=[NS(function=NS(name="set_reminder", arguments=json.dumps(args)))] if args else None)
@@ -86,7 +98,9 @@ class FakeCompletions:
 @pytest.fixture
 def gateway(monkeypatch, tmp_path):
     state = {"broken": {}}
-    monkeypatch.setattr(llm._client, "chat", NS(completions=FakeCompletions(state["broken"])))
+    state["fake"] = FakeCompletions(state["broken"])
+    monkeypatch.setattr(llm._client, "chat", NS(completions=state["fake"]))
+    monkeypatch.setattr(mp, "RETRY_PAUSE", 0)
     monkeypatch.setattr(mp, "STATE_FILE", str(tmp_path / "models.json"))
     monkeypatch.setattr(llm, "MODELS", ["seed"])
     monkeypatch.setattr(llm, "SEED_MODELS", ["seed"])
@@ -127,3 +141,34 @@ async def test_the_pool_is_capped(gateway, monkeypatch):
     monkeypatch.setattr(mp, "fetch_candidates", candidates)
     monkeypatch.setattr(mp, "LLM_POOL_SIZE", 3)
     assert len(await mp.refresh()) == 3
+
+
+async def test_a_model_must_pass_both_rounds(gateway, monkeypatch):
+    async def candidates():
+        return ["steady:free", "lucky:free"]
+
+    monkeypatch.setattr(mp, "fetch_candidates", candidates)
+    gateway["broken"]["lucky:free"] = "second-round-garbled"
+    assert await mp.refresh() == ["steady:free"]
+    assert gateway["fake"].calls["steady:free"] == 4 and gateway["fake"].calls["lucky:free"] == 3  # no wasted third call
+
+
+async def test_a_busy_provider_is_retried_once_and_a_rate_limit_is_not(gateway, monkeypatch):
+    async def candidates():
+        return ["blip:free", "limited:free"]
+
+    monkeypatch.setattr(mp, "fetch_candidates", candidates)
+    gateway["broken"].update({"blip:free": "busy-once", "limited:free": "limited"})
+    assert await mp.refresh() == ["blip:free"]
+    assert gateway["fake"].calls["limited:free"] == 1
+
+
+async def test_a_model_in_use_that_was_only_busy_keeps_its_place_but_one_that_answered_badly_loses_it(gateway, monkeypatch):
+    async def candidates():
+        return ["new:free", "busy-incumbent:free", "bad-incumbent:free"]
+
+    monkeypatch.setattr(mp, "fetch_candidates", candidates)
+    monkeypatch.setattr(llm, "MODELS", ["busy-incumbent:free", "bad-incumbent:free", "seed"])
+    gateway["broken"].update({"busy-incumbent:free": "busy", "bad-incumbent:free": "garbled"})
+    assert await mp.refresh() == ["new:free", "busy-incumbent:free"]
+    assert llm.MODELS == ["new:free", "busy-incumbent:free", "seed"]

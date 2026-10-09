@@ -11,12 +11,14 @@ import json
 import logging
 import os
 import re
+import statistics
 import time
 import unicodedata
 from dataclasses import dataclass
 from typing import Any
 
 import httpx
+import openai
 
 from . import llm
 from .config import (
@@ -33,6 +35,8 @@ log = logging.getLogger("duecoach.modelpicker")
 
 MAX_PROBES = 10  # candidates tried per check: every probe spends some of the free daily quota
 PROBE_TIMEOUT = 45.0
+ROUNDS = 2  # a model must answer well this many times in a row
+RETRY_PAUSE = 5.0  # seconds before retrying a model whose provider was busy
 PROBE_CONCURRENCY = 2  # separate from the chat slots, so a check never makes a user wait
 KEEP_PRIMARY_BONUS = 0.75  # the current first choice is kept unless another is more than 25% faster (no flip-flopping)
 STATE_FILE = os.path.join(os.path.dirname(os.path.abspath(DB_PATH)), "models.json")
@@ -68,6 +72,7 @@ class Probe:
     ok: bool
     seconds: float = 0.0
     why: str = ""
+    temporary: bool = False  # failed only because the provider was busy, down or slow: says nothing about the model's quality
 
 
 def eligible(entry: dict) -> bool:
@@ -116,38 +121,55 @@ def good_reminder(message) -> bool:
     return False
 
 
-async def probe(model: str, gate: asyncio.Semaphore) -> Probe:
+TEMPORARY = (openai.APIConnectionError, openai.RateLimitError, openai.InternalServerError)  # incl. timeouts
+
+
+async def _round(model: str) -> Probe:
     """One Greek chat reply and one reminder tool call; both must be right."""
+    started = time.monotonic()
+    try:
+        chat = await llm._client.chat.completions.create(
+            model=model,
+            messages=[{"role": "system", "content": SYSTEM}, {"role": "user", "content": CHAT}],
+            max_tokens=3000,
+            timeout=PROBE_TIMEOUT,
+        )
+        seconds = time.monotonic() - started
+        if not chat.choices:  # free routes answer 200 with an error body when the provider behind them is down
+            return Probe(model, False, why=str(getattr(chat, "error", None) or "no choices")[:80], temporary=True)
+        choice = chat.choices[0]
+        text = (choice.message.content or "").strip()
+        if not text or choice.finish_reason != "stop":
+            return Probe(model, False, seconds, "empty or cut off")
+        if not clean_greek(text):
+            return Probe(model, False, seconds, "unclean Greek")
+        call = await llm._client.chat.completions.create(
+            model=model,
+            messages=[{"role": "system", "content": SYSTEM}, {"role": "user", "content": REMIND}],
+            tools=[TOOL],
+            max_tokens=3000,
+            timeout=PROBE_TIMEOUT,
+        )
+        if not call.choices or not good_reminder(call.choices[0].message):
+            return Probe(model, False, seconds, "wrong tool call")
+        return Probe(model, True, seconds)
+    except Exception as error:
+        return Probe(model, False, time.monotonic() - started, f"{type(error).__name__}: {error}"[:80], isinstance(error, TEMPORARY))
+
+
+async def probe(model: str, gate: asyncio.Semaphore) -> Probe:
+    """Two rounds, both must pass (one lucky answer proves little). A busy provider is retried once, a rate limit is not."""
     async with gate:
-        started = time.monotonic()
-        try:
-            chat = await llm._client.chat.completions.create(
-                model=model,
-                messages=[{"role": "system", "content": SYSTEM}, {"role": "user", "content": CHAT}],
-                max_tokens=3000,
-                timeout=PROBE_TIMEOUT,
-            )
-            seconds = time.monotonic() - started
-            if not chat.choices:
-                return Probe(model, False, why=str(getattr(chat, "error", None) or "no choices")[:80])
-            choice = chat.choices[0]
-            text = (choice.message.content or "").strip()
-            if not text or choice.finish_reason != "stop":
-                return Probe(model, False, seconds, "empty or cut off")
-            if not clean_greek(text):
-                return Probe(model, False, seconds, "unclean Greek")
-            call = await llm._client.chat.completions.create(
-                model=model,
-                messages=[{"role": "system", "content": SYSTEM}, {"role": "user", "content": REMIND}],
-                tools=[TOOL],
-                max_tokens=3000,
-                timeout=PROBE_TIMEOUT,
-            )
-            if not call.choices or not good_reminder(call.choices[0].message):
-                return Probe(model, False, seconds, "wrong tool call")
-            return Probe(model, True, seconds)
-        except Exception as error:  # rate limits, timeouts, provider errors: this model is not usable right now
-            return Probe(model, False, time.monotonic() - started, f"{type(error).__name__}: {error}"[:80])
+        results = []
+        for _ in range(ROUNDS):
+            result = await _round(model)
+            if result.temporary and not result.why.startswith("RateLimitError"):
+                await asyncio.sleep(RETRY_PAUSE)
+                result = await _round(model)
+            if not result.ok:
+                return result  # no second round for a model that already failed: it would only spend quota
+            results.append(result)
+        return Probe(model, True, statistics.mean(r.seconds for r in results))
 
 
 async def fetch_candidates() -> list[str]:
@@ -210,6 +232,10 @@ async def refresh() -> list[str]:
     results = await check()
     previous_first = llm.MODELS[0] if llm.MODELS else None
     picked = rank(results, previous_first)[:LLM_POOL_SIZE]
+    # A model in use now that failed only because its provider was busy keeps its place behind the passing ones: it is probably fine.
+    kept = [p.model for p in results if p.temporary and p.model in llm.MODELS and p.model not in picked]
+    if picked:
+        picked += kept
     log.info(
         "model check: %d probed, %d passed; using %s",
         len(results),
