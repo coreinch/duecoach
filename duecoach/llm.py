@@ -46,7 +46,8 @@ def _system(user_id: int) -> str:
         + "\n"
         + prompts.LANGUAGE.get(lang, prompts.LANGUAGE["en"])
         + (f"\n\nWhat you know about the user:\n{notes}" if notes else "")
-        + "\n\nCoaching playbook (techniques to apply in your own words; use the one that fits what they need right now):\n\n"
+        + "\n\nCoaching playbook (techniques to apply in your own words; use the one that fits what they need right now. The cards are in "
+        "no order of priority: don't default to the first one, and don't use the same technique as in your last reply):\n\n"
         + playbook.full_text()
         + "\n\n"
         + tools.coaching_state(user_id)
