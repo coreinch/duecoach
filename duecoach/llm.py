@@ -34,7 +34,7 @@ NOTES_EVERY = 20  # new chat messages between refreshes of the long-term notes
 # is used up by the thinking and the answer comes back empty, so even one-sentence jobs get a generous budget.
 SHORT_JOB_TOKENS = 2000
 
-_client = AsyncOpenAI(api_key=LLM_API_KEY, base_url=LLM_BASE_URL, timeout=LLM_TIMEOUT, max_retries=2)
+_client = AsyncOpenAI(api_key=LLM_API_KEY or "unused", base_url=LLM_BASE_URL, timeout=LLM_TIMEOUT, max_retries=2)
 # Models named "@cf/..." run on Cloudflare Workers AI (its OpenAI-compatible endpoint); everything else on LLM_BASE_URL.
 _cf_client = (
     AsyncOpenAI(
