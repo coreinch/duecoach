@@ -63,15 +63,15 @@ def is_allowed(channel: str, ext_id: str) -> bool:
 LLM_API_KEY = os.getenv("LLM_API_KEY", "")
 if not LLM_API_KEY:
     raise SystemExit("LLM_API_KEY is not set (see .env.example)")
-LLM_BASE_URL = os.getenv("LLM_BASE_URL", "https://api.kilo.ai/api/gateway")
-LLM_MODEL = os.getenv("LLM_MODEL", "nvidia/nemotron-3-ultra-550b-a55b:free")
+LLM_BASE_URL = os.getenv("LLM_BASE_URL", "https://generativelanguage.googleapis.com/v1beta/openai/")
+LLM_MODEL = os.getenv("LLM_MODEL", "gemini-3.5-flash-lite")
 # Models to try, in order, when LLM_MODEL fails (an outage, a rate limit, a timeout, or a model that rejects a request).
 # Comma-separated. They must support tool calling (reminders, goals and the like are tools).
 LLM_FALLBACK_MODELS = [m.strip() for m in os.getenv("LLM_FALLBACK_MODELS", "").split(",") if m.strip()]
 # Automatic model selection (see modelpicker.py): every LLM_REFRESH_HOURS the gateway's free models are probed and the fastest ones
 # that answer in clean Greek and call tools correctly become the model list. 0 turns it off (only LLM_MODEL and the fallbacks are used).
 # LLM_MODEL / LLM_FALLBACK_MODELS stay as the seed before the first check and as the last resort behind the picked models.
-LLM_REFRESH_HOURS = _number("LLM_REFRESH_HOURS", 6, float, low=0, high=None)
+LLM_REFRESH_HOURS = _number("LLM_REFRESH_HOURS", 0, float, low=0, high=None)
 LLM_POOL_SIZE = _number("LLM_POOL_SIZE", 4, low=1, high=10)  # how many picked models to keep, fastest first
 LLM_MIN_CONTEXT = _number("LLM_MIN_CONTEXT", 32000, low=1000, high=None)  # tokens a candidate must accept
 # Candidates whose id matches this regex are never probed (code, safety, audio and similar models).

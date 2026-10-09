@@ -131,6 +131,7 @@ jobs:
           # Set it to "true" to open the bot to everyone; it overrides ALLOWED_USERS.
           OPEN_ACCESS: ${{ vars.OPEN_ACCESS }}
           LLM_API_KEY: ${{ secrets.LLM_API_KEY }}
+          LLM_BASE_URL: ${{ vars.LLM_BASE_URL }}
           LLM_MODEL: ${{ secrets.LLM_MODEL }}
           LLM_FALLBACK_MODELS: ${{ secrets.LLM_FALLBACK_MODELS }}
           VIBER_AUTH_TOKEN: ${{ secrets.VIBER_AUTH_TOKEN }}
@@ -157,6 +158,7 @@ jobs:
             --arg allowed_users "$ALLOWED_USERS" \
             --arg open_access "$OPEN_ACCESS" \
             --arg llm_api_key "$LLM_API_KEY" \
+            --arg llm_base_url "$LLM_BASE_URL" \
             --arg llm_model "$LLM_MODEL" \
             --arg llm_fallback_models "$LLM_FALLBACK_MODELS" \
             --arg viber_auth_token "$VIBER_AUTH_TOKEN" \

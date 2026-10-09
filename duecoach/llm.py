@@ -137,6 +137,19 @@ async def _complete(messages: list[dict], max_tokens: int = 1500) -> str:
     return ((await _chat(messages, max_tokens=max_tokens)).content or "").strip()
 
 
+def _tool_call(call) -> dict:
+    """A tool call as sent back to the model. Gemini 3 attaches an `extra_content` (its thought signature) that must be returned."""
+    out: dict[str, Any] = {
+        "id": call.id,
+        "type": "function",
+        "function": {"name": call.function.name, "arguments": call.function.arguments},
+    }
+    extra = (getattr(call, "model_extra", None) or {}).get("extra_content")
+    if extra:
+        out["extra_content"] = extra
+    return out
+
+
 async def reply(user_id: int, user_text: str, instruction: str | None = None) -> str:
     """Chat with history, in one model call: the whole playbook is in the system prompt, so no lookup round is needed.
 
@@ -162,10 +175,7 @@ async def reply(user_id: int, user_text: str, instruction: str | None = None) ->
             {
                 "role": "assistant",
                 "content": msg.content or "",
-                "tool_calls": [
-                    {"id": c.id, "type": "function", "function": {"name": c.function.name, "arguments": c.function.arguments}}
-                    for c in msg.tool_calls
-                ],
+                "tool_calls": [_tool_call(c) for c in msg.tool_calls],
             }
         )
         for call in msg.tool_calls:

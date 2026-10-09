@@ -36,7 +36,10 @@ TOOLS = [
                 "for a daily reminder give its next occurrence.",
             },
             "minutes": {"type": "number", "description": "Alternative to `at`: minutes from now (1 to 43200)."},
-            "message": {"type": "string", "description": "Short message to send, in the user's language."},
+            "message": {
+                "type": "string",
+                "description": "Short message to send, in the user's language, informal singular, as in the chat.",
+            },
             "daily": {"type": "boolean", "description": "Repeat every day at the same local time."},
         },
         ["message"],

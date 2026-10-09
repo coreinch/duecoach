@@ -219,3 +219,16 @@ async def test_the_total_time_budget_stops_further_models_after_slow_failures(ch
     with pytest.raises(llm.ModelError, match="budget"):
         await ask()
     assert gateway.calls == ["primary", "backup-1"]  # the third model was not tried
+
+
+async def test_a_tool_calls_extra_content_is_sent_back_with_it(model, user):
+    """Gemini 3 rejects the follow-up request if the thought signature it attached to a tool call is not returned."""
+    call = NS(
+        id="c0",
+        function=NS(name="save_to_toolbox", arguments=json.dumps({"text": "timer"})),
+        model_extra={"extra_content": {"google": {"thought_signature": "abc"}}},
+    )
+    model.queue += [NS(content=None, tool_calls=[call]), message("Saved.")]
+    await llm.reply(1001, "hi")
+    sent = model.calls[1]["messages"]
+    assert [m for m in sent if m["role"] == "assistant"][0]["tool_calls"][0]["extra_content"] == {"google": {"thought_signature": "abc"}}
