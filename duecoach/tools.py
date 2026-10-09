@@ -165,6 +165,9 @@ def _set_reminder(uid: int, a: dict) -> str:
         due = time.time() + minutes * 60
     else:
         return "error: give `at` (local 'YYYY-MM-DD HH:MM') or `minutes`"
+    for r in db.pending_reminders(uid) + list(db.recent_reminders(uid, 1)):
+        if abs(r["due"] - due) < 120 and _norm(r["text"]) == _norm(message):
+            return f"ok: reminder #{r['id']} for that time was already set; don't set it again"
     rid = db.add_reminder(uid, due, message, daily)
     if rid is None:
         return f"error: already {db.MAX_PENDING_REMINDERS} reminders waiting; cancel one first"
@@ -311,6 +314,10 @@ def coaching_state(user_id: int) -> str:
     for r in reminders:
         when = datetime.fromtimestamp(r["due"], zone).strftime("%a %Y-%m-%d %H:%M")
         lines.append(f"  #{r['id']} {when}{' daily' if r['repeat_daily'] else ''}: {r['text']}")
+    fired = db.recent_reminders(user_id)
+    if fired:
+        lines.append("Reminders already delivered in the last 24h (done: don't set them again):")
+        lines += [f"  {datetime.fromtimestamp(r['due'], zone).strftime('%a %H:%M')}: {r['text']}" for r in fired]
     profile = db.get_profile(user_id)
     told = {
         "why they came": profile.get("why"),

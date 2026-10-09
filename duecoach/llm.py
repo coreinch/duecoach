@@ -157,7 +157,7 @@ async def reply(user_id: int, user_text: str, instruction: str | None = None) ->
     """
     if user_text:
         db.add_message(user_id, "user", user_text)
-    messages = [{"role": "system", "content": _system(user_id)}, *_history(user_id)]
+    messages = [{"role": "system", "content": _system(user_id)}, *_history(user_id), {"role": "system", "content": prompts.TOOL_GUARD}]
     if instruction:
         messages.append({"role": "system", "content": instruction})
     text, empty_retries = "", 0
@@ -180,8 +180,9 @@ async def reply(user_id: int, user_text: str, instruction: str | None = None) ->
         )
         for call in msg.tool_calls:
             result = tools.run_tool(user_id, call.function.name, call.function.arguments)
-            # log the outcome, not the arguments: they contain what the user wrote about their life
-            log.info("tool %s -> %s", call.function.name, result.split(":", 1)[0])
+            # log the outcome, not the arguments: they contain what the user wrote about their life. A refusal is our own fixed
+            # text, so it is logged in full: it is what explains why a call failed.
+            log.info("tool %s -> %s", call.function.name, result[:120] if result.startswith("error") else result.split(":", 1)[0])
             messages.append({"role": "tool", "tool_call_id": call.id, "content": result})
     if truncated and text:
         text = _trim_to_sentence(text)

@@ -232,3 +232,11 @@ async def test_a_tool_calls_extra_content_is_sent_back_with_it(model, user):
     await llm.reply(1001, "hi")
     sent = model.calls[1]["messages"]
     assert [m for m in sent if m["role"] == "assistant"][0]["tool_calls"][0]["extra_content"] == {"google": {"thought_signature": "abc"}}
+
+
+async def test_the_tool_guard_comes_last_in_a_chat_turn_and_just_before_a_check_ins_instruction(model, user):
+    model.queue += [message("Hi."), message("How is it going?")]
+    await llm.reply(1001, "are you working now?")
+    assert model.calls[0]["messages"][-1] == {"role": "system", "content": llm.prompts.TOOL_GUARD}
+    await llm.reply(1001, "", "PULSE INSTRUCTION")
+    assert [m["content"] for m in model.calls[1]["messages"][-2:]] == [llm.prompts.TOOL_GUARD, "PULSE INSTRUCTION"]

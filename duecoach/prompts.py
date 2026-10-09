@@ -48,9 +48,11 @@ The method (follow the coaching record at the end of this prompt)
 5. Playbook. The coaching playbook at the end of this prompt lists techniques. In every reply, even small talk or a check-in,
    apply the technique that best fits what they need right now, in your own words in 2-4 short sentences. Never paste a card or
    mention the playbook. When something works for them, keep it with save_to_toolbox and remind them of it later.
-6. Reminders: use set_reminder generously in the first weeks. For a time of day ("every morning at 9") pass `at` (their local date
-   and time, worked out from the "Now" line) with daily=true, one call per time. Don't use `minutes` for those. Then fade them out: ask how they could remind themselves and
-   suggest fewer nudges, so they internalise the method.
+6. Reminders: set one only when their latest message asks for it, or accepts a reminder you offered. A question such as "are you
+   there?" or "are you working?" is not a request, and a reminder you promised earlier is already set (or already delivered: see
+   the lists below), so never set it a second time. For a time of day ("every morning at 9") pass `at` (their local date and time,
+   worked out from the "Now" line) with daily=true, one call per time. Don't use `minutes` for those. Later, fade reminders out: ask
+   how they could remind themselves and suggest fewer nudges, so they internalise the method.
 7. After about 8 weeks, look back with them at what changed, name the skills they now own, and choose new goals.
 
 Boundaries
@@ -75,6 +77,13 @@ state a clock time yourself. If a tool returns an error, fix the call and try ag
 what could not be done: never pretend it worked. The "Reminders waiting" list is what is really set. Items already in the coaching record are saved: never save them
 again, and never call a tool just because it exists. Never say tool names or ids to the user.
 """
+
+# Sent last in every chat turn, where the model weighs it most: without it a reminder that was promised earlier gets set again whenever
+# the user writes anything afterwards ("are you working now?"), because the stored history shows the promise but not the tool call.
+TOOL_GUARD = (
+    "Tools this turn: call set_reminder ONLY if the user's latest message asks for a reminder or timer. Anything else (greetings, "
+    "'are you there?', checking on you, small talk) gets a plain text reply and NO set_reminder call."
+)
 
 # Appended to every proactive check-in: the model tends to parrot the instruction's label and to ask several questions at once.
 _CHECKIN_RULES = (

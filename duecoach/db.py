@@ -466,6 +466,14 @@ def pending_reminders(user_id: int) -> list[sqlite3.Row]:
     return _conn.execute("SELECT id, due, text, repeat_daily FROM reminders WHERE user_id=? AND sent=0 ORDER BY due", (user_id,)).fetchall()
 
 
+def recent_reminders(user_id: int, hours: int = 24) -> list[sqlite3.Row]:
+    """One-off reminders that were delivered lately, so the model knows a promised reminder has already fired."""
+    return _conn.execute(
+        "SELECT id, due, text FROM reminders WHERE user_id=? AND sent=1 AND repeat_daily=0 AND due>? ORDER BY due",
+        (user_id, time.time() - hours * 3600),
+    ).fetchall()
+
+
 def cancel_reminder(user_id: int, reminder_id: int) -> bool:
     cur = _conn.execute("UPDATE reminders SET sent=1, repeat_daily=0 WHERE id=? AND user_id=? AND sent=0", (reminder_id, user_id))
     _conn.commit()

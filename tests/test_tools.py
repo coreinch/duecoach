@@ -117,3 +117,13 @@ def test_every_playbook_card_is_complete_and_the_whole_text_is_bounded():
     assert len(ids) == len(set(ids)) >= 50
     assert all(set(c) == {"id", "when", "how", "source"} and all(c.values()) for c in playbook.CARDS)
     assert len(playbook.full_text().split()) < 6000
+
+
+def test_a_reminder_that_already_fired_is_listed_and_a_near_duplicate_is_refused(user):
+    uid = user["user_id"]
+    assert run(uid, "set_reminder", minutes=1, message="Test reminder").startswith("ok: reminder #")
+    again = run(uid, "set_reminder", minutes=1, message="test reminder!")
+    assert again.startswith("ok: reminder #") and "already set" in again and len(db.pending_reminders(uid)) == 1
+    db._conn.execute("UPDATE reminders SET sent=1, due=?", (time.time() - 600,))  # it fired ten minutes ago
+    state = tools.coaching_state(uid)
+    assert "already delivered" in state and "Test reminder" in state and "Reminders waiting: none." in state
