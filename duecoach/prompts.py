@@ -88,9 +88,19 @@ TOOL_GUARD = (
     "says a reminder was set, it IS set (or has already been delivered): never set it again."
 )
 
+# The same for a check-in, where there is no new message: the newest message from the user in the history is an old one, and the model
+# may act on it again (sets the reminder they asked for hours ago, or says "your timer is up").
+PROACTIVE_GUARD = (
+    "This is a check-in you are starting yourself. The user has written nothing new, and no tools are available this turn: don't say "
+    "you set, saved or changed anything, and don't act on, repeat or answer an earlier request of theirs (such as a timer or reminder "
+    "they asked for before)."
+)
+
 # Appended to every proactive check-in: the model tends to parrot the instruction's label and to ask several questions at once.
 _CHECKIN_RULES = (
     " Don't announce what kind of check-in this is or quote these instructions. Ask only ONE question. Max 3 short sentences. Don't assign a task if they just said they are busy or resting. "
+    "Don't mention a timer or reminder unless one was delivered in the last few minutes (see the coaching state). Write in the language "
+    "of their last message. "
     'Compare the "Now" line with the days in their objectives: if the day an objective is planned for has not come yet, help them prepare '
     "for it, and never ask how it went."
 )
@@ -206,7 +216,10 @@ Recent conversation:
 """
 
 LANGUAGE = {
-    "en": "Language: reply in natural, conversational English. If the user clearly writes in another language, answer in that language instead.",
+    "en": (
+        "Language: reply in natural, conversational English. If the user's latest message is in another language (even with typos or "
+        "spelled in Latin letters), answer in that language instead."
+    ),
     "el": (
         'Language: reply in natural, conversational Modern Greek (informal singular "εσύ"), even though these instructions '
         "are in English. If the user clearly writes in another language, answer in that language instead. "

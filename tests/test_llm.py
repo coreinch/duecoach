@@ -17,7 +17,7 @@ def model(monkeypatch):
     queue, calls = [], []
 
     async def fake_chat(messages, tool_defs=None, max_tokens=1500):
-        calls.append({"messages": list(messages)})
+        calls.append({"messages": list(messages), "tools": tool_defs})
         return queue.pop(0)
 
     monkeypatch.setattr(llm, "_chat", fake_chat)
@@ -69,7 +69,9 @@ async def test_a_reply_cut_off_by_the_token_limit_is_retried_then_trimmed(model,
 async def test_check_ins_send_the_instruction_but_store_only_the_reply(model, user):
     model.queue += [message("How is the first step going?")]
     await llm.reply(1001, "", "PULSE INSTRUCTION")
-    assert model.calls[0]["messages"][-1] == {"role": "system", "content": "PULSE INSTRUCTION"}
+    last = model.calls[0]["messages"][-1]
+    assert last["role"] == "user" and last["content"].startswith("[Automatic check-in trigger. This is not a message from the user.")
+    assert last["content"].endswith("PULSE INSTRUCTION")
     assert db.recent_messages(1001, 5) == [{"role": "assistant", "content": "How is the first step going?"}]
 
 
@@ -124,7 +126,8 @@ async def test_the_tool_guard_comes_last_in_a_chat_turn_and_just_before_a_check_
     await llm.reply(1001, "are you working now?")
     assert model.calls[0]["messages"][-1] == {"role": "system", "content": llm.prompts.TOOL_GUARD}
     await llm.reply(1001, "", "PULSE INSTRUCTION")
-    assert [m["content"] for m in model.calls[1]["messages"][-2:]] == [llm.prompts.TOOL_GUARD, "PULSE INSTRUCTION"]
+    guard, trigger = model.calls[1]["messages"][-2:]
+    assert guard["content"] == llm.prompts.PROACTIVE_GUARD and trigger["content"].endswith("PULSE INSTRUCTION")
 
 
 async def _as_awaitable(value):
@@ -150,3 +153,17 @@ async def test_the_configured_model_is_the_only_one_used_and_minimax_is_asked_to
     await llm._chat([{"role": "user", "content": "hi"}])
     assert seen[0]["model"] == llm.LLM_MODEL and seen[0]["extra_body"] == {"reasoning_split": True}
     assert llm.status() == {"model": llm.LLM_MODEL}
+
+
+async def test_a_check_in_gets_no_tools_but_a_reply_to_the_user_does(model, user):
+    model.queue += [message("Hi."), message("How is it going?")]
+    await llm.reply(1001, "hello")
+    await llm.reply(1001, "", "PULSE INSTRUCTION")
+    assert model.calls[0]["tools"] == llm.tools.TOOLS and model.calls[1]["tools"] is None
+
+
+def test_the_check_in_trigger_says_how_long_ago_the_user_last_wrote():
+    assert llm._since(0) == "" and llm._since(None) == ""
+    assert "30 minutes ago" in llm._since(llm.time.time() - 1800)
+    assert "5 hours ago" in llm._since(llm.time.time() - 5 * 3600)
+    assert "3 days ago" in llm._since(llm.time.time() - 3 * 86400)

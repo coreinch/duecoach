@@ -1,6 +1,7 @@
 import asyncio
 import logging
 import re
+import time
 from typing import Any
 
 import openai
@@ -97,6 +98,15 @@ async def _complete(messages: list[dict], max_tokens: int = 1500) -> str:
     return ((await _chat(messages, max_tokens=max_tokens)).content or "").strip()
 
 
+def _since(last_inbound: float | None) -> str:
+    """'The user last wrote 3 hours ago, so anything they asked for then is done or over.' (empty if they never wrote)."""
+    if not last_inbound:
+        return ""
+    minutes = int((time.time() - last_inbound) // 60)
+    ago = f"{minutes} minutes" if minutes < 90 else f"{minutes // 60} hours" if minutes < 2880 else f"{minutes // 1440} days"
+    return f"The user last wrote {ago} ago, so anything they asked for in that message (a timer, a reminder) is already done or over."
+
+
 async def reply(user_id: int, user_text: str, instruction: str | None = None) -> str:
     """Chat with history, in one model call: the whole playbook is in the system prompt, so no lookup round is needed.
 
@@ -104,12 +114,25 @@ async def reply(user_id: int, user_text: str, instruction: str | None = None) ->
     """
     if user_text:
         db.add_message(user_id, "user", user_text)
-    messages = [{"role": "system", "content": _system(user_id)}, *_history(user_id), {"role": "system", "content": prompts.TOOL_GUARD}]
-    if instruction:
+    messages = [
+        {"role": "system", "content": _system(user_id)},
+        *_history(user_id),
+        {"role": "system", "content": prompts.TOOL_GUARD if user_text else prompts.PROACTIVE_GUARD},
+    ]
+    if instruction and user_text:
         messages.append({"role": "system", "content": instruction})
+    elif instruction:
+        # A check-in: the last thing in the chat must not look like an unanswered message from the user, so the instruction closes it
+        # as an automatic trigger (a system message at the end leaves their old request as the last thing they said).
+        since = _since(db.get_user(user_id)["last_inbound"])
+        trigger = "[Automatic check-in trigger. This is not a message from the user." + (f" {since}" if since else "") + "]"
+        messages.append({"role": "user", "content": f"{trigger}\n{instruction}"})
+    # A check-in has no new message from the user, and the model acts on their last (old) one: no tools then, so it can't, for example,
+    # set again the reminder they asked for hours ago. Their answer to the check-in is a normal turn with tools.
+    tool_defs = tools.TOOLS if user_text else None
     text, empty_retries = "", 0
     for _ in range(MAX_TOOL_ROUNDS + MAX_EMPTY_RETRIES):
-        msg = await _chat(messages, tools.TOOLS, max_tokens=REPLY_TOKENS)
+        msg = await _chat(messages, tool_defs, max_tokens=REPLY_TOKENS)
         text = (msg.content or "").strip()
         truncated = getattr(msg, "finish_reason", None) == "length"
         if not msg.tool_calls:
