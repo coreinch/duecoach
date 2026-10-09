@@ -18,7 +18,7 @@ def model(monkeypatch):
     """Script the model: each queued item is the message returned by one call; every call is recorded."""
     queue, calls = [], []
 
-    async def fake_chat(messages, tool_defs=None, max_tokens=1500):
+    async def fake_chat(messages, tool_defs=None, max_tokens=1500, accept=None):
         calls.append({"messages": list(messages)})
         return queue.pop(0)
 
@@ -272,3 +272,34 @@ async def test_leaked_reasoning_is_stripped_from_a_reply(monkeypatch):
 
 async def _as_awaitable(value):
     return value
+
+
+@pytest.mark.parametrize(
+    "text, leaked",
+    [
+        ('Θα χρησιμοποιήσω το εργαλείο set_reminder.\n>set_reminder(message="x", at="2026-10-10 09:00", daily=true)', True),
+        ('{"name": "set_reminder", "arguments": {"minutes": 1}}', True),
+        ('<add_goal>{"text": "x"}', True),
+        ("Έτοιμο, θα σου θυμίζω κάθε μέρα στις 9:00.", False),
+        ("I can set a reminder for you: when?", False),
+        ("", False),
+    ],
+)
+def test_a_tool_call_written_as_text_is_recognised(text, leaked):
+    assert (llm._leaked_tool_call(NS(content=text, tool_calls=None)) is not None) is leaked
+    assert llm._leaked_tool_call(NS(content=text, tool_calls=[object()])) is None  # a real tool call is fine
+
+
+async def test_an_unusable_answer_moves_on_to_the_next_model_without_marking_the_first_as_down(monkeypatch):
+    answers = {"primary": 'set_reminder(message="x", minutes=1)', "backup-1": "Έτοιμο."}
+
+    class Completions:
+        async def create(self, model, **kw):
+            msg = NS(content=answers[model], tool_calls=None)
+            return NS(choices=[NS(message=msg, finish_reason="stop")])
+
+    monkeypatch.setattr(llm, "MODELS", ["primary", "backup-1"])
+    monkeypatch.setattr(llm, "_down_until", {})
+    monkeypatch.setattr(llm._client, "chat", NS(completions=Completions()))
+    out = await llm._chat([{"role": "user", "content": "hi"}], accept=llm._leaked_tool_call)
+    assert out.content == "Έτοιμο." and llm._down_until == {}

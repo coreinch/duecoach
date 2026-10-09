@@ -2,6 +2,7 @@ import asyncio
 import logging
 import re
 import time
+from collections.abc import Callable
 from typing import Any
 
 import openai
@@ -137,7 +138,11 @@ def status() -> dict:
     }
 
 
-async def _chat(messages: Any, tool_defs: list[dict] | None = None, max_tokens: int = 1500):
+async def _chat(
+    messages: Any, tool_defs: list[dict] | None = None, max_tokens: int = 1500, accept: Callable[[Any], str | None] | None = None
+):
+    """One completion, trying the models in order. `accept` returns a reason to refuse a model's answer (it then moves to the next
+    model, without that model being marked as down: it answered, just not usably)."""
     kwargs: dict[str, Any] = {"tools": tool_defs} if tool_defs else {}
     attempts = MODEL_ATTEMPTS if len(MODELS) == 1 else 1  # with fallbacks available, move on rather than retry the same model
     failures: list[str] = []
@@ -158,17 +163,21 @@ async def _chat(messages: Any, tool_defs: list[dict] | None = None, max_tokens: 
                 rejected = isinstance(error, (openai.BadRequestError, openai.UnprocessableEntityError))
             else:
                 if resp.choices:
-                    _down_until.pop(model, None)
-                    if model != MODELS[0]:
-                        log.warning("answered by fallback model %s", model)
                     choice = resp.choices[0]
                     choice.message.finish_reason = getattr(choice, "finish_reason", None)  # "length": the answer was cut off
                     if choice.message.content and "<think>" in choice.message.content:  # reasoning must never reach the user
                         choice.message.content = _THINK.sub("", choice.message.content).strip()
-                    return choice.message
-                # free routes answer HTTP 200 with {"error": {...}} when the provider behind them is down
-                error_body = getattr(resp, "error", None) or (getattr(resp, "model_extra", None) or {}).get("error")
-                problem, rejected = str(error_body or "empty response")[:200], False
+                    refusal = accept(choice.message) if accept else None
+                    if not refusal:
+                        _down_until.pop(model, None)
+                        if model != MODELS[0]:
+                            log.warning("answered by fallback model %s", model)
+                        return choice.message
+                    problem, rejected = refusal, True
+                else:
+                    # free routes answer HTTP 200 with {"error": {...}} when the provider behind them is down
+                    error_body = getattr(resp, "error", None) or (getattr(resp, "model_extra", None) or {}).get("error")
+                    problem, rejected = str(error_body or "empty response")[:200], False
             log.warning("model %s failed (%s)%s", model, problem, ", retrying" if attempt + 1 < attempts else "")
             if attempt + 1 < attempts:
                 await asyncio.sleep(1)
@@ -180,6 +189,17 @@ async def _chat(messages: Any, tool_defs: list[dict] | None = None, max_tokens: 
 
 async def _complete(messages: list[dict], max_tokens: int = 1500) -> str:
     return ((await _chat(messages, max_tokens=max_tokens)).content or "").strip()
+
+
+_TOOL_NAMES = "|".join(t["function"]["name"] for t in tools.TOOLS)
+_LEAKED_CALL = re.compile(rf"(?:\b(?:{_TOOL_NAMES})\s*[({{>\[=]|[<>`]\s*(?:{_TOOL_NAMES})\b|\"name\"\s*:\s*\"(?:{_TOOL_NAMES})\")")
+
+
+def _leaked_tool_call(msg) -> str | None:
+    """Some models write a tool call into the reply text instead of making it: the user must never see that (or be told it's done)."""
+    if not msg.tool_calls and _LEAKED_CALL.search(msg.content or ""):
+        return "tool call written as text"
+    return None
 
 
 def _tool_call(call) -> dict:
@@ -207,7 +227,7 @@ async def reply(user_id: int, user_text: str, instruction: str | None = None) ->
         messages.append({"role": "system", "content": instruction})
     text, empty_retries = "", 0
     for _ in range(MAX_TOOL_ROUNDS + MAX_EMPTY_RETRIES):
-        msg = await _chat(messages, tools.TOOLS, max_tokens=REPLY_TOKENS)
+        msg = await _chat(messages, tools.TOOLS, max_tokens=REPLY_TOKENS, accept=_leaked_tool_call)
         text = (msg.content or "").strip()
         truncated = getattr(msg, "finish_reason", None) == "length"
         if not msg.tool_calls:
