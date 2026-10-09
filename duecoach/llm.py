@@ -9,6 +9,8 @@ from openai import AsyncOpenAI
 
 from . import db, playbook, prompts, strings, tools
 from .config import (
+    CLOUDFLARE_ACCOUNT_ID,
+    CLOUDFLARE_API_TOKEN,
     HISTORY_TURNS,
     LLM_API_KEY,
     LLM_BASE_URL,
@@ -32,11 +34,32 @@ NOTES_EVERY = 20  # new chat messages between refreshes of the long-term notes
 # is used up by the thinking and the answer comes back empty, so even one-sentence jobs get a generous budget.
 SHORT_JOB_TOKENS = 2000
 
-MODELS = [LLM_MODEL, *[m for m in LLM_FALLBACK_MODELS if m != LLM_MODEL]]  # in order of preference
+_client = AsyncOpenAI(api_key=LLM_API_KEY, base_url=LLM_BASE_URL, timeout=LLM_TIMEOUT, max_retries=2)
+# Models named "@cf/..." run on Cloudflare Workers AI (its OpenAI-compatible endpoint); everything else on LLM_BASE_URL.
+_cf_client = (
+    AsyncOpenAI(
+        api_key=CLOUDFLARE_API_TOKEN,
+        base_url=f"https://api.cloudflare.com/client/v4/accounts/{CLOUDFLARE_ACCOUNT_ID}/ai/v1",
+        timeout=LLM_TIMEOUT,
+        max_retries=2,
+    )
+    if CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID
+    else None
+)
+
+
+def _client_for(model: str) -> AsyncOpenAI:
+    return _cf_client if _cf_client is not None and model.startswith("@cf/") else _client
+
+
+def _usable(model: str) -> bool:
+    return _cf_client is not None or not model.startswith("@cf/")  # a Cloudflare model without Cloudflare credentials can't run
+
+
+MODELS = [m for m in [LLM_MODEL, *[m for m in LLM_FALLBACK_MODELS if m != LLM_MODEL]] if _usable(m)]  # in order of preference
 SEED_MODELS = list(MODELS)  # from the environment: used until the first automatic check, and as the last resort after it
 auto_info: dict = {}  # the last automatic model check, for /healthz (set by modelpicker)
 _down_until: dict[str, float] = {}  # model -> time before which it is skipped (it failed recently)
-_client = AsyncOpenAI(api_key=LLM_API_KEY, base_url=LLM_BASE_URL, timeout=LLM_TIMEOUT, max_retries=2)
 _slots = asyncio.Semaphore(LLM_CONCURRENCY)  # one slow or rate-limited gateway must not be hammered by every user at once
 
 
@@ -109,7 +132,7 @@ async def _chat(messages: Any, tool_defs: list[dict] | None = None, max_tokens: 
         for attempt in range(attempts):
             try:
                 async with _slots:
-                    resp = await _client.chat.completions.create(model=model, messages=messages, max_tokens=max_tokens, **kwargs)
+                    resp = await _client_for(model).chat.completions.create(model=model, messages=messages, max_tokens=max_tokens, **kwargs)
             except openai.OpenAIError as error:  # connection, timeout, rate limit, server error, or a request this model rejects
                 problem = f"{type(error).__name__}: {error}"[:200]
                 rejected = isinstance(error, (openai.BadRequestError, openai.UnprocessableEntityError))

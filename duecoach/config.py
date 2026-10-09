@@ -64,6 +64,10 @@ LLM_API_KEY = os.getenv("LLM_API_KEY", "")
 if not LLM_API_KEY:
     raise SystemExit("LLM_API_KEY is not set (see .env.example)")
 LLM_BASE_URL = os.getenv("LLM_BASE_URL", "https://generativelanguage.googleapis.com/v1beta/openai/")
+# Cloudflare Workers AI (free tier) is a second provider: models whose id starts with "@cf/" go there instead of to LLM_BASE_URL.
+# Both values are needed; without them such models are ignored.
+CLOUDFLARE_API_TOKEN = os.getenv("CLOUDFLARE_API_TOKEN", "")
+CLOUDFLARE_ACCOUNT_ID = os.getenv("CLOUDFLARE_ACCOUNT_ID", "")
 LLM_MODEL = os.getenv("LLM_MODEL", "gemini-3.5-flash-lite")
 # Models to try, in order, when LLM_MODEL fails (an outage, a rate limit, a timeout, or a model that rejects a request).
 # Comma-separated. They must support tool calling (reminders, goals and the like are tools).

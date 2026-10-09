@@ -240,3 +240,14 @@ async def test_the_tool_guard_comes_last_in_a_chat_turn_and_just_before_a_check_
     assert model.calls[0]["messages"][-1] == {"role": "system", "content": llm.prompts.TOOL_GUARD}
     await llm.reply(1001, "", "PULSE INSTRUCTION")
     assert [m["content"] for m in model.calls[1]["messages"][-2:]] == [llm.prompts.TOOL_GUARD, "PULSE INSTRUCTION"]
+
+
+def test_cloudflare_models_use_their_own_client_and_are_ignored_without_credentials(monkeypatch):
+    cf = object()
+    monkeypatch.setattr(llm, "_cf_client", cf)
+    assert llm._client_for("@cf/meta/llama-4-scout-17b-16e-instruct") is cf
+    assert llm._client_for("gemini-3.5-flash-lite") is llm._client
+    assert llm._usable("@cf/meta/llama-4-scout-17b-16e-instruct") and llm._usable("gemini-3.5-flash-lite")
+    monkeypatch.setattr(llm, "_cf_client", None)
+    assert llm._client_for("@cf/meta/llama-4-scout-17b-16e-instruct") is llm._client
+    assert not llm._usable("@cf/meta/llama-4-scout-17b-16e-instruct") and llm._usable("gemini-3.5-flash-lite")
