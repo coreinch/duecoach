@@ -62,12 +62,10 @@ Runs on the same branch are queued, never cancelled, so the newest commit is alw
 | `DEPLOY_HOST` | VPS address (never committed; the inventory is generated in CI) |
 | `DEPLOY_SSH_KEY` | private key CI uses to SSH in as root |
 | `GHCR_PULL_PAT` | token with `read:packages`, so the VPS can pull the private image |
-| `TELEGRAM_BOT_TOKEN`, `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID` | the bot's credentials (`LLM_API_KEY` instead, or as well, for a non-Cloudflare provider) |
+| `TELEGRAM_BOT_TOKEN`, `LLM_API_KEY` | the bot's credentials (`LLM_API_KEY` is your MiniMax key) |
 | `ALLOWED_USERS` | who may use the bot, e.g. `telegram:123`. **Required** unless the `OPEN_ACCESS` variable is `true`: the deploy refuses to run with it empty |
 | `OPEN_ACCESS` (repository *variable*, not secret) | set to `true` to let everyone use the bot in production; it overrides `ALLOWED_USERS`. Everyone then shares your model quota and their chats are stored |
-| `LLM_MODEL` | optional, defaults to `MiniMax-M3` when `MINIMAX_API_KEY` is set, else `@cf/meta/llama-4-scout-17b-16e-instruct` (Cloudflare Workers AI, free tier; needs the `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` secrets). Models not starting with `@cf/` go to the OpenAI-compatible API at the `LLM_BASE_URL` repository variable (default: Gemini's endpoint) with `LLM_API_KEY`, which is then optional |
-| `LLM_FALLBACK_MODELS` | optional, comma-separated models to try in order when `LLM_MODEL` fails (they must support tool calling); `LLM_BUDGET`, `LLM_MODEL_COOLDOWN` tune the fallback |
-| `LLM_REFRESH_HOURS`, `LLM_POOL_SIZE` | optional: every `LLM_REFRESH_HOURS` (default 0 = off; written for the Kilo gateway) the free `:free` models on the gateway are probed with a Greek reply and a reminder tool call, and the `LLM_POOL_SIZE` fastest that pass are used first (auto-routers like `kilo-auto/free` are never picked). `LLM_MODEL` and `LLM_FALLBACK_MODELS` are the seed and the last resort. Preview it with `python -m duecoach.modelpicker`; `/healthz` shows the last result |
+| `LLM_MODEL` | optional, defaults to `MiniMax-M3`. The bot uses this one model; it must support tool calling. Another OpenAI-compatible provider works via the `LLM_BASE_URL` repository variable (default `https://api.minimax.io/v1`) and its key in `LLM_API_KEY` |
 | `VIBER_AUTH_TOKEN`, `WHATSAPP_*`, `PUBLIC_URL` | optional, only for those channels |
 
 Set them with `gh secret set NAME -R coreinch/duecoach`.
@@ -108,7 +106,7 @@ Layout: `duecoach/core.py` (the order a message is handled in: rate limit, conse
 `duecoach/commands.py` (slash commands), `duecoach/chat.py` (the coach's reply plus at most one question of the bot's own, and the
 crisis answer), `duecoach/flows/` (the bot-led conversations, one module each: `intake`, `goals`, `followup`, `timezone`, with
 `moments` deciding when to ask, `onboarding` the hand-over and `state` where a flow is stored), `duecoach/llm.py` (model calls,
-fallback models, tool loop), `duecoach/tools.py` and `duecoach/playbook.py` (what the coach can do and the strategy cards),
+tool loop), `duecoach/tools.py` and `duecoach/playbook.py` (what the coach can do and the strategy cards),
 `duecoach/prompts.py` and `duecoach/strings.py` (model prompts, fixed texts in both languages), `duecoach/bot.py` (reminders, check-ins,
 housekeeping, startup), `duecoach/channels/` (Telegram, Viber, WhatsApp), `duecoach/db.py` (SQLite, numbered migrations). The Docker base image is pinned by digest; Dependabot proposes updates.
 

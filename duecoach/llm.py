@@ -1,29 +1,13 @@
 import asyncio
 import logging
 import re
-import time
-from collections.abc import Callable
 from typing import Any
 
 import openai
 from openai import AsyncOpenAI
 
 from . import db, playbook, prompts, strings, tools
-from .config import (
-    CLOUDFLARE_ACCOUNT_ID,
-    CLOUDFLARE_API_TOKEN,
-    HISTORY_TURNS,
-    LLM_API_KEY,
-    LLM_BASE_URL,
-    LLM_BUDGET,
-    LLM_CONCURRENCY,
-    LLM_FALLBACK_MODELS,
-    LLM_MODEL,
-    LLM_MODEL_COOLDOWN,
-    LLM_TIMEOUT,
-    MINIMAX_API_KEY,
-    MINIMAX_BASE_URL,
-)
+from .config import HISTORY_TURNS, LLM_API_KEY, LLM_BASE_URL, LLM_CONCURRENCY, LLM_MODEL, LLM_TIMEOUT
 
 log = logging.getLogger("duecoach.llm")
 
@@ -31,55 +15,17 @@ MAX_TOOL_ROUNDS = 4
 MAX_EMPTY_RETRIES = 2
 REPLY_TOKENS = 3000  # reasoning models spend part of this thinking; too small a limit cuts the answer off mid-sentence
 MAX_CONSECUTIVE_ASSISTANT = 2  # in the history sent to the model: proactive check-ins pile up while a user is silent
-MODEL_ATTEMPTS = 2  # tries per call when there is only one model to use
+MODEL_ATTEMPTS = 2  # tries per call: a provider hiccup is retried once
 NOTES_EVERY = 20  # new chat messages between refreshes of the long-term notes
-# Free routes are reasoning models: they think before they answer, and the thinking counts against max_tokens. A small limit
+# Reasoning models: they think before they answer, and the thinking counts against max_tokens. A small limit
 # is used up by the thinking and the answer comes back empty, so even one-sentence jobs get a generous budget.
 SHORT_JOB_TOKENS = 2000
 
-_client = AsyncOpenAI(api_key=LLM_API_KEY or "unused", base_url=LLM_BASE_URL, timeout=LLM_TIMEOUT, max_retries=2)
-# Models named "@cf/..." run on Cloudflare Workers AI (its OpenAI-compatible endpoint); everything else on LLM_BASE_URL.
-_cf_client = (
-    AsyncOpenAI(
-        api_key=CLOUDFLARE_API_TOKEN,
-        base_url=f"https://api.cloudflare.com/client/v4/accounts/{CLOUDFLARE_ACCOUNT_ID}/ai/v1",
-        timeout=LLM_TIMEOUT,
-        max_retries=2,
-    )
-    if CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID
-    else None
-)
-
-
-# Models named "MiniMax-..." run on MiniMax. It puts its reasoning inside the reply as <think>...</think> unless asked to split it off.
-_mm_client = (
-    AsyncOpenAI(api_key=MINIMAX_API_KEY, base_url=MINIMAX_BASE_URL, timeout=LLM_TIMEOUT, max_retries=2) if MINIMAX_API_KEY else None
-)
+_client = AsyncOpenAI(api_key=LLM_API_KEY, base_url=LLM_BASE_URL, timeout=LLM_TIMEOUT, max_retries=2)
+# MiniMax puts its reasoning inside the reply as <think>...</think> unless asked to split it off; the regex is a second safety net.
+_EXTRA: dict[str, Any] = {"extra_body": {"reasoning_split": True}} if LLM_MODEL.startswith("MiniMax-") else {}
 _THINK = re.compile(r"<think>.*?</think>\s*", re.DOTALL)
-
-
-def _client_for(model: str) -> AsyncOpenAI:
-    if _mm_client is not None and model.startswith("MiniMax-"):
-        return _mm_client
-    return _cf_client if _cf_client is not None and model.startswith("@cf/") else _client
-
-
-def _usable(model: str) -> bool:
-    """A model whose provider has no credentials can't run (it is left out of the list instead of failing every time)."""
-    if model.startswith("MiniMax-"):
-        return _mm_client is not None
-    return _cf_client is not None or not model.startswith("@cf/")
-
-
-def _extra(model: str) -> dict[str, Any]:
-    return {"extra_body": {"reasoning_split": True}} if model.startswith("MiniMax-") else {}
-
-
-MODELS = [m for m in [LLM_MODEL, *[m for m in LLM_FALLBACK_MODELS if m != LLM_MODEL]] if _usable(m)]  # in order of preference
-SEED_MODELS = list(MODELS)  # from the environment: used until the first automatic check, and as the last resort after it
-auto_info: dict = {}  # the last automatic model check, for /healthz (set by modelpicker)
-_down_until: dict[str, float] = {}  # model -> time before which it is skipped (it failed recently)
-_slots = asyncio.Semaphore(LLM_CONCURRENCY)  # one slow or rate-limited gateway must not be hammered by every user at once
+_slots = asyncio.Semaphore(LLM_CONCURRENCY)  # one slow or rate-limited provider must not be hammered by every user at once
 
 
 def _system(user_id: int) -> str:
@@ -114,105 +60,41 @@ def _history(user_id: int) -> list[dict]:
 
 
 class ModelError(RuntimeError):
-    """No model produced a completion (outages, rate limits, timeouts), with what each one reported."""
-
-
-def _order() -> list[str]:
-    """Models to try now: those not recently failed, best first. If every model is cooling down, try them all anyway."""
-    now = time.time()
-    return [m for m in MODELS if _down_until.get(m, 0) <= now] or list(MODELS)
-
-
-def set_models(picked: list[str]) -> None:
-    """Use `picked` first (in order), then the configured models as a last resort. Changes the shared list in place."""
-    MODELS[:] = [*picked, *[m for m in SEED_MODELS if m not in picked]]
+    """The model produced no completion (outage, rate limit, timeout), with what it reported."""
 
 
 def status() -> dict:
-    """For /healthz: which models are configured and which are cooling down after a failure (seconds left)."""
-    now = time.time()
-    return {
-        "models": list(MODELS),
-        "cooling_down": {m: round(t - now) for m, t in _down_until.items() if t > now},
-        "auto": dict(auto_info),
-    }
+    """For /healthz: which model is in use."""
+    return {"model": LLM_MODEL}
 
 
-async def _chat(
-    messages: Any, tool_defs: list[dict] | None = None, max_tokens: int = 1500, accept: Callable[[Any], str | None] | None = None
-):
-    """One completion, trying the models in order. `accept` returns a reason to refuse a model's answer (it then moves to the next
-    model, without that model being marked as down: it answered, just not usably)."""
+async def _chat(messages: Any, tool_defs: list[dict] | None = None, max_tokens: int = 1500):
     kwargs: dict[str, Any] = {"tools": tool_defs} if tool_defs else {}
-    attempts = MODEL_ATTEMPTS if len(MODELS) == 1 else 1  # with fallbacks available, move on rather than retry the same model
-    failures: list[str] = []
-    started = time.time()
-    for model in _order():
-        if failures and time.time() - started > LLM_BUDGET:
-            failures.append(f"not tried (over the {LLM_BUDGET:g}s budget): {model}")
-            break
-        problem = "no completion"
-        for attempt in range(attempts):
-            try:
-                async with _slots:
-                    resp = await _client_for(model).chat.completions.create(
-                        model=model, messages=messages, max_tokens=max_tokens, **kwargs, **_extra(model)
-                    )
-            except openai.OpenAIError as error:  # connection, timeout, rate limit, server error, or a request this model rejects
-                problem = f"{type(error).__name__}: {error}"[:200]
-                rejected = isinstance(error, (openai.BadRequestError, openai.UnprocessableEntityError))
-            else:
-                if resp.choices:
-                    choice = resp.choices[0]
-                    choice.message.finish_reason = getattr(choice, "finish_reason", None)  # "length": the answer was cut off
-                    if choice.message.content and "<think>" in choice.message.content:  # reasoning must never reach the user
-                        choice.message.content = _THINK.sub("", choice.message.content).strip()
-                    refusal = accept(choice.message) if accept else None
-                    if not refusal:
-                        _down_until.pop(model, None)
-                        if model != MODELS[0]:
-                            log.warning("answered by fallback model %s", model)
-                        return choice.message
-                    problem, rejected = refusal, True
-                else:
-                    # free routes answer HTTP 200 with {"error": {...}} when the provider behind them is down
-                    error_body = getattr(resp, "error", None) or (getattr(resp, "model_extra", None) or {}).get("error")
-                    problem, rejected = str(error_body or "empty response")[:200], False
-            log.warning("model %s failed (%s)%s", model, problem, ", retrying" if attempt + 1 < attempts else "")
-            if attempt + 1 < attempts:
-                await asyncio.sleep(1)
-        if not rejected:  # a model that merely rejected this one request is not down; don't skip it for the next user
-            _down_until[model] = time.time() + LLM_MODEL_COOLDOWN
-        failures.append(f"{model}: {problem}")
-    raise ModelError("; ".join(failures))
+    problem = "no completion"
+    for attempt in range(MODEL_ATTEMPTS):
+        try:
+            async with _slots:
+                resp = await _client.chat.completions.create(model=LLM_MODEL, messages=messages, max_tokens=max_tokens, **kwargs, **_EXTRA)
+        except openai.OpenAIError as error:  # connection, timeout, rate limit, server error, or a request the model rejects
+            problem = f"{type(error).__name__}: {error}"[:200]
+        else:
+            if resp.choices:
+                choice = resp.choices[0]
+                choice.message.finish_reason = getattr(choice, "finish_reason", None)  # "length": the answer was cut off
+                if choice.message.content and "<think>" in choice.message.content:  # reasoning must never reach the user
+                    choice.message.content = _THINK.sub("", choice.message.content).strip()
+                return choice.message
+            # some providers answer HTTP 200 with {"error": {...}} when the service behind them is down
+            error_body = getattr(resp, "error", None) or (getattr(resp, "model_extra", None) or {}).get("error")
+            problem = str(error_body or "empty response")[:200]
+        log.warning("model %s failed (%s)%s", LLM_MODEL, problem, ", retrying" if attempt + 1 < MODEL_ATTEMPTS else "")
+        if attempt + 1 < MODEL_ATTEMPTS:
+            await asyncio.sleep(1)
+    raise ModelError(f"{LLM_MODEL}: {problem}")
 
 
 async def _complete(messages: list[dict], max_tokens: int = 1500) -> str:
     return ((await _chat(messages, max_tokens=max_tokens)).content or "").strip()
-
-
-_TOOL_NAMES = "|".join(t["function"]["name"] for t in tools.TOOLS)
-_LEAKED_CALL = re.compile(rf"(?:\b(?:{_TOOL_NAMES})\s*[({{>\[=]|[<>`]\s*(?:{_TOOL_NAMES})\b|\"name\"\s*:\s*\"(?:{_TOOL_NAMES})\")")
-
-
-def _leaked_tool_call(msg) -> str | None:
-    """Some models write a tool call into the reply text instead of making it: the user must never see that (or be told it's done)."""
-    if not msg.tool_calls and _LEAKED_CALL.search(msg.content or ""):
-        return "tool call written as text"
-    return None
-
-
-def _tool_call(call) -> dict:
-    """A tool call as sent back to the model. Gemini 3 attaches an `extra_content` (its thought signature) that must be returned."""
-    out: dict[str, Any] = {
-        "id": call.id,
-        "type": "function",
-        "function": {"name": call.function.name, "arguments": call.function.arguments},
-    }
-    extra = (getattr(call, "model_extra", None) or {}).get("extra_content")
-    if extra:
-        out["extra_content"] = extra
-    return out
 
 
 async def reply(user_id: int, user_text: str, instruction: str | None = None) -> str:
@@ -227,7 +109,7 @@ async def reply(user_id: int, user_text: str, instruction: str | None = None) ->
         messages.append({"role": "system", "content": instruction})
     text, empty_retries = "", 0
     for _ in range(MAX_TOOL_ROUNDS + MAX_EMPTY_RETRIES):
-        msg = await _chat(messages, tools.TOOLS, max_tokens=REPLY_TOKENS, accept=_leaked_tool_call)
+        msg = await _chat(messages, tools.TOOLS, max_tokens=REPLY_TOKENS)
         text = (msg.content or "").strip()
         truncated = getattr(msg, "finish_reason", None) == "length"
         if not msg.tool_calls:
@@ -240,7 +122,10 @@ async def reply(user_id: int, user_text: str, instruction: str | None = None) ->
             {
                 "role": "assistant",
                 "content": msg.content or "",
-                "tool_calls": [_tool_call(c) for c in msg.tool_calls],
+                "tool_calls": [
+                    {"id": c.id, "type": "function", "function": {"name": c.function.name, "arguments": c.function.arguments}}
+                    for c in msg.tool_calls
+                ],
             }
         )
         for call in msg.tool_calls:

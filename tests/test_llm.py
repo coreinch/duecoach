@@ -1,8 +1,6 @@
 import json
 from types import SimpleNamespace as NS
 
-import httpx
-import openai
 import pytest
 
 from duecoach import db, llm
@@ -18,7 +16,7 @@ def model(monkeypatch):
     """Script the model: each queued item is the message returned by one call; every call is recorded."""
     queue, calls = [], []
 
-    async def fake_chat(messages, tool_defs=None, max_tokens=1500, accept=None):
+    async def fake_chat(messages, tool_defs=None, max_tokens=1500):
         calls.append({"messages": list(messages)})
         return queue.pop(0)
 
@@ -121,119 +119,6 @@ async def _noop():
     return None
 
 
-class PerModel:
-    """Scripted gateway: each model name has its own queue of answers (a reply, an outage body, or an exception to raise)."""
-
-    def __init__(self, **queues):
-        self.queues = {name.replace("_", "-"): list(items) for name, items in queues.items()}
-        self.calls = []
-
-    async def create(self, **kwargs):
-        model = kwargs["model"]
-        self.calls.append(model)
-        item = self.queues[model].pop(0)
-        if isinstance(item, Exception):
-            raise item
-        return item
-
-
-def good(text="fine"):
-    return NS(choices=[NS(message=message(text))])
-
-
-def connection_error():
-    return openai.APIConnectionError(request=httpx.Request("POST", "http://gateway"))
-
-
-def bad_request():
-    request = httpx.Request("POST", "http://gateway")
-    return openai.BadRequestError("tools not supported", response=httpx.Response(400, request=request), body=None)
-
-
-@pytest.fixture
-def chain(monkeypatch):
-    """Three models in preference order, no cooldown history, and a clock the test controls."""
-    clock = {"t": 1000.0}
-    monkeypatch.setattr(llm, "MODELS", ["primary", "backup-1", "backup-2"])
-    monkeypatch.setattr(llm, "_down_until", {})
-    monkeypatch.setattr(llm.time, "time", lambda: clock["t"])
-    monkeypatch.setattr(llm, "LLM_MODEL_COOLDOWN", 120)
-
-    def install(gateway):
-        monkeypatch.setattr(llm._client, "chat", NS(completions=gateway))
-        return gateway
-
-    install.clock = clock
-    return install
-
-
-async def ask():
-    return (await llm._chat([{"role": "user", "content": "hi"}])).content
-
-
-async def test_the_first_model_is_used_when_it_works(chain):
-    gateway = chain(PerModel(primary=[good("one")]))
-    assert await ask() == "one" and gateway.calls == ["primary"]
-
-
-async def test_a_failing_model_falls_through_to_the_next_and_is_skipped_for_a_while(chain):
-    gateway = chain(PerModel(primary=[outage(), good("back")], backup_1=[good("b1"), good("b1 again")], backup_2=[]))
-    assert await ask() == "b1" and gateway.calls == ["primary", "backup-1"]
-    assert await ask() == "b1 again" and gateway.calls[2:] == ["backup-1"]  # primary is cooling down: no wait on it
-    chain.clock["t"] += 121
-    assert await ask() == "back" and gateway.calls[3:] == ["primary"]  # cooldown over: the preferred model is tried first again
-
-
-async def test_connection_errors_and_rejected_requests_also_fall_through(chain):
-    gateway = chain(PerModel(primary=[connection_error()], backup_1=[bad_request()], backup_2=[good("third")]))
-    assert await ask() == "third" and gateway.calls == ["primary", "backup-1", "backup-2"]
-    assert set(llm._down_until) == {"primary"}  # a request one model rejects doesn't make it "down" for everyone else
-
-
-async def test_when_every_model_fails_the_error_names_each_one_and_all_are_tried_again_next_time(chain):
-    gateway = chain(PerModel(primary=[outage(), good("ok")], backup_1=[connection_error()], backup_2=[outage()]))
-    with pytest.raises(llm.ModelError) as error:
-        await ask()
-    assert all(name in str(error.value) for name in ("primary", "backup-1", "backup-2"))
-    assert await ask() == "ok"  # all were cooling down, so the preferred one was tried first rather than giving up
-    assert gateway.calls == ["primary", "backup-1", "backup-2", "primary"]
-
-
-async def test_a_model_that_recovers_leaves_the_cooldown_list(chain):
-    chain(PerModel(primary=[outage(), good("recovered")], backup_1=[good("b1")], backup_2=[]))
-    await ask()
-    assert "primary" in llm._down_until
-    chain.clock["t"] += 121
-    await ask()
-    assert "primary" not in llm._down_until
-
-
-async def test_the_total_time_budget_stops_further_models_after_slow_failures(chain, monkeypatch):
-    class Slow(PerModel):
-        async def create(self, **kwargs):
-            chain.clock["t"] += 100  # every attempt takes 100 seconds before failing
-            return await super().create(**kwargs)
-
-    gateway = chain(Slow(primary=[outage()], backup_1=[outage()], backup_2=[good("never reached")]))
-    monkeypatch.setattr(llm, "LLM_BUDGET", 150)
-    with pytest.raises(llm.ModelError, match="budget"):
-        await ask()
-    assert gateway.calls == ["primary", "backup-1"]  # the third model was not tried
-
-
-async def test_a_tool_calls_extra_content_is_sent_back_with_it(model, user):
-    """Gemini 3 rejects the follow-up request if the thought signature it attached to a tool call is not returned."""
-    call = NS(
-        id="c0",
-        function=NS(name="save_to_toolbox", arguments=json.dumps({"text": "timer"})),
-        model_extra={"extra_content": {"google": {"thought_signature": "abc"}}},
-    )
-    model.queue += [NS(content=None, tool_calls=[call]), message("Saved.")]
-    await llm.reply(1001, "hi")
-    sent = model.calls[1]["messages"]
-    assert [m for m in sent if m["role"] == "assistant"][0]["tool_calls"][0]["extra_content"] == {"google": {"thought_signature": "abc"}}
-
-
 async def test_the_tool_guard_comes_last_in_a_chat_turn_and_just_before_a_check_ins_instruction(model, user):
     model.queue += [message("Hi."), message("How is it going?")]
     await llm.reply(1001, "are you working now?")
@@ -242,64 +127,26 @@ async def test_the_tool_guard_comes_last_in_a_chat_turn_and_just_before_a_check_
     assert [m["content"] for m in model.calls[1]["messages"][-2:]] == [llm.prompts.TOOL_GUARD, "PULSE INSTRUCTION"]
 
 
-def test_cloudflare_models_use_their_own_client_and_are_ignored_without_credentials(monkeypatch):
-    cf = object()
-    monkeypatch.setattr(llm, "_cf_client", cf)
-    assert llm._client_for("@cf/meta/llama-4-scout-17b-16e-instruct") is cf
-    assert llm._client_for("gemini-3.5-flash-lite") is llm._client
-    assert llm._usable("@cf/meta/llama-4-scout-17b-16e-instruct") and llm._usable("gemini-3.5-flash-lite")
-    monkeypatch.setattr(llm, "_cf_client", None)
-    assert llm._client_for("@cf/meta/llama-4-scout-17b-16e-instruct") is llm._client
-    assert not llm._usable("@cf/meta/llama-4-scout-17b-16e-instruct") and llm._usable("gemini-3.5-flash-lite")
-
-
-def test_minimax_models_use_their_own_client_ask_for_split_reasoning_and_need_a_key(monkeypatch):
-    mm = object()
-    monkeypatch.setattr(llm, "_mm_client", mm)
-    assert llm._client_for("MiniMax-M3") is mm and llm._usable("MiniMax-M3")
-    assert llm._extra("MiniMax-M3") == {"extra_body": {"reasoning_split": True}} and llm._extra("gemini-3.5-flash-lite") == {}
-    monkeypatch.setattr(llm, "_mm_client", None)
-    assert not llm._usable("MiniMax-M3") and llm._client_for("MiniMax-M3") is llm._client
+async def _as_awaitable(value):
+    return value
 
 
 async def test_leaked_reasoning_is_stripped_from_a_reply(monkeypatch):
     msg = NS(content="<think>\nthe user greets me\n</think>\n\nΓεια σου!", finish_reason=None, tool_calls=None)
     fake = NS(create=lambda **kw: _as_awaitable(NS(choices=[NS(message=msg, finish_reason="stop")])))
     monkeypatch.setattr(llm._client, "chat", NS(completions=fake))
-    monkeypatch.setattr(llm, "MODELS", ["primary"])
     assert (await llm._chat([{"role": "user", "content": "hi"}])).content == "Γεια σου!"
 
 
-async def _as_awaitable(value):
-    return value
+async def test_the_configured_model_is_the_only_one_used_and_minimax_is_asked_to_split_its_reasoning(monkeypatch):
+    seen = []
 
+    async def create(**kw):
+        seen.append(kw)
+        return NS(choices=[NS(message=NS(content="ok", tool_calls=None), finish_reason="stop")])
 
-@pytest.mark.parametrize(
-    "text, leaked",
-    [
-        ('Θα χρησιμοποιήσω το εργαλείο set_reminder.\n>set_reminder(message="x", at="2026-10-10 09:00", daily=true)', True),
-        ('{"name": "set_reminder", "arguments": {"minutes": 1}}', True),
-        ('<add_goal>{"text": "x"}', True),
-        ("Έτοιμο, θα σου θυμίζω κάθε μέρα στις 9:00.", False),
-        ("I can set a reminder for you: when?", False),
-        ("", False),
-    ],
-)
-def test_a_tool_call_written_as_text_is_recognised(text, leaked):
-    assert (llm._leaked_tool_call(NS(content=text, tool_calls=None)) is not None) is leaked
-    assert llm._leaked_tool_call(NS(content=text, tool_calls=[object()])) is None  # a real tool call is fine
-
-
-async def test_an_unusable_answer_moves_on_to_the_next_model_without_marking_the_first_as_down(monkeypatch):
-    answers = {"primary": 'set_reminder(message="x", minutes=1)', "backup-1": "Έτοιμο."}
-
-    class Completions:
-        async def create(self, model, **kw):
-            msg = NS(content=answers[model], tool_calls=None)
-            return NS(choices=[NS(message=msg, finish_reason="stop")])
-
-    monkeypatch.setattr(llm, "MODELS", ["primary", "backup-1"])
-    monkeypatch.setattr(llm, "_down_until", {})
-    monkeypatch.setattr(llm._client, "chat", NS(completions=Completions()))
-    out = await llm._chat([{"role": "user", "content": "hi"}], accept=llm._leaked_tool_call)
-    assert out.content == "Έτοιμο." and llm._down_until == {}
+    monkeypatch.setattr(llm._client, "chat", NS(completions=NS(create=create)))
+    monkeypatch.setattr(llm, "_EXTRA", {"extra_body": {"reasoning_split": True}})
+    await llm._chat([{"role": "user", "content": "hi"}])
+    assert seen[0]["model"] == llm.LLM_MODEL and seen[0]["extra_body"] == {"reasoning_split": True}
+    assert llm.status() == {"model": llm.LLM_MODEL}
