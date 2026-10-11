@@ -1,23 +1,23 @@
-"""The timezone question, as a flow like the others (its state lives in `flow_state` too).
+"""The timezone question, as a flow (its state lives in `flow_state` too).
 
-The bot asks for the user's city once, after a few coaching messages, because check-ins and "what time is it for you" depend on it;
-the model is not involved, so it can't forget to ask or invent a zone. A zone is taken as correct as soon as it is understood: the
-user is only told what local time it implies, and corrects it if wrong.
+The bot asks for the user's city right after they agree to the privacy notice (and again after a few messages if it was never settled),
+because check-ins and "what time is it for you" depend on it; the model is not involved in the asking, so it can't forget to ask or
+invent a zone. A zone is taken as correct as soon as it is understood: the user is told the zone and the local time it implies. If it
+is wrong they say so in ordinary chat and the coach fixes it with its set_timezone tool.
 
-Steps: `asked` (waiting for a city), `verify` (zone assumed and in use, waiting for "yes"), `time` (told it was wrong, asking the time).
-The lasting outcome is the user's `tz_state`: "" (never settled), "done" (a zone is in use) or "skipped" (they declined or it failed).
+The only step is `asked` (waiting for a city). The lasting outcome is the user's `tz_state`: "" (never settled), "done" (a zone is in
+use) or "skipped" (they declined or it failed).
 """
 
 from .. import db, timezones
 from ..config import CHECKIN_INTERVAL_MINUTES
-from .onboarding import handoff, mark_onboarded
-from .state import NO, SKIP, YES, CoachTurn, clear, get, put, say
+from .moments import note_question_asked
+from .state import NO, SKIP, clear, get, put, say
 
 ASK_AFTER_MESSAGES = 6  # chat messages stored (both sides), i.e. about three exchanges
 MAX_ANSWER_WORDS = 5  # longer messages are treated as ordinary chat, not as an answer to the question
+MAX_PLACE_WORDS = 2  # an unrecognised message longer than this is chat, not a misspelt city
 MAX_ATTEMPTS = 3  # tries at understanding a city before giving up
-MAX_CORRECTIONS = 2  # times the assumed zone may be corrected before giving up
-LEADING_NO = {"no", "nope", "οχι", "λαθος"}
 
 
 def pending(uid: int) -> bool:
@@ -37,83 +37,54 @@ def settle(uid: int) -> None:
         db.set_field(uid, "tz_state", "done")
 
 
+def ask(uid: int, key: str = "TZ_ASK") -> str:
+    """Start the question and return the text to send (`key` lets /agree use its own greeting that ends with the question)."""
+    put(uid, "timezone", "asked", attempts=0)
+    note_question_asked(uid)
+    return say(uid, key)
+
+
 def _end(uid: int, outcome: str, reply: str) -> str:
-    """The question is settled: record the outcome, and if this was the last stage of the setup, finish with the hand-over."""
+    """The question is settled: record the outcome."""
     clear(uid)
     db.set_field(uid, "tz_state", outcome)
-    closing = handoff(uid)
-    return f"{reply}\n\n{closing}" if closing else reply
+    return reply
 
 
-def _assume(uid: int, zone: str, corrections: int) -> str:
-    """Take the zone as correct straight away and tell the user only the local time it implies, asking just whether that is right.
+def _assume(uid: int, zone: str) -> str:
+    """Take the zone as correct straight away and tell the user the zone and the local time it implies.
 
     The first time a timezone is set, check-ins switch on by themselves.
     """
     switched_on = db.confirm_timezone(uid, zone)
+    clear(uid)
     db.set_field(uid, "tz_state", "done")
-    put(uid, "timezone", "verify", candidate=zone, attempts=corrections)
-    reply = say(uid, "TZ_ASSUMED", time=timezones.local_time(zone))
+    reply = say(uid, "TZ_ASSUMED", zone=zone, time=timezones.local_time(zone))
     if switched_on:
         reply += "\n\n" + say(uid, "CHECKINS_ENABLED", minutes=CHECKIN_INTERVAL_MINUTES)
     return reply
 
 
-async def answer(uid: int, state: dict, text: str, said: str) -> str | CoachTurn | None:
+async def answer(uid: int, state: dict, text: str, said: str) -> str | None:
     """Handle a reply to the timezone question; None means the message is ordinary chat."""
-    step, attempts = state["step"], state.get("attempts", 0)
-    if step == "asked":
-        if db.get_user(uid)["tz_set"] or len(text.split()) > MAX_ANSWER_WORDS:
-            return None
-        if said in SKIP or said in NO:
-            return _end(uid, "skipped", say(uid, "TZ_SKIPPED"))
-        found = timezones.resolve(text)
-        if found.zone:
-            return _assume(uid, found.zone, corrections=0)
-        if found.country:
-            return say(uid, "TZ_MULTI", country=found.country)  # a follow-up question, not a failed attempt
-        attempts += 1
-        if attempts >= MAX_ATTEMPTS:
-            return _end(uid, "skipped", say(uid, "TZ_SKIPPED"))
-        put(uid, "timezone", "asked", attempts=attempts)
-        return say(uid, "TZ_RETRY")
-    if step == "time":  # they said the local time was wrong and were asked what time it is
-        return _correct(uid, state, text)
-    # step == "verify": the zone is already in use; this is the answer to "it's 16:36 where you are, right?"
-    if said in YES:
-        return _end(uid, "done", say(uid, "TZ_VERIFIED"))
-    if said in NO:
-        put(uid, "timezone", "time", candidate=state.get("candidate", ""), attempts=attempts)
-        return say(uid, "TZ_ASK_TIME")
-    words = text.split()
-    if len(words) > 1 and timezones.normalize(words[0]) in LEADING_NO:  # "no, I'm in Dubai" / "no it's 3pm"
-        return _correct(uid, state, text.split(None, 1)[1])
-    found = timezones.resolve(text) if len(words) <= MAX_ANSWER_WORDS else timezones.Resolution()
-    if found.zone and found.zone != db.get_user(uid)["tz"]:  # they just named a different place
-        return _correct(uid, state, text)
-    clear(uid)  # they moved on without objecting: the assumption stands...
-    mark_onboarded(uid)  # ...and so the setup is over: no hand-over message on top of whatever they are saying
-    return None
-
-
-def _correct(uid: int, state: dict, text: str) -> str:
-    """The assumed timezone was wrong: work out the right one from the time it is for them now, or from a place they name."""
-    user = db.get_user(uid)
-    corrections = state.get("attempts", 0) + 1
-    clock = timezones.parse_clock(text)
-    if clock:
-        zone = timezones.zone_for_offset(timezones.offset_from_clock(*clock), near=user["tz"])
-        if zone:
-            db.confirm_timezone(uid, zone)
-            return _end(uid, "done", say(uid, "TZ_FIXED", time=timezones.local_time(zone)))
-    else:
-        found = timezones.resolve(text)
-        if found.zone and corrections <= MAX_CORRECTIONS:
-            return _assume(uid, found.zone, corrections)
-        if found.country:
-            return say(uid, "TZ_MULTI", country=found.country)
-    if corrections >= MAX_CORRECTIONS:  # we could not fix it: better no timezone (and no check-ins) than a wrong one
-        db.revoke_timezone(uid)
-        return _end(uid, "skipped", say(uid, "TZ_GIVE_UP"))
-    put(uid, "timezone", "time", candidate=state.get("candidate", ""), attempts=corrections)
-    return say(uid, "TZ_TIME_RETRY")
+    if state["step"] != "asked":  # a confirmation step from an earlier version of the bot: the zone is already in use
+        clear(uid)
+        db.set_field(uid, "tz_state", "done")
+        return None
+    attempts = state.get("attempts", 0)
+    if db.get_user(uid)["tz_set"] or len(text.split()) > MAX_ANSWER_WORDS:
+        return None
+    if said in SKIP or said in NO:
+        return _end(uid, "skipped", say(uid, "TZ_SKIPPED"))
+    found = timezones.resolve(text)
+    if found.zone:
+        return _assume(uid, found.zone)
+    if found.country:
+        return say(uid, "TZ_MULTI", country=found.country)  # a follow-up question, not a failed attempt
+    if len(text.split()) > MAX_PLACE_WORDS:
+        return None  # not a place: likely the first thing they wanted to talk about, which the coach answers
+    attempts += 1
+    if attempts >= MAX_ATTEMPTS:
+        return _end(uid, "skipped", say(uid, "TZ_SKIPPED"))
+    put(uid, "timezone", "asked", attempts=attempts)
+    return say(uid, "TZ_RETRY")

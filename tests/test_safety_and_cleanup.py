@@ -20,7 +20,6 @@ def no_model(monkeypatch):
         raise AssertionError("the model must not be called here")
 
     monkeypatch.setattr(llm, "reply", forbidden)
-    monkeypatch.setattr(llm, "draft", forbidden)
 
 
 async def say(text, ext="1001"):

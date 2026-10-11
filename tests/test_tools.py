@@ -108,7 +108,7 @@ def test_coaching_state_shows_time_and_record(user):
     uid = user["user_id"]
     run(uid, "add_goal", text="Sleep before midnight for a month")
     state = tools.coaching_state(uid)
-    assert "Europe/Athens" in state and "confirmed by the user" in state
+    assert "Europe/Athens" in state and "set from what the user told us" in state
     assert "Sleep before midnight" in state and "Check-ins: off" in state
 
 

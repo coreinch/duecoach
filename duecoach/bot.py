@@ -128,9 +128,7 @@ async def checkin(u) -> None:
             return
         seen_inbound = u["last_inbound"] or 0
         try:
-            # a weekly step that is due for follow-up becomes a short fixed question instead of a free-form check-in
-            message = flows.start_followup(uid) if (u["unanswered"] or 0) == 0 else None
-            await channels.send(u, message or await llm.reply(uid, "", instruction))
+            await channels.send(u, await llm.reply(uid, "", instruction))
         except channels.Unreachable:
             # they blocked the bot or left: stop spending model calls on a check-in nobody can receive
             log.info("user %s cannot be messaged: check-ins switched off", uid)

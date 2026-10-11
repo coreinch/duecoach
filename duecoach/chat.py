@@ -53,44 +53,18 @@ async def coach(uid: int, text: str, instruction: str | None = None) -> str:
 
 
 async def flow_answer(uid: int, text: str) -> str | None:
-    """Reply to the question in progress (goal, weekly step, follow-up, interview, timezone), if any. None: ordinary chat."""
-    result = await flows.answer(uid, text)
-    if isinstance(result, flows.CoachTurn):  # the user reported how a step went, or finished the interview: coach that now
-        coaching = coach(uid, result.text, result.instruction)
-        if callable(result.follow_up):  # the question takes a model call too: compute it while the coach writes
-            reply, question = await asyncio.gather(coaching, result.follow_up())
-        else:
-            reply, question = await coaching, result.follow_up
-        if reply == say(uid, "LLM_ERROR") and result.fallback:
-            return f"{result.fallback}\n\n{question}" if question else result.fallback
-        return f"{without_trailing_question(reply)}\n\n{question}" if question else reply
-    return result
+    """Reply to the timezone question in progress, if any. None: ordinary chat."""
+    return await flows.answer(uid, text)
 
 
 async def coach_with_question(uid: int, text: str) -> str:
-    """The coach's reply, plus at most one question from the bot (follow-up, goal, weekly step or timezone)."""
+    """The coach's reply, plus the timezone question if it was never settled and this is a good moment."""
     # Decide before the coach writes: if a question of ours will follow, the coach must not end with one of its own.
-    kind = None
-    if not (flows.get(uid) or flows.question_blocked(uid, text)):
-        kind = flows.question_due(uid, text) or ("timezone" if flows.should_ask_timezone(uid) else None)
-    ideas = asyncio.create_task(flows.goal_options(uid)) if kind == "goal" else None  # runs while the coach writes
-    reply = await coach(uid, text, prompts.QUESTION_FOLLOWS if kind else None)
-    if kind is None or reply == say(uid, "LLM_ERROR"):
-        if ideas:
-            ideas.cancel()
+    ask = not (flows.get(uid) or flows.question_blocked(uid, text)) and flows.should_ask_timezone(uid)
+    reply = await coach(uid, text, prompts.QUESTION_FOLLOWS if ask else None)
+    if not ask or reply == say(uid, "LLM_ERROR"):
         return reply
-    question: str | None
-    if kind == "timezone":
-        question = flows.ask_timezone(uid)
-    elif kind == "goal":
-        assert ideas is not None
-        question = await flows.start_goal(uid, options=await ideas)
-    else:
-        question = await flows.start_question(uid, kind, text)
-    if question is None:
-        return reply
-    flows.note_question_asked(uid)
-    return f"{without_trailing_question(reply)}\n\n{question}"
+    return f"{without_trailing_question(reply)}\n\n{flows.ask_timezone(uid)}"
 
 
 def privacy(uid: int) -> str:

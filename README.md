@@ -4,8 +4,8 @@ From what you meant to do to what you did.
 
 Duecoach is an ADHD coach in your chat app, on Telegram, Viber and WhatsApp (Greek and English), built around follow-through. It coaches with a structured method — goals,
 small weekly objectives, barrier analysis, a toolbox of what works, a weekly review — with a 54-card playbook of strategies in
-the prompt of every reply (one model call per message). New users are led through a short conversation (a few intake questions,
-a first goal, their timezone) and then talk freely. Once the timezone is known, the bot checks in after 30 minutes of silence
+the prompt of every reply (one model call per message). New users are asked for their timezone first and then talk freely: the coach learns about them, sets goals and weekly steps
+and follows up on them in conversation, saving them with tools. Once the timezone is known, the bot checks in after 30 minutes of silence
 during the day and backs off when ignored (`/interval off` turns it off).
 
 It is a coaching aid, not therapy or medical advice. Chats are stored in a local SQLite database and each message is sent to the
@@ -84,7 +84,7 @@ them off the box if the data matters.
 
 ## Commands
 
-`/help` lists them. Highlights: `/stuck`, `/plan`, `/overwhelm`, `/goals`, `/goal`, `/step`, `/toolbox`, `/progress`, `/remind`, `/timezone`,
+`/help` lists them. Highlights: `/stuck`, `/plan`, `/overwhelm`, `/goals`, `/toolbox`, `/progress`, `/remind`, `/timezone`,
 `/interval on|off|<minutes>`, `/morning`, `/evening`, `/language`, `/privacy`, `/deletedata`.
 
 ## Telegram profile
@@ -104,8 +104,8 @@ python -m venv .venv && .venv/bin/pip install -r requirements-dev.txt
 
 Layout: `duecoach/core.py` (the order a message is handled in: rate limit, consent, crisis, commands, flows, coaching),
 `duecoach/commands.py` (slash commands), `duecoach/chat.py` (the coach's reply plus at most one question of the bot's own, and the
-crisis answer), `duecoach/flows/` (the bot-led conversations, one module each: `intake`, `goals`, `followup`, `timezone`, with
-`moments` deciding when to ask, `onboarding` the hand-over and `state` where a flow is stored), `duecoach/llm.py` (model calls,
+crisis answer), `duecoach/flows/` (the one bot-led conversation, the timezone question, in `timezone`, with
+`moments` deciding when it may be asked and spotting crisis wording, and `state` where a flow is stored), `duecoach/llm.py` (model calls,
 tool loop), `duecoach/tools.py` and `duecoach/playbook.py` (what the coach can do and the strategy cards),
 `duecoach/prompts.py` and `duecoach/strings.py` (model prompts, fixed texts in both languages), `duecoach/bot.py` (reminders, check-ins,
 housekeeping, startup), `duecoach/channels/` (Telegram, Viber, WhatsApp), `duecoach/db.py` (SQLite, numbered migrations). The Docker base image is pinned by digest; Dependabot proposes updates.

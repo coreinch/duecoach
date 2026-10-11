@@ -25,13 +25,10 @@ STRINGS = {
             "/interval <15-240|on|off> - κάθε πόσα λεπτά (προεπιλογή 30, αρχικά κλειστό)\n"
             "/timezone <Περιοχή/Πόλη> - ζώνη ώρας για τα check-in (π.χ. Europe/Athens)\n"
             "/goals - οι στόχοι και τα βήματα της εβδομάδας\n"
-            "/goal - όρισε νέο στόχο\n"
-            "/step - διάλεξε το βήμα της εβδομάδας\n"
             "/progress - σημείωση προόδου της εβδομάδας\n"
             "/toolbox - τι έχει δουλέψει για σένα\n"
             "/language <el|en> - γλώσσα\n"
             "/notes - τι θυμάμαι για σένα\n"
-            "/intake - ξανακάνε τις ερωτήσεις γνωριμίας\n"
             "/privacy - πώς χρησιμοποιώ τα δεδομένα σου\n"
             "/deletedata - σβήσε τα πάντα για σένα\n"
             "/forget - σβήσε τις σημειώσεις μου για σένα"
@@ -77,7 +74,7 @@ STRINGS = {
         ),
         "KEEP_MESSAGES": " Τα μηνύματα της συνομιλίας σβήνονται μετά από {days} ημέρες.",
         "KEEP_INACTIVE": " Όλα όσα έχω για σένα σβήνονται μετά από {days} ημέρες χωρίς μήνυμά σου.",
-        "AGREED": "Ευχαριστώ, είμαστε έτοιμοι. Να πώς θα πάει: μερικές γρήγορες ερωτήσεις για σένα, μετά διαλέγουμε έναν στόχο και ένα μικρό βήμα για αυτή την εβδομάδα, και θα είμαι δίπλα σου στην πορεία. Για αρχή, πες μου τι σε έφερε εδώ.",
+        "AGREED": "Ευχαριστώ, είμαστε έτοιμοι. Πρώτα, πού μένεις; Πες μου την πόλη (ή τη χώρα) σου και θα ορίσω τη ζώνη ώρας, ώστε υπενθυμίσεις και check-in να έρχονται στη σωστή ώρα. Μπορείς και να πεις «παράλειψη». Μετά πες μου τι σε έφερε εδώ.",
         "DELETE_CONFIRM": "Αυτό σβήνει οριστικά ό,τι έχω για σένα: ιστορικό συνομιλίας, σημειώσεις, στόχους, εβδομαδιαία βήματα, εργαλειοκουτί και υπενθυμίσεις. Στείλε /deletedata confirm για να προχωρήσω.",
         "DELETED": "Έγινε. Όλα όσα είχα για σένα σβήστηκαν (τα αντίγραφα ασφαλείας αντικαθίστανται μέσα σε περίπου μία εβδομάδα). Μπορείς να ξεκινήσεις από την αρχή όποτε θέλεις.",
         "RATE_LIMITED": "Είναι πολλά μαζί. Θα κάνω μια παύση λίγων λεπτών για να προλάβω.",
@@ -88,21 +85,7 @@ STRINGS = {
         "TZ_MULTI": "Η χώρα {country} έχει πολλές ζώνες ώρας. Ποια πόλη είναι πιο κοντά σου;",
         "TZ_RETRY": "Δεν κατάλαβα τη ζώνη ώρας από αυτό. Δοκίμασε μια μεγαλύτερη κοντινή πόλη, ή τη μορφή Περιοχή/Πόλη (π.χ. Europe/Athens), ή πες «παράλειψη».",
         "TZ_SKIPPED": "Κανένα πρόβλημα. Μπορείς να την ορίσεις όποτε θέλεις με /timezone Europe/Athens· τα check-in ξεκινούν μόλις οριστεί.",
-        "GOAL_ASK": "Ας ορίσουμε έναν στόχο μαζί. Να τρεις ιδέες με βάση όσα μου είπες:\n\n1) {a}\n2) {b}\n3) {c}\n\nΑπάντησε 1, 2 ή 3, ή γράψε τον δικό σου στόχο σε μία πρόταση. Μπορείς και να πεις «παράλειψη».",
-        "GOAL_MORE": "Πες μου λίγο περισσότερα, σε μία-δυο προτάσεις.",
-        "GOAL_CONFIRM": "Έτσι θα τον έγραφα ως στόχο: «{goal}»\nΣου ταιριάζει; Απάντησε ναι, ή πες μου τι να αλλάξω.",
-        "GOAL_SAVED": "Ο στόχος αποθηκεύτηκε: «{goal}»",
-        "GOAL_SKIPPED": "Κανένα πρόβλημα. Γράψε /goal όποτε θέλεις να ορίσεις έναν.",
-        "GOAL_FULL": "Έχεις ήδη το μέγιστο των 4 στόχων. Ολοκλήρωσε ή άφησε έναν πριν προσθέσεις άλλον.",
         "REVISE": "Τι θα άλλαζες;",
-        "OBJ_ASK": "Ποιο είναι ένα μικρό βήμα προς {goal} που μπορείς να κάνεις αυτή την εβδομάδα; Πες πότε και πού αν μπορείς, ή πες «παράλειψη».",
-        "OBJ_MORE": "Πες μου λίγο περισσότερα για το βήμα, σε μία-δυο προτάσεις.",
-        "OBJ_CONFIRM": "Έτσι θα έγραφα το βήμα: «{step}»\nΣου ταιριάζει; Απάντησε ναι, ή πες μου τι να αλλάξω.",
-        "OBJ_REWARD": "Διάλεξε μια μικρή ανταμοιβή για όταν το κάνεις (έναν καφέ, μια βόλτα, ένα επεισόδιο), ή απάντησε κανένα.",
-        "OBJ_REWARD_NOTE": " (ανταμοιβή: {reward})",
-        "OBJ_SAVED": "Αποθήκευσα το βήμα της εβδομάδας: «{step}»{reward}. Πες μου πώς πάει· θα σε ρωτήσω σε μερικές μέρες όταν τα πούμε.",
-        "OBJ_SKIPPED": "Κανένα πρόβλημα. Γράψε /step όταν είσαι έτοιμος να διαλέξεις βήμα.",
-        "OBJ_FULL": "Έχεις ήδη 3 ανοιχτά βήματα. Πες μου πρώτα πώς πήγαν αυτά.",
         "FU_ASK": "Πώς πήγε αυτό: «{step}»;\nΑπάντησε 1 = έγινε, 2 = κατά μέρος, 3 = όχι ακόμα.",
         "FU_AGAIN": "Απάντησε 1 (έγινε), 2 (κατά μέρος) ή 3 (όχι ακόμα).",
         "FU_BARRIER": "Τι εμπόδισε;\n1 = ξέχασα\n2 = δεν ήξερα πώς\n3 = μπερδεύτηκα\n4 = το απέφευγα\n5 = δεν είχα κίνητρο\nΑπάντησε με αριθμό ή πες το με δικά σου λόγια.",
@@ -114,17 +97,6 @@ STRINGS = {
             "να μιλήσεις με επαγγελματία ψυχικής υγείας ή με μια γραμμή βοήθειας στη χώρα σου.{help}\n\n"
             "Είσαι ασφαλής αυτή τη στιγμή; Είμαι εδώ και μπορούμε να συνεχίσουμε να μιλάμε."
         ),
-        "INTAKE_INTRO": "Για να σε βοηθήσω σωστά, θα σου κάνω μερικές γρήγορες ερωτήσεις (περίπου 6). Μπορείς να παραλείψεις όποια θες γράφοντας «παράλειψη», ή να πεις «αρκετά» για να σταματήσουμε.",
-        "INTAKE_Q_why": "Πρώτα: τι σε έκανε να ψάξεις υποστήριξη αυτή την περίοδο;",
-        "INTAKE_Q_tried": "Τι έχεις ήδη δοκιμάσει και τι σε βοήθησε, έστω και λίγο;",
-        "INTAKE_Q_obstacle": "Τι σε δυσκολεύει περισσότερο; Για παράδειγμα: να ξεκινήσεις πράγματα, ο χρόνος, η οργάνωση, η συγκέντρωση, να θυμάσαι, το κίνητρο, ο ύπνος ή το άγχος. Με δικά σου λόγια.",
-        "INTAKE_Q_strength": "Σε τι είσαι καλός ή καλή, ή τι σε έχει βοηθήσει να τα καταφέρνεις στο παρελθόν;",
-        "INTAKE_Q_rhythm": "Πώς είναι μια συνηθισμένη μέρα σου; Πότε ξυπνάς και κοιμάσαι, και τι πιάνει το μεγαλύτερο μέρος της μέρας σου;",
-        "INTAKE_Q_mood": "Τελευταία: πώς νιώθεις τον τελευταίο καιρό, σε διάθεση και άγχος; Αν ήταν βαρύς, είναι εντάξει να το πεις.",
-        "INTAKE_ACK": "Ευχαριστώ.",
-        "INTAKE_DONE": "Ευχαριστώ, αυτό βοηθά πολύ. Κράτησα ένα σύντομο προφίλ (δες /notes). Να πώς δουλεύουμε: πες μου ό,τι σε απασχολεί όποτε θέλεις, και θα ορίζουμε έναν στόχο και ένα μικρό βήμα κάθε εβδομάδα.",
-        "INTAKE_STOPPED": "Εντάξει, σταματάμε εδώ. Ό,τι μου είπες το κράτησα (δες /notes). Πες μου ό,τι σε απασχολεί όποτε θέλεις, γράψε /goal όταν θες να ορίσεις στόχο, ή /intake για να συνεχίσεις τις ερωτήσεις.",
-        "INTAKE_MOOD_HEAVY": "Ευχαριστώ που μου το είπες. Ακούγεται βαρύ. Το coaching βοηθά στο πρακτικό κομμάτι, αλλά δεν αντικαθιστά τη θεραπεία: αν κρατά καιρό, σκέψου να μιλήσεις και με γιατρό ή ψυχολόγο. Είμαι εδώ έτσι κι αλλιώς.",
         "PROFILE_HEADER": "Για σένα (από την πρώτη μας κουβέντα)",
         "PROFILE_why": "Γιατί ήρθες",
         "PROFILE_tried": "Τι έχεις δοκιμάσει",
@@ -132,23 +104,9 @@ STRINGS = {
         "PROFILE_strength": "Δυνατά σου σημεία",
         "PROFILE_rhythm": "Η μέρα σου",
         "PROFILE_mood": "Διάθεση",
-        "TZ_ASSUMED": "Εντάξει. Εκεί που είσαι είναι τώρα {time}, σωστά;",
-        "TZ_VERIFIED": "Τέλεια, ευχαριστώ.",
-        "TZ_ASK_TIME": "Συγγνώμη γι' αυτό. Τι ώρα είναι εκεί που είσαι αυτή τη στιγμή; Για παράδειγμα 15:30 ή 3:30μμ.",
-        "TZ_FIXED": "Ευχαριστώ, το διόρθωσα. Εκεί που είσαι είναι τώρα {time}.",
-        "TZ_TIME_RETRY": "Δεν μπόρεσα να το διαβάσω. Πες μου την ώρα όπως 15:30 ή 3:30μμ, ή το όνομα της πόλης σου.",
-        "TZ_GIVE_UP": "Κανένα πρόβλημα, το αφήνω προς το παρόν. Όρισέ την όποτε θες με /timezone Europe/Athens· τα check-in ξεκινούν μόλις οριστεί.",
+        "TZ_ASSUMED": "Εντάξει, όρισα τη ζώνη ώρας {zone}: εκεί είναι τώρα {time}. Αν δεν είναι σωστό, πες μου.",
         "CHECKINS_ENABLED": "Θα σε ρωτάω αφού περάσουν περίπου {minutes} λεπτά ησυχίας, και πιο αραιά αν δεν απαντάς. Με /interval off σταματούν, με /interval 60 τα αραιώνεις.",
-        "GOAL_ASK_INTAKE": "Ανέφερες: «{obstacle}». Ας ορίσουμε έναν στόχο μαζί. Να τρεις ιδέες:\n\n1) {a}\n2) {b}\n3) {c}\n\nΑπάντησε 1, 2 ή 3, ή γράψε τον δικό σου στόχο σε μία πρόταση. Μπορείς και να πεις «παράλειψη».",
-        "TZ_ASK_LAST": "Μία τελευταία ερώτηση για να δουλεύει όλο αυτό γύρω από τη μέρα σου: πού μένεις; Πες μου την πόλη (ή τη χώρα) σου και θα ορίσω τη ζώνη ώρας, ώστε υπενθυμίσεις και check-in να έρχονται στη σωστή ώρα. Μπορείς και να πεις «παράλειψη».",
-        "HANDOFF": "Είμαστε έτοιμοι. Μίλα μου όποτε κάτι σε εμποδίζει ή θες μια σπρωξιά, για παράδειγμα «δεν μπορώ να ξεκινήσω» ή «με πνίγουν όλα».",
-        "HANDOFF_STEP": "Το βήμα σου αυτή την εβδομάδα: «{step}». Πες μου πότε σκέφτεσαι να το κάνεις και θα σου το θυμίσω.",
-        "HANDOFF_NO_STEP": "Στείλε /step όταν θες να διαλέξεις το βήμα της εβδομάδας.",
-        "HANDOFF_NO_GOAL": "Στείλε /goal όποτε θες να ορίσεις έναν στόχο.",
-        "HANDOFF_NO_TZ": "Τα check-in ξεκινούν μόλις ορίσεις τη ζώνη ώρας σου με /timezone.",
         "THAT_GOAL": "αυτόν τον στόχο",
-        "GOAL_ASK_OPEN": "Ας ορίσουμε έναν στόχο μαζί. Ποιο είναι το ένα πράγμα που θα ήθελες περισσότερο να αλλάξεις ή να βελτιώσεις; Αρκεί μια-δυο προτάσεις, ή πες «παράλειψη».",
-        "GOAL_ASK_OPEN_INTAKE": "Ανέφερες: «{obstacle}». Ας το κάνουμε στόχο. Τι θα ήθελες να αλλάξεις πρώτο; Αρκεί μία πρόταση, ή πες «παράλειψη».",
         "UNSUPPORTED": "Προς το παρόν διαβάζω μόνο γραπτά μηνύματα. Γράψε μου τι σκέφτεσαι;",
     },
     "en": {
@@ -163,13 +121,10 @@ STRINGS = {
             "/interval <15-240|on|off> - minutes between check-ins (default 30, off at first)\n"
             "/timezone <Area/City> - set your timezone for check-ins (e.g. Europe/Athens)\n"
             "/goals - your goals and this week's steps\n"
-            "/goal - set a new goal\n"
-            "/step - pick this week's step\n"
             "/progress - this week's progress note\n"
             "/toolbox - what has worked for you\n"
             "/language <el|en> - language\n"
             "/notes - see what I remember about you\n"
-            "/intake - redo the getting-to-know-you questions\n"
             "/privacy - how your data is used\n"
             "/deletedata - erase everything about you\n"
             "/forget - wipe my memory of you"
@@ -214,7 +169,7 @@ STRINGS = {
         ),
         "KEEP_MESSAGES": " Chat messages are deleted after {days} days.",
         "KEEP_INACTIVE": " Everything about you is deleted after {days} days without a message from you.",
-        "AGREED": "Thanks, you're set. Here's how this goes: a few quick questions about you, then we pick a goal and one small step for this week, and I'll be with you along the way. To start, tell me what brought you here.",
+        "AGREED": "Thanks, you're set. First, where do you live? Tell me your city (or country) and I'll set your timezone, so reminders and check-ins land at the right time. You can also say \"skip\". Then tell me what brought you here.",
         "DELETE_CONFIRM": "This permanently erases everything I have about you: chat history, notes, goals, weekly steps, toolbox and reminders. Send /deletedata confirm to go ahead.",
         "DELETED": "Done. Everything I had about you has been erased (backup copies are overwritten within about a week). You're welcome to start fresh any time.",
         "RATE_LIMITED": "That's a lot at once. I'll pause for a few minutes to catch up.",
@@ -225,21 +180,7 @@ STRINGS = {
         "TZ_MULTI": "{country} spans several timezones. Which city are you closest to?",
         "TZ_RETRY": 'I couldn\'t work out a timezone from that. Try a bigger nearby city, or the Area/City form like Europe/Athens, or say "skip".',
         "TZ_SKIPPED": "No problem. You can set it any time with /timezone Europe/Athens; check-ins start once it's set.",
-        "GOAL_ASK": "Let's set a goal together. Here are three ideas based on what you've told me:\n\n1) {a}\n2) {b}\n3) {c}\n\nReply 1, 2 or 3, or tell me your own goal in a sentence. You can also say \"skip\".",
-        "GOAL_MORE": "Tell me a little more, in a sentence or two.",
-        "GOAL_CONFIRM": "Here's how I'd write that as a goal: \"{goal}\"\nDoes that fit? Reply yes, or tell me what to change.",
-        "GOAL_SAVED": 'Goal saved: "{goal}"',
-        "GOAL_SKIPPED": "No problem. Say /goal whenever you want to set one.",
-        "GOAL_FULL": "You already have the maximum of 4 goals. Finish or drop one before adding another.",
         "REVISE": "What would you change?",
-        "OBJ_ASK": 'What\'s one small step toward {goal} you could take this week? Say when and where if you can, or say "skip".',
-        "OBJ_MORE": "Tell me a little more about the step, in a sentence or two.",
-        "OBJ_CONFIRM": 'I\'d write the step like this: "{step}"\nDoes that work? Reply yes, or tell me what to change.',
-        "OBJ_REWARD": "Pick a small reward for when you do it (a coffee, a walk, an episode of something), or reply none.",
-        "OBJ_REWARD_NOTE": " (reward: {reward})",
-        "OBJ_SAVED": 'Saved your step for this week: "{step}"{reward}. Tell me how it goes; I\'ll ask about it in a couple of days when we talk.',
-        "OBJ_SKIPPED": "No problem. Say /step when you're ready to pick a step.",
-        "OBJ_FULL": "You already have 3 open steps. Tell me how those went first.",
         "FU_ASK": 'How did this go: "{step}"?\nReply 1 = done, 2 = partly, 3 = not yet.',
         "FU_AGAIN": "Please reply 1 (done), 2 (partly) or 3 (not yet).",
         "FU_BARRIER": "What got in the way?\n1 = I forgot\n2 = I didn't know how\n3 = I got confused about it\n4 = I was avoiding it\n5 = I wasn't motivated\nReply with a number, or tell me in your own words.",
@@ -251,17 +192,6 @@ STRINGS = {
             "mental-health professional or a helpline in your country.{help}\n\n"
             "Are you safe right now? I'm here, and we can keep talking."
         ),
-        "INTAKE_INTRO": 'To help you properly, I\'d like to ask a few quick questions (about 6). You can skip any by saying "skip", or say "enough" to stop.',
-        "INTAKE_Q_why": "First: what made you look for support at this point?",
-        "INTAKE_Q_tried": "What have you already tried, and did anything help, even a little?",
-        "INTAKE_Q_obstacle": "What gets in your way most? For example: starting things, time, organising, focus, remembering, motivation, sleep or stress. Your own words are fine.",
-        "INTAKE_Q_strength": "What are you good at, or what has helped you get things done in the past?",
-        "INTAKE_Q_rhythm": "What does a typical day look like: when do you wake up and go to bed, and what takes most of your day?",
-        "INTAKE_Q_mood": "Last one: how have you been feeling lately, mood and stress wise? If it has been heavy, it's okay to say so.",
-        "INTAKE_ACK": "Thanks.",
-        "INTAKE_DONE": "Thanks, that helps a lot. I've saved a short profile (see /notes). Here's how this works: tell me what's on your mind any time, and we'll set a goal and one small step each week.",
-        "INTAKE_STOPPED": "Okay, we'll stop here. What you told me is saved (see /notes). Tell me what's on your mind any time, send /goal when you want to set a goal, or /intake to carry on with the questions.",
-        "INTAKE_MOOD_HEAVY": "Thank you for telling me. That sounds heavy. Coaching can help with the practical side, but it isn't a substitute for treatment: if this has lasted a while, please consider talking to a doctor or therapist as well. I'm here either way.",
         "PROFILE_HEADER": "About you (from our first chat)",
         "PROFILE_why": "Why you came",
         "PROFILE_tried": "What you've tried",
@@ -269,23 +199,9 @@ STRINGS = {
         "PROFILE_strength": "Your strengths",
         "PROFILE_rhythm": "Your day",
         "PROFILE_mood": "Mood",
-        "TZ_ASSUMED": "Got it. It's {time} where you are right now, right?",
-        "TZ_VERIFIED": "Great, thanks.",
-        "TZ_ASK_TIME": "Sorry about that. What time is it where you are right now? For example 15:30 or 3:30pm.",
-        "TZ_FIXED": "Thanks, I've fixed it. It's {time} where you are now.",
-        "TZ_TIME_RETRY": "I couldn't read that. Tell me the time like 15:30 or 3:30pm, or the name of your city.",
-        "TZ_GIVE_UP": "No problem, I'll leave it for now. Set it any time with /timezone Europe/Athens; check-ins start once it's set.",
+        "TZ_ASSUMED": "Got it, I've set your timezone to {zone}: it's {time} there now. If that's off, just tell me.",
         "CHECKINS_ENABLED": "I'll check in after about {minutes} minutes of quiet, and less often if you don't reply. /interval off stops it, /interval 60 spaces it out.",
-        "GOAL_ASK_INTAKE": 'You mentioned: "{obstacle}". Let\'s set a goal together. Here are three ideas:\n\n1) {a}\n2) {b}\n3) {c}\n\nReply 1, 2 or 3, or tell me your own goal in a sentence. You can also say "skip".',
-        "TZ_ASK_LAST": 'One last thing so this works around your day: where do you live? Tell me your city (or country) and I\'ll set your timezone, so reminders and check-ins land at the right time. You can also say "skip".',
-        "HANDOFF": 'You\'re all set. Talk to me whenever something gets in the way or you want a nudge, for example "I can\'t get started" or "I\'m overwhelmed".',
-        "HANDOFF_STEP": 'Your step this week: "{step}". Tell me when you plan to do it and I\'ll remind you.',
-        "HANDOFF_NO_STEP": "Send /step when you want to pick this week's step.",
-        "HANDOFF_NO_GOAL": "Send /goal whenever you want to set a goal.",
-        "HANDOFF_NO_TZ": "Check-ins start once you set your timezone with /timezone.",
         "THAT_GOAL": "that goal",
-        "GOAL_ASK_OPEN": "Let's set a goal together. What's one thing you'd most like to change or get better at? A sentence or two is plenty, or say \"skip\".",
-        "GOAL_ASK_OPEN_INTAKE": 'You mentioned: "{obstacle}". Let\'s turn that into a goal. What would you most like to change first? A sentence is enough, or say "skip".',
         "UNSUPPORTED": "I can only read text messages for now. Could you type it out?",
     },
 }

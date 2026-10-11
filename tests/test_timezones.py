@@ -88,80 +88,56 @@ async def test_the_question_is_asked_once_after_a_few_messages(new_user):
     assert "where do you live" not in await say("and my desk is a mess here")  # not asked twice
 
 
-async def test_a_city_is_taken_as_correct_and_only_the_local_time_is_shown(new_user):
+async def test_a_city_is_taken_as_correct_and_the_zone_and_local_time_are_shown(new_user):
     await ask(new_user)
     reply = await say("Athens")
-    assert re.search(r"It's \d\d:\d\d where you are right now, right\?", reply) and "Europe/Athens" not in reply
+    assert re.search(r"set your timezone to Europe/Athens: it's \d\d:\d\d there now", reply)
     user = db.get_user(new_user)
-    assert (user["tz"], user["tz_set"], flows.get(new_user)["step"]) == (
-        "Europe/Athens",
-        1,
-        "verify",
-    )  # in use immediately, not after a yes
+    assert (user["tz"], user["tz_set"], user["tz_state"]) == ("Europe/Athens", 1, "done")
+    assert flows.get(new_user) is None  # nothing is waiting for a "yes"
     assert user["interval_min"] == 30 and "30 minutes of quiet" in reply  # check-ins switch on, and the user is told how to change them
-    assert "Great, thanks" in await say("yes")
-    assert db.get_user(new_user)["tz_state"] == "done" and db.get_user(new_user)["tz"] == "Europe/Athens"
 
 
-async def test_carrying_on_without_answering_counts_as_agreeing(new_user):
+async def test_a_wrong_zone_is_fixed_by_the_coach_with_the_tool_from_a_place_or_the_time(new_user):
+    import json
+
+    from duecoach import tools
+
     await ask(new_user)
     await say("Athens")
-    assert await say("anyway, about my keys") == "coached"
-    assert db.get_user(new_user)["tz_state"] == "done" and db.get_user(new_user)["tz"] == "Europe/Athens"
+    assert await say("no, I'm in Dubai") == "coached"  # ordinary chat now: the model fixes it
+    assert tools.run_tool(new_user, "set_timezone", json.dumps({"name": "Asia/Dubai"})).startswith("ok")
+    assert db.get_user(new_user)["tz"] == "Asia/Dubai"
+    assert tools.run_tool(new_user, "set_timezone", json.dumps({"local_time": clock_in("Asia/Tokyo")})).startswith("ok")
+    now = datetime.now()
+    assert ZoneInfo(db.get_user(new_user)["tz"]).utcoffset(now) == ZoneInfo("Asia/Tokyo").utcoffset(now)  # same clock as Tokyo
 
 
-async def test_a_no_leads_to_asking_the_time_and_the_right_zone_is_worked_out_from_it(new_user):
-    await ask(new_user)
-    await say("Athens")
-    assert "What time is it where you are" in await say("no")
-    reply = await say(clock_in("Asia/Tokyo"))
-    assert "I've fixed it" in reply and clock_in("Asia/Tokyo") in reply
-    user = db.get_user(new_user)
-    assert user["tz_state"] == "done" and ZoneInfo(user["tz"]).utcoffset(datetime.now()) is not None
-    assert datetime.now(ZoneInfo(user["tz"])).utcoffset() == datetime.now(ZoneInfo("Asia/Tokyo")).utcoffset()  # same clock as Tokyo
+async def test_the_time_fix_prefers_the_same_country_as_the_current_zone(new_user):
+    import json
 
+    from duecoach import tools
 
-async def test_the_corrected_zone_prefers_the_same_country_as_the_first_guess(new_user):
     await ask(new_user)
     await say("New York")
-    await say("no")
-    await say(clock_in("America/Chicago"))
-    assert db.get_user(new_user)["tz"] == "America/Chicago"  # not some other zone that happens to share the clock
+    tools.run_tool(new_user, "set_timezone", json.dumps({"local_time": clock_in("America/Chicago")}))
+    assert db.get_user(new_user)["tz"] == "America/Chicago"
 
 
-async def test_a_half_hour_zone_is_found_too(new_user):
-    await ask(new_user)
-    await say("Athens")
-    await say("no")
-    await say(clock_in("Asia/Kolkata"))
-    assert db.get_user(new_user)["tz"] == "Asia/Kolkata"
+async def test_a_time_that_gives_no_zone_or_no_arguments_is_an_error(new_user):
+    import json
 
+    from duecoach import tools
 
-@pytest.mark.parametrize("answer", ["no, I'm in Dubai", "No it's Dubai", "Dubai"])
-async def test_a_no_with_a_place_in_it_is_taken_as_the_correction(new_user, answer):
-    await ask(new_user)
-    await say("Athens")
-    reply = await say(answer)
-    assert "where you are right now, right?" in reply and "check in after" not in reply  # not re-announced: they were told already
-    assert db.get_user(new_user)["tz"] == "Asia/Dubai"
-
-
-async def test_when_the_correction_cannot_be_worked_out_the_timezone_is_withdrawn(new_user):
-    await ask(new_user)
-    await say("Athens")
-    await say("no")
-    assert "I couldn't read that" in await say("hmm not sure")
-    reply = await say("dunno")
-    assert "I'll leave it for now" in reply
-    user = db.get_user(new_user)
-    assert (user["tz_set"], user["interval_min"], user["tz_state"]) == (0, 0, "skipped")  # no wrong clock, no night-time pings
+    assert tools.run_tool(new_user, "set_timezone", json.dumps({"local_time": "banana"})).startswith("error")
+    assert tools.run_tool(new_user, "set_timezone", json.dumps({})).startswith("error")
 
 
 async def test_a_country_with_several_clocks_asks_for_a_city_first(new_user):
     await ask(new_user)
     assert "spans several timezones" in await say("United States")
     assert db.get_user(new_user)["tz_set"] == 0
-    assert "where you are right now, right?" in await say("Chicago")
+    assert "timezone to America/Chicago" in await say("Chicago")
     assert db.get_user(new_user)["tz"] == "America/Chicago"
 
 
@@ -214,12 +190,10 @@ async def test_greek_conversation(new_user):
     seed_history(new_user)
     assert "πού μένεις" in await say("γεια")
     reply = await say("Θεσσαλονίκη")
-    assert "σωστά;" in reply and "Europe/Athens" not in reply and "30 λεπτά" in reply
-    assert "Τι ώρα είναι εκεί" in await say("όχι")
-    assert "το διόρθωσα" in await say(clock_in("Asia/Tokyo"))
+    assert "Europe/Athens" in reply and "όρισα τη ζώνη ώρας" in reply and "30 λεπτά" in reply
 
 
-async def test_crisis_wording_while_the_local_time_is_being_checked_keeps_the_zone_and_ends_the_question(new_user):
+async def test_crisis_wording_after_the_zone_was_set_keeps_the_zone(new_user):
     await ask(new_user)
     await say("Athens")
     assert "112" in await say("I want to die")

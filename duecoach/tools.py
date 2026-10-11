@@ -5,7 +5,7 @@ import time
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 
-from . import db
+from . import db, timezones
 from .config import CHECKIN_INTERVAL_MINUTES
 
 MAX_REMINDER_MINUTES = 60 * 24 * 30
@@ -58,9 +58,13 @@ TOOLS = [
     ),
     _fn(
         "set_timezone",
-        "Save the user's timezone once they've told you their city or region. Needed before check-ins can be turned on.",
-        {"name": {"type": "string", "description": "IANA timezone name such as Europe/Athens or America/New_York."}},
-        ["name"],
+        "Save or correct the user's timezone: when they tell you their city or region, or say the one saved is wrong. Give the IANA name, "
+        "or, if they only tell you what time it is for them, local_time. Needed before check-ins can be turned on.",
+        {
+            "name": {"type": "string", "description": "IANA timezone name such as Europe/Athens or America/New_York."},
+            "local_time": {"type": "string", "description": "Their clock right now, such as 15:30 or 3:30pm (use instead of name)."},
+        },
+        [],
     ),
     _fn(
         "set_checkins",
@@ -180,7 +184,15 @@ def _cancel_reminder(uid: int, a: dict) -> str:
 
 
 def _set_timezone(uid: int, a: dict) -> str:
-    name = _text(a, "name")
+    name = str(a.get("name") or "").strip()
+    if not name and a.get("local_time"):
+        clock = timezones.parse_clock(str(a["local_time"]))
+        found = clock and timezones.zone_for_offset(timezones.offset_from_clock(*clock), near=db.get_user(uid)["tz"])
+        if not found:
+            return "error: could not work out a timezone from that time; ask for their city"
+        name = found
+    if not name:
+        return "error: give name or local_time"
     try:
         ZoneInfo(name)
     except Exception:
@@ -284,7 +296,7 @@ def coaching_state(user_id: int) -> str:
     zone = _local_zone(user_id)
     local = datetime.now(zone)
     tz_note = (
-        "confirmed by the user"
+        "set from what the user told us; if they say it is wrong, correct it with set_timezone"
         if user["tz_set"]
         else "NOT confirmed yet (the system asks for it and switches check-ins on once it is set; do not ask yourself)"
     )
@@ -297,7 +309,7 @@ def coaching_state(user_id: int) -> str:
         f"Now: {local.strftime('%A %Y-%m-%d %H:%M')} local time ({user['tz']}, {tz_note}). Check-ins: {checkins}.",
         f"Coaching record (week {weeks} of working together):",
     ]
-    lines.append("Goals:" if goals else "Goals: none yet, so you are in the intake stage.")
+    lines.append("Goals:" if goals else "Goals: none yet (get to know them first; offer a goal when they have named a struggle or a wish).")
     lines += [f"  #{g['id']} {g['text']}" for g in goals]
     lines.append("Open objectives:" if open_obj else "Open objectives: none.")
     for o in open_obj:
@@ -329,7 +341,7 @@ def coaching_state(user_id: int) -> str:
     }
     told = {label: answer for label, answer in told.items() if answer}
     if told:
-        lines.append("What they told you at intake (their words; use it, don't re-ask):")
+        lines.append("What they told you in the early interview (their words; use it, don't re-ask):")
         lines += [f"  {label}: {answer}" for label, answer in told.items()]
         if profile.get("mood_heavy"):
             lines.append("  (they described a heavy mood: stay gentle, and encourage professional support if it persists)")

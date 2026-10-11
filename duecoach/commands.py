@@ -7,15 +7,7 @@ from . import db, flows, prompts, ratelimit, strings
 from .chat import coach, privacy, say
 from .config import CHECKIN_INTERVAL_MINUTES
 
-
-async def _goal(uid, args):
-    if len(db.active_goals(uid)) >= db.MAX_GOALS:
-        return say(uid, "GOAL_FULL")
-    return await flows.start_goal(uid)
-
-
-async def _step(uid, args):
-    return await flows.start_objective(uid)
+PROFILE_TOPICS = ("why", "tried", "obstacle", "strength", "rhythm", "mood")  # kept from the interview that early users went through
 
 
 async def _help(uid, args):
@@ -78,17 +70,13 @@ async def _progress(uid, args):
 
 def _profile_text(uid: int) -> str:
     profile = db.get_profile(uid)
-    lines = [f"{say(uid, f'PROFILE_{topic}')}: {profile[topic]}" for topic in flows.INTAKE_STEPS if profile.get(topic)]
+    lines = [f"{say(uid, f'PROFILE_{topic}')}: {profile[topic]}" for topic in PROFILE_TOPICS if profile.get(topic)]
     return f"{say(uid, 'PROFILE_HEADER')}:\n" + "\n".join(lines) if lines else ""
 
 
 async def _notes(uid, args):
     parts = [part for part in (_profile_text(uid), db.get_notes(uid)) if part]
     return "\n\n".join(parts) or say(uid, "NOTES_EMPTY")
-
-
-async def _intake(uid, args):
-    return flows.start_intake(uid, restart=True)
 
 
 async def _forget(uid, args):
@@ -115,6 +103,7 @@ async def _privacy(uid, args):
 
 async def agree(uid, args):
     db.set_field(uid, "consent_at", time.time())
+    flows.ask_timezone(uid)  # the greeting ends with the timezone question, so the flow is opened here
     return say(uid, "AGREED")
 
 
@@ -194,9 +183,6 @@ COMMANDS = {
     "timezone": _timezone,
     "language": _language,
     "interval": _interval,
-    "goal": _goal,
-    "step": _step,
-    "intake": _intake,
     "morning": _checkin("morning"),
     "evening": _checkin("evening"),
     "privacy": _privacy,

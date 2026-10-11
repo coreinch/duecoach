@@ -14,7 +14,6 @@ os.environ.update(
 import pytest  # noqa: E402
 
 from duecoach import core, db, llm, ratelimit  # noqa: E402
-from duecoach.flows import goal_ideas  # noqa: E402
 
 
 @pytest.fixture(autouse=True)
@@ -23,7 +22,6 @@ def database(tmp_path):
     db.init(str(tmp_path / "duecoach.db"))
     core._locks.clear()
     ratelimit.reset()
-    goal_ideas._prefetched.clear()  # background goal-idea jobs belong to the event loop of the test that started them
     yield
     db.close()
 
@@ -42,5 +40,5 @@ def no_real_model(monkeypatch):
 def user():
     """A Telegram user who has agreed to the privacy notice and confirmed their timezone."""
     row = db.get_or_create_user("telegram", "1001", "1001", "en")
-    db.set_fields(1001, consent_at=1.0, tz_set=1, intake_state="done")
+    db.set_fields(1001, consent_at=1.0, tz_set=1)
     return db.get_user(row["user_id"])
