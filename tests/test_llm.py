@@ -197,3 +197,48 @@ async def test_the_check_in_trigger_says_a_goodbye_in_the_chat_is_over(model, us
 def test_markdown_is_stripped_but_plain_text_is_left_alone():
     raw = "**Phase 1** foundations\n## Next\n* buy the domain\n- keep this 2*3 and __that__"
     assert llm._plain(raw) == "Phase 1 foundations\nNext\n- buy the domain\n- keep this 2*3 and that"
+
+
+LEAK = '[Calling set_reminder with parameter at = "2026-10-11 07:00", message = "Ξυπνητήρι 7:00", daily = false]'
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        LEAK,
+        "Sure. set_reminder(minutes=5)",
+        '{"name": "add_goal", "arguments": {}}',
+        "<tool_call>x</tool_call>",
+        "I will call save_to_toolbox now.",
+    ],
+)
+def test_tool_calls_written_as_text_are_recognised(text):
+    assert llm._leaked_call(text)
+
+
+@pytest.mark.parametrize("text", ["I'll remind you at 7:00.", "Θα σου θυμίσω στις 9:00 για τα φάρμακα.", "Calling it a day is fine too."])
+def test_ordinary_replies_are_not_mistaken_for_tool_calls(text):
+    assert not llm._leaked_call(text)
+
+
+async def test_a_check_in_that_writes_a_tool_call_is_redrawn_and_never_sent(model, user):
+    model.queue += [message(LEAK), message("Good morning. What is the first thing you want to do today?")]
+    assert await llm.reply(1001, "", llm.prompts.MORNING) == "Good morning. What is the first thing you want to do today?"
+    model.queue += [message(LEAK)] * 3
+    with pytest.raises(llm.ModelError):
+        await llm.reply(1001, "", llm.prompts.PULSE)
+    assert not any("Calling" in m["content"] for m in db.recent_messages(1001, 9))
+
+
+async def test_a_chat_reply_that_writes_a_tool_call_gets_the_apology_not_the_call(model, user):
+    model.queue += [message(LEAK)] * 3
+    out = await llm.reply(1001, "remind me at 7")
+    assert out == llm.strings.t("en", "EMPTY_REPLY") and "Calling" not in out
+
+
+def test_stored_leaks_and_old_flow_markers_are_not_shown_to_the_model_again(user):
+    db.add_message(1001, "user", "(step result) missed, barrier: something else")
+    db.add_message(1001, "assistant", LEAK)
+    db.add_message(1001, "user", "(finished the intake interview)")
+    db.add_message(1001, "user", "hello")
+    assert llm._history(1001) == [{"role": "user", "content": "hello"}]

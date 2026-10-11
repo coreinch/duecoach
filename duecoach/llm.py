@@ -49,6 +49,9 @@ def _history(user_id: int) -> list[dict]:
     """Recent chat for the model, keeping at most a couple of assistant messages in a row (the latest ones)."""
     out: list[dict] = []
     for msg in db.recent_messages(user_id, HISTORY_TURNS):
+        # stored text that must not be shown to the model: it would copy it (a leaked tool call) or take it for something the user said
+        if (msg["role"] == "assistant" and _leaked_call(msg["content"])) or (msg["role"] == "user" and _MARKER.match(msg["content"])):
+            continue
         out.append(msg)
         run = 0
         for m in reversed(out):
@@ -67,6 +70,12 @@ _SIGN_OFF = re.compile(
     r"καληνύχτα|καλό βράδυ|τα λέμε αύριο",
     re.IGNORECASE,
 )
+# A tool call written as text instead of made ("[Calling set_reminder with parameter at = ...]"): no tool name ever belongs in a message
+# to the user, and the check-in turn has no tools at all, so the model sometimes "calls" one in words.
+_TOOL_NAMES = "|".join(t["function"]["name"] for t in tools.TOOLS)
+_LEAKED_CALL = re.compile(rf"\b(?:{_TOOL_NAMES})\b|<\s*/?\s*(?:tool_call|function_call|invoke)\b|\[\s*calling\s+\w+", re.IGNORECASE)
+# Old stored markers of the removed scripted flows, which are not things the user wrote
+_MARKER = re.compile(r"^\((?:finished the intake interview|step result)")
 _QUESTION_ENDINGS = ("?", ";", "\u037e")
 _MARKDOWN = [
     (re.compile(r"\*\*(.+?)\*\*|__(.+?)__", re.DOTALL), lambda m: m.group(1) or m.group(2)),
@@ -80,6 +89,10 @@ def _plain(text: str) -> str:
     for pattern, repl in _MARKDOWN:
         text = pattern.sub(repl, text)
     return text
+
+
+def _leaked_call(text: str) -> bool:
+    return bool(_LEAKED_CALL.search(text))
 
 
 def _unfit_checkin(text: str, instruction: str | None) -> bool:
@@ -169,13 +182,17 @@ async def reply(user_id: int, user_text: str, instruction: str | None = None) ->
         text = (msg.content or "").strip()
         truncated = getattr(msg, "finish_reason", None) == "length"
         if not msg.tool_calls:
-            unfit = bool(text) and not user_text and _unfit_checkin(text, instruction)
+            unfit = bool(text) and (_leaked_call(text) or (not user_text and _unfit_checkin(text, instruction)))
             if (text and not truncated and not unfit) or empty_retries >= MAX_EMPTY_RETRIES:
                 break
             empty_retries += (
                 1  # the model sometimes returns only hidden reasoning, stops mid-sentence, or (check-in) says goodbye: ask again
             )
-            log.warning("%s model reply, retrying (%d)", "unfit check-in" if unfit else "cut-off" if text else "empty", empty_retries)
+            log.warning(
+                "%s model reply, retrying (%d)",
+                "leaked tool call or unfit check-in" if unfit else "cut-off" if text else "empty",
+                empty_retries,
+            )
             continue
         messages.append(
             {
@@ -195,6 +212,11 @@ async def reply(user_id: int, user_text: str, instruction: str | None = None) ->
             messages.append({"role": "tool", "tool_call_id": call.id, "content": result})
     if truncated and text:
         text = _trim_to_sentence(text)
+    if text and _leaked_call(text):
+        if user_text:
+            text = ""  # the apology below; a tool call written out is never shown to the user
+        else:
+            raise ModelError("the check-in contained a tool call written as text")
     if not user_text and text and _unfit_checkin(text, instruction):
         raise ModelError("the check-in was a goodbye or too short to coach")  # nothing is sent; the caller backs off and tries later
     text = _plain(text)

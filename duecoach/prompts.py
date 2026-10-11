@@ -96,7 +96,8 @@ TOOL_GUARD = (
 # may act on it again (sets the reminder they asked for hours ago, or says "your timer is up").
 PROACTIVE_GUARD = (
     "This is a check-in you are starting yourself. The user has written nothing new, and no tools are available this turn: don't say "
-    "you set, saved or changed anything, and don't act on, repeat or answer an earlier request of theirs (such as a timer or reminder "
+    "you set, saved or changed anything or that you WILL set a reminder (the reminders listed in the record are the only ones that exist), "
+    "never write a tool call or a tool name, and don't act on, repeat or answer an earlier request of theirs (such as a timer or reminder "
     "they asked for before)."
 )
 
