@@ -1,4 +1,4 @@
-"""Where a flow is stored (one JSON value on the user row), and the yes/no/skip word lists."""
+"""Where a flow is stored (one JSON value on the user row), and the no/skip word lists."""
 
 import json
 import time
@@ -6,9 +6,6 @@ import time
 from .. import db, strings
 
 FLOW_TTL = 24 * 3600
-
-
-YES = {"yes", "y", "yeah", "yep", "yup", "correct", "right", "ok", "okay", "sure", "ναι", "ν", "σωστα", "σωστο", "ενταξει", "οκ"}
 
 
 NO = {"no", "n", "nope", "wrong", "incorrect", "no thanks", "οχι", "λαθος", "οχι ευχαριστω"}

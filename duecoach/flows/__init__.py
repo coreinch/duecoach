@@ -9,27 +9,22 @@ rest of the bot uses.
 """
 
 from ..timezones import normalize
-from .moments import QUESTION_GAP, is_crisis, note_question_asked, question_blocked
+from .moments import is_crisis
 from .state import FLOW_TTL, clear, get, put
 from .timezone import answer as timezone_answer
 from .timezone import ask as ask_timezone
 from .timezone import pending as timezone_pending
 from .timezone import settle as settle_timezone
-from .timezone import should_ask as should_ask_timezone
 
 __all__ = [
     "FLOW_TTL",
-    "QUESTION_GAP",
     "answer",
     "ask_timezone",
     "clear",
     "get",
     "is_crisis",
-    "note_question_asked",
     "put",
-    "question_blocked",
     "settle_timezone",
-    "should_ask_timezone",
     "timezone_pending",
 ]
 
@@ -37,6 +32,9 @@ __all__ = [
 async def answer(uid: int, text: str) -> str | None:
     """Handle the user's reply to the question in progress. None: it was ordinary chat, let the coach answer."""
     state = get(uid)
-    if state is None or state["flow"] != "timezone":
+    if state is None:
+        return None
+    if state["flow"] != "timezone":  # a question of a flow that no longer exists, left over from an earlier version
+        clear(uid)
         return None
     return await timezone_answer(uid, state, text, normalize(text))

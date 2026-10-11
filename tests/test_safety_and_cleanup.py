@@ -1,15 +1,12 @@
 import time
 from types import SimpleNamespace
 
-import httpx
 import pytest
 import telegram.error
 
 from duecoach import bot, channels, core, db, flows, llm
 from duecoach.channels import SendError, Unreachable
 from duecoach.channels.telegram import TelegramChannel
-from duecoach.channels.viber import ViberChannel
-from duecoach.channels.whatsapp import WhatsAppChannel
 
 
 @pytest.fixture
@@ -56,9 +53,6 @@ class Gone:
         self.error = error
         self.sent = 0
 
-    def can_send(self, user, template_ok=True):
-        return True
-
     async def send(self, user, text):
         self.sent += 1
         raise self.error
@@ -82,8 +76,6 @@ def due_checkin_user(uid=3003):
         row["user_id"],
         consent_at=1.0,
         tz_set=1,
-        intake_state="done",
-        onboarded=1,
         interval_min=30,
         tz="Europe/Athens",
         morning_hour=0,
@@ -122,9 +114,6 @@ async def test_reminders_for_unreachable_people_are_dropped_and_the_rest_retried
     class Mixed:
         name = "telegram"
 
-        def can_send(self, user, template_ok=True):
-            return True
-
         async def send(self, user, text):
             if user["user_id"] == blocked:
                 raise Unreachable("blocked")
@@ -156,26 +145,6 @@ async def test_telegram_blocked_and_missing_chats_are_unreachable_other_errors_a
         await failing(telegram.error.BadRequest("Message is too long"))
     with pytest.raises(telegram.error.NetworkError):
         await failing(telegram.error.NetworkError("timeout"))
-
-
-def mock_http(status_code, body):
-    return httpx.AsyncClient(transport=httpx.MockTransport(lambda request: httpx.Response(status_code, json=body)))
-
-
-@pytest.mark.parametrize(("status", "expected"), [(6, Unreachable), (5, Unreachable), (12, SendError)])
-async def test_viber_unsubscribed_receivers_are_unreachable(status, expected):
-    viber = ViberChannel("tok", "Coach", mock_http(200, {"status": status, "status_message": "x"}))
-    with pytest.raises(expected) as error:
-        await viber.send({"chat_id": "abc"}, "hi")
-    assert isinstance(error.value, Unreachable) is (expected is Unreachable)
-
-
-@pytest.mark.parametrize(("code", "expected"), [(131026, Unreachable), (131047, SendError), (190, SendError)])
-async def test_whatsapp_undeliverable_numbers_are_unreachable_but_a_closed_window_is_not(code, expected):
-    wa = WhatsAppChannel("tok", "PHONE", "v", "s", "", mock_http(400, {"error": {"code": code}}))
-    with pytest.raises(expected) as error:
-        await wa.send({"chat_id": "3069", "last_inbound": time.time(), "lang": "en"}, "hi")
-    assert isinstance(error.value, Unreachable) is (expected is Unreachable)
 
 
 # --- data kept only as long as it is needed ------------------------------------------------------------------------------------

@@ -2,7 +2,7 @@
 
 From what you meant to do to what you did.
 
-Duecoach is an ADHD coach in your chat app, on Telegram, Viber and WhatsApp (Greek and English), built around follow-through. It coaches with a structured method — goals,
+Duecoach is an ADHD coach in your chat app, on Telegram (Greek and English), built around follow-through. It coaches with a structured method — goals,
 small weekly objectives, barrier analysis, a toolbox of what works, a weekly review — with a 54-card playbook of strategies in
 the prompt of every reply (one model call per message). New users are asked for their timezone first and then talk freely: the coach learns about them, sets goals and weekly steps
 and follows up on them in conversation, saving them with tools. Once the timezone is known, the bot checks in after 30 minutes of silence
@@ -25,9 +25,7 @@ docker compose logs -f
 
 - The database lives in the `data` volume (named `<project>_data`, i.e. `duecoach_data` on the server) (`/data/coach.db`). Back that volume up.
 - `GET /healthz` on port 8080 reports 503 when the reminder or check-in loop stops (the container's healthcheck uses it) and shows
-  which models are cooling down after failures; a model outage alone does not fail it.
-- Viber and WhatsApp need a public HTTPS address in front of port 8080 (reverse proxy or tunnel) and `PUBLIC_URL` in `.env`.
-  Telegram works without one.
+  the model in use; a model outage alone does not fail it.
 - Only one instance can use a database (a lock file enforces it). Don't run the bot twice with the same Telegram token.
 - The container runs as an unprivileged user with a read-only root filesystem; `docker-compose.yml` has the details.
 
@@ -66,7 +64,6 @@ Runs on the same branch are queued, never cancelled, so the newest commit is alw
 | `ALLOWED_USERS` | who may use the bot, e.g. `telegram:123`. **Required** unless the `OPEN_ACCESS` variable is `true`: the deploy refuses to run with it empty |
 | `OPEN_ACCESS` (repository *variable*, not secret) | set to `true` to let everyone use the bot in production; it overrides `ALLOWED_USERS`. Everyone then shares your model quota and their chats are stored |
 | `LLM_MODEL` | optional, defaults to `MiniMax-M3`. The bot uses this one model; it must support tool calling. Another OpenAI-compatible provider works via the `LLM_BASE_URL` repository variable (default `https://api.minimax.io/v1`) and its key in `LLM_API_KEY` |
-| `VIBER_AUTH_TOKEN`, `WHATSAPP_*`, `PUBLIC_URL` | optional, only for those channels |
 
 Set them with `gh secret set NAME -R coreinch/duecoach`.
 
@@ -108,7 +105,7 @@ crisis answer), `duecoach/flows/` (the one bot-led conversation, the timezone qu
 `moments` deciding when it may be asked and spotting crisis wording, and `state` where a flow is stored), `duecoach/llm.py` (model calls,
 tool loop), `duecoach/tools.py` and `duecoach/playbook.py` (what the coach can do and the strategy cards),
 `duecoach/prompts.py` and `duecoach/strings.py` (model prompts, fixed texts in both languages), `duecoach/bot.py` (reminders, check-ins,
-housekeeping, startup), `duecoach/channels/` (Telegram, Viber, WhatsApp), `duecoach/db.py` (SQLite, numbered migrations). The Docker base image is pinned by digest; Dependabot proposes updates.
+housekeeping, startup), `duecoach/channels/` (Telegram), `duecoach/db.py` (SQLite, numbered migrations). The Docker base image is pinned by digest; Dependabot proposes updates.
 
 ## Licence
 

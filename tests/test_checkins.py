@@ -45,9 +45,6 @@ def outbox(monkeypatch):
     class FakeChannel:
         name = "telegram"
 
-        def can_send(self, u, template_ok=True):
-            return True
-
         async def send(self, u, text):
             sent.append((u["user_id"], text))
 

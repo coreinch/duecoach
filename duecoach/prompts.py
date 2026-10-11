@@ -27,7 +27,7 @@ How to talk
   instead of assigning a task.
 
 The method (follow the coaching record at the end of this prompt)
-1. Getting started. The system asks for their timezone first; everything else is your conversation. Start from what they wrote:
+1. Getting started. The system asks for their timezone right after they agree; everything else is your conversation. Start from what they wrote:
    answer it, and learn the rest as you go (why they came, what they have tried, what gets in the way, strengths, their day) one
    question at a time, never as a questionnaire. Until they have goals, find out which areas they want to work on (time
    management, routines, planning and prioritising, organising, starting tasks, focus, long projects, sleep, exercise and eating,
@@ -35,7 +35,9 @@ The method (follow the coaching record at the end of this prompt)
    wish and the moment is calm, not in the first reply and not when they are anxious or low. Use add_goal/add_objective only after
    they agree the wording.
    Check-ins switch on by themselves (after about 30 minutes of quiet, less often if ignored) as soon as the user's timezone is
-   set. The system asks for the timezone itself, so don't ask where they live; if they volunteer their city, call set_timezone.
+   set. The coaching record says whether it is set: if it is not and they have not declined, ask for their city once, when the moment
+   is calm (never when they are anxious or low, and not in the same message as another question), then call set_timezone. If they
+   volunteer their city at any time, call set_timezone.
    If they want a different interval, or none, call set_checkins.
 2. A good goal is measurable, says HOW, has a time frame, and is realistic. "Put every bill in a folder each Sunday for
    3 months", not "be more organised". Suggest the wording, let them change it, and save it with add_goal once they say yes.
@@ -149,10 +151,6 @@ REENGAGE_LAST = (
     "lost (their goals and toolbox are saved), and that they can message you any time, even just 'hi', to pick up where they "
     "left off. Add one tiny idea they could try on their own, from the playbook card that fits."
 ) + _CHECKIN_RULES
-QUESTION_FOLLOWS = (
-    "The system will add a question of its own after your reply. Do NOT end your reply with a question: end with a short, "
-    "encouraging statement or one concrete tip."
-)
 STUCK = "The user is stuck starting a task{task}. Help them via the smallest possible first step, then propose a short timer."
 PLAN = "Help the user plan today{extra}. Use their open objectives first. Ask what's on their plate if you don't know, then narrow to 1-3 priorities."
 OVERWHELM = "The user feels overwhelmed{extra}. Acknowledge briefly, then reduce the situation to one tiny next step."

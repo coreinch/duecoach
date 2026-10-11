@@ -259,15 +259,8 @@ USER_FIELDS = {
     "last_review",
     "tz_state",
     "flow_state",
-    "goal_asked_at",
-    "obj_asked_at",
-    "followup_asked_at",
-    "question_at_count",
     "profile",
-    "intake_state",
-    "intake_asked_at",
     "notes_at_count",
-    "onboarded",
 }
 
 
@@ -277,8 +270,7 @@ USER_FIELDS = {
 def get_or_create_user(channel: str, ext_id: str, chat_id: str, lang: str = "en") -> sqlite3.Row:
     """Find the user behind a channel identity, creating them on first contact.
 
-    Telegram users keep their Telegram id as internal id; users on other channels get negative ids so the two can't clash.
-    New users start with check-ins off, no consent and an unconfirmed timezone.
+    Users keep their Telegram id as internal id. New users start with check-ins off, no consent and an unconfirmed timezone.
     """
     row = get_user_by_identity(channel, ext_id)
     if row:
@@ -286,10 +278,7 @@ def get_or_create_user(channel: str, ext_id: str, chat_id: str, lang: str = "en"
             _conn.execute("UPDATE users SET chat_id=? WHERE user_id=?", (chat_id, row["user_id"]))
             _conn.commit()
         return get_user(row["user_id"])
-    if channel == "telegram":
-        user_id = int(ext_id)
-    else:
-        user_id = min(-1, (_conn.execute("SELECT MIN(user_id) FROM users").fetchone()[0] or 0) - 1)
+    user_id = int(ext_id)
     _conn.execute(
         "INSERT INTO users (user_id, channel, ext_id, chat_id, tz, lang, created_at, morning_hour, evening_hour, interval_min, tz_set)"
         " VALUES (?,?,?,?,?,?,?,?,?,0,0)",
@@ -306,10 +295,6 @@ def get_user(user_id: int) -> Any:
 
 def get_user_by_identity(channel: str, ext_id: str) -> sqlite3.Row | None:
     return _conn.execute("SELECT * FROM users WHERE channel=? AND ext_id=?", (channel, ext_id)).fetchone()
-
-
-def all_users() -> list[sqlite3.Row]:
-    return _conn.execute("SELECT * FROM users").fetchall()
 
 
 def users_for_checkins(now_ts: float) -> list[sqlite3.Row]:
@@ -349,11 +334,6 @@ def confirm_timezone(user_id: int, zone: str) -> bool:
     return switched_on
 
 
-def revoke_timezone(user_id: int) -> None:
-    """The user said the assumed timezone is wrong and we could not fix it: back to unconfirmed, with check-ins off again."""
-    set_fields(user_id, tz_set=0, interval_min=0)
-
-
 def get_profile(user_id: int) -> dict:
     """What the user said in the intake interview, by topic (why, tried, obstacle, strength, rhythm, mood)."""
     user = get_user(user_id)
@@ -362,10 +342,6 @@ def get_profile(user_id: int) -> dict:
     except ValueError:
         profile = {}
     return profile if isinstance(profile, dict) else {}
-
-
-def set_profile(user_id: int, profile: dict) -> None:
-    set_field(user_id, "profile", json.dumps(profile, ensure_ascii=False) if profile else "")
 
 
 def get_notes(user_id: int) -> str:
@@ -434,15 +410,6 @@ def prune_messages(retention_days: int, keep_last: int = 40) -> int:
     )
     _conn.commit()
     return cur.rowcount
-
-
-def mark_seen(key: str) -> bool:
-    """True the first time a webhook message id is seen. Webhooks are retried, so callers use this to drop duplicates."""
-    now = time.time()
-    _conn.execute("DELETE FROM seen_messages WHERE ts<?", (now - 3 * 86400,))
-    inserted = _conn.execute("INSERT OR IGNORE INTO seen_messages (key, ts) VALUES (?,?)", (key, now)).rowcount == 1
-    _conn.commit()
-    return inserted
 
 
 # --- reminders ---

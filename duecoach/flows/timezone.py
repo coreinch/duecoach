@@ -1,8 +1,8 @@
 """The timezone question, as a flow (its state lives in `flow_state` too).
 
-The bot asks for the user's city right after they agree to the privacy notice (and again after a few messages if it was never settled),
-because check-ins and "what time is it for you" depend on it; the model is not involved in the asking, so it can't forget to ask or
-invent a zone. A zone is taken as correct as soon as it is understood: the user is told the zone and the local time it implies. If it
+The bot asks for the user's city right after they agree to the privacy notice, because check-ins and "what time is it for you" depend
+on it; the model is not involved in the asking, so it can't forget to ask or invent a zone. If the question is never settled, the coach
+is told in its prompt and asks once itself. A zone is taken as correct as soon as it is understood: the user is told the zone and the local time it implies. If it
 is wrong they say so in ordinary chat and the coach fixes it with its set_timezone tool.
 
 The only step is `asked` (waiting for a city). The lasting outcome is the user's `tz_state`: "" (never settled), "done" (a zone is in
@@ -11,10 +11,8 @@ use) or "skipped" (they declined or it failed).
 
 from .. import db, timezones
 from ..config import CHECKIN_INTERVAL_MINUTES
-from .moments import note_question_asked
 from .state import NO, SKIP, clear, get, put, say
 
-ASK_AFTER_MESSAGES = 6  # chat messages stored (both sides), i.e. about three exchanges
 MAX_ANSWER_WORDS = 5  # longer messages are treated as ordinary chat, not as an answer to the question
 MAX_PLACE_WORDS = 2  # an unrecognised message longer than this is chat, not a misspelt city
 MAX_ATTEMPTS = 3  # tries at understanding a city before giving up
@@ -23,11 +21,6 @@ MAX_ATTEMPTS = 3  # tries at understanding a city before giving up
 def pending(uid: int) -> bool:
     state = get(uid)
     return bool(state and state["flow"] == "timezone")
-
-
-def should_ask(uid: int) -> bool:
-    user = db.get_user(uid)
-    return bool(user and not user["tz_set"] and not user["tz_state"] and db.message_count(uid) >= ASK_AFTER_MESSAGES and not get(uid))
 
 
 def settle(uid: int) -> None:
@@ -40,7 +33,6 @@ def settle(uid: int) -> None:
 def ask(uid: int, key: str = "TZ_ASK") -> str:
     """Start the question and return the text to send (`key` lets /agree use its own greeting that ends with the question)."""
     put(uid, "timezone", "asked", attempts=0)
-    note_question_asked(uid)
     return say(uid, key)
 
 

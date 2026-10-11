@@ -85,11 +85,6 @@ STRINGS = {
         "TZ_MULTI": "Η χώρα {country} έχει πολλές ζώνες ώρας. Ποια πόλη είναι πιο κοντά σου;",
         "TZ_RETRY": "Δεν κατάλαβα τη ζώνη ώρας από αυτό. Δοκίμασε μια μεγαλύτερη κοντινή πόλη, ή τη μορφή Περιοχή/Πόλη (π.χ. Europe/Athens), ή πες «παράλειψη».",
         "TZ_SKIPPED": "Κανένα πρόβλημα. Μπορείς να την ορίσεις όποτε θέλεις με /timezone Europe/Athens· τα check-in ξεκινούν μόλις οριστεί.",
-        "REVISE": "Τι θα άλλαζες;",
-        "FU_ASK": "Πώς πήγε αυτό: «{step}»;\nΑπάντησε 1 = έγινε, 2 = κατά μέρος, 3 = όχι ακόμα.",
-        "FU_AGAIN": "Απάντησε 1 (έγινε), 2 (κατά μέρος) ή 3 (όχι ακόμα).",
-        "FU_BARRIER": "Τι εμπόδισε;\n1 = ξέχασα\n2 = δεν ήξερα πώς\n3 = μπερδεύτηκα\n4 = το απέφευγα\n5 = δεν είχα κίνητρο\nΑπάντησε με αριθμό ή πες το με δικά σου λόγια.",
-        "FU_LATER": "Εντάξει, θα το ξαναδούμε.",
         "CRISIS": (
             "Λυπάμαι πολύ που νιώθεις έτσι, και χαίρομαι που μου το είπες. Μετράς και δεν χρειάζεται να το αντιμετωπίσεις μόνος ή μόνη. "
             "Αν υπάρχει πιθανότητα να πράξεις σύμφωνα με αυτές τις σκέψεις ή βρίσκεσαι σε κίνδυνο, κάλεσε τώρα τον τοπικό αριθμό έκτακτης "
@@ -106,7 +101,6 @@ STRINGS = {
         "PROFILE_mood": "Διάθεση",
         "TZ_ASSUMED": "Εντάξει, όρισα τη ζώνη ώρας {zone}: εκεί είναι τώρα {time}. Αν δεν είναι σωστό, πες μου.",
         "CHECKINS_ENABLED": "Θα σε ρωτάω αφού περάσουν περίπου {minutes} λεπτά ησυχίας, και πιο αραιά αν δεν απαντάς. Με /interval off σταματούν, με /interval 60 τα αραιώνεις.",
-        "THAT_GOAL": "αυτόν τον στόχο",
         "UNSUPPORTED": "Προς το παρόν διαβάζω μόνο γραπτά μηνύματα. Γράψε μου τι σκέφτεσαι;",
     },
     "en": {
@@ -180,11 +174,6 @@ STRINGS = {
         "TZ_MULTI": "{country} spans several timezones. Which city are you closest to?",
         "TZ_RETRY": 'I couldn\'t work out a timezone from that. Try a bigger nearby city, or the Area/City form like Europe/Athens, or say "skip".',
         "TZ_SKIPPED": "No problem. You can set it any time with /timezone Europe/Athens; check-ins start once it's set.",
-        "REVISE": "What would you change?",
-        "FU_ASK": 'How did this go: "{step}"?\nReply 1 = done, 2 = partly, 3 = not yet.',
-        "FU_AGAIN": "Please reply 1 (done), 2 (partly) or 3 (not yet).",
-        "FU_BARRIER": "What got in the way?\n1 = I forgot\n2 = I didn't know how\n3 = I got confused about it\n4 = I was avoiding it\n5 = I wasn't motivated\nReply with a number, or tell me in your own words.",
-        "FU_LATER": "Okay, we'll come back to it.",
         "CRISIS": (
             "I'm really sorry you're feeling this way, and I'm glad you told me. You matter, and you don't have to face this alone. "
             "If you might act on these thoughts or you're in danger, please call your local emergency number now (112 in the EU) or go to "
@@ -201,7 +190,6 @@ STRINGS = {
         "PROFILE_mood": "Mood",
         "TZ_ASSUMED": "Got it, I've set your timezone to {zone}: it's {time} there now. If that's off, just tell me.",
         "CHECKINS_ENABLED": "I'll check in after about {minutes} minutes of quiet, and less often if you don't reply. /interval off stops it, /interval 60 spaces it out.",
-        "THAT_GOAL": "that goal",
         "UNSUPPORTED": "I can only read text messages for now. Could you type it out?",
     },
 }

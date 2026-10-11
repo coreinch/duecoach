@@ -17,30 +17,14 @@ def _number(name: str, default: float, kind: type = int, low: float | None = Non
     return value
 
 
-# --- channels: a channel is enabled when its credentials are set ---
+# --- Telegram, and the web port for the health check ---
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "")
-VIBER_AUTH_TOKEN = os.getenv("VIBER_AUTH_TOKEN", "")
-VIBER_BOT_NAME = os.getenv("VIBER_BOT_NAME", "Duecoach")[:28]
-WHATSAPP_TOKEN = os.getenv("WHATSAPP_TOKEN", "")
-WHATSAPP_PHONE_NUMBER_ID = os.getenv("WHATSAPP_PHONE_NUMBER_ID", "")
-WHATSAPP_VERIFY_TOKEN = os.getenv("WHATSAPP_VERIFY_TOKEN", "")
-WHATSAPP_APP_SECRET = os.getenv("WHATSAPP_APP_SECRET", "")
-WHATSAPP_API_VERSION = os.getenv("WHATSAPP_API_VERSION", "v23.0")
-WHATSAPP_TEMPLATE = os.getenv("WHATSAPP_TEMPLATE", "")  # approved template with one {{1}} body variable
-
-# Viber and WhatsApp deliver messages to a public HTTPS webhook served by this process.
-PUBLIC_URL = os.getenv("PUBLIC_URL", "").rstrip("/")
 WEB_HOST = os.getenv("WEB_HOST", "127.0.0.1")
 WEB_PORT = _number("WEB_PORT", 8080, low=1, high=65535)
 
 
-def normalize_ext_id(channel: str, ext_id: str) -> str:
-    ext_id = str(ext_id).strip()
-    return "".join(c for c in ext_id if c.isdigit()) if channel == "whatsapp" else ext_id
-
-
 def _parse_allowed(raw: str) -> set[tuple[str, str]]:
-    """'telegram:123, whatsapp:+3069..., viber:abc=' -> {(channel, id)}. A bare number means a Telegram id."""
+    """'telegram:123, 456' -> {(channel, id)}. A bare number means a Telegram id."""
     allowed = set()
     for item in raw.replace(" ", "").split(","):
         if not item:
@@ -48,7 +32,7 @@ def _parse_allowed(raw: str) -> set[tuple[str, str]]:
         channel, sep, ext_id = item.partition(":")
         if not sep:
             channel, ext_id = "telegram", item
-        allowed.add((channel.lower(), normalize_ext_id(channel.lower(), ext_id)))
+        allowed.add((channel.lower(), ext_id))
     return allowed
 
 
@@ -57,7 +41,7 @@ ALLOWED = _parse_allowed(os.getenv("ALLOWED_USERS") or os.getenv("ALLOWED_USER_I
 
 
 def is_allowed(channel: str, ext_id: str) -> bool:
-    return not ALLOWED or (channel, normalize_ext_id(channel, ext_id)) in ALLOWED
+    return not ALLOWED or (channel, str(ext_id).strip()) in ALLOWED
 
 
 # One model, through any OpenAI-compatible API. The default is MiniMax-M3 (api.minimax.io); LLM_API_KEY is that provider's key.

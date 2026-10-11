@@ -1,31 +1,16 @@
-"""Talking to the coach: one model call per message, plus at most one question of the bot's own, and the crisis answer."""
+"""Talking to the coach: one model call per message, and the crisis answer."""
 
 import asyncio
 import logging
-import re
 import time
 
-from . import db, flows, llm, prompts
+from . import db, flows, llm
 from .config import CRISIS_HELP, INACTIVE_DELETE_DAYS, RETENTION_DAYS
 from .flows.state import say  # noqa: F401  (the fixed texts, in the user's language; re-exported for the commands)
 
 log = logging.getLogger("duecoach.chat")
 background: set[asyncio.Task] = set()  # fire-and-forget jobs (notes refresh); shutdown waits for them
 CRISIS_QUIET_SECONDS = 24 * 3600  # no proactive check-ins for a day after someone writes about harming themselves
-
-_SENTENCE_BREAK = re.compile(r"(?<=[.!?;;])\s+")
-_QUESTION_MARKS = ("?", ";", ";")  # the last one is the Greek question mark
-
-
-def without_trailing_question(reply: str) -> str:
-    """Drop the coach's closing question(s): when the bot adds a question of its own, the user must not get two in a row."""
-    text = reply.rstrip()
-    while text.endswith(_QUESTION_MARKS):
-        start_of_last = max((m.end() for m in _SENTENCE_BREAK.finditer(text)), default=0)
-        if start_of_last == 0:
-            break  # a single sentence: keep it rather than send an empty reply
-        text = text[:start_of_last].rstrip()
-    return text
 
 
 def _spawn(coro) -> None:
@@ -57,16 +42,6 @@ async def flow_answer(uid: int, text: str) -> str | None:
     return await flows.answer(uid, text)
 
 
-async def coach_with_question(uid: int, text: str) -> str:
-    """The coach's reply, plus the timezone question if it was never settled and this is a good moment."""
-    # Decide before the coach writes: if a question of ours will follow, the coach must not end with one of its own.
-    ask = not (flows.get(uid) or flows.question_blocked(uid, text)) and flows.should_ask_timezone(uid)
-    reply = await coach(uid, text, prompts.QUESTION_FOLLOWS if ask else None)
-    if not ask or reply == say(uid, "LLM_ERROR"):
-        return reply
-    return f"{without_trailing_question(reply)}\n\n{flows.ask_timezone(uid)}"
-
-
 def privacy(uid: int) -> str:
     """The privacy notice, with the retention periods this deployment actually uses (0 means kept for good, so not mentioned)."""
     keeping = ""
@@ -94,5 +69,4 @@ async def crisis(uid: int, text: str) -> str:
     db.add_message(uid, "user", text)
     db.add_message(uid, "assistant", reply)
     db.set_field(uid, "snooze_until", time.time() + CRISIS_QUIET_SECONDS)
-    flows.note_question_asked(uid)
     return reply

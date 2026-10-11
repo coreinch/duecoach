@@ -12,13 +12,6 @@ services:
     volumes:
       # The database. Named volume: survives redeploys and image updates.
       - data:/data
-{% if custom_domain | length > 0 %}
-    ports:
-      # Only for the Viber/WhatsApp webhooks, and 127.0.0.1-only: the nginx
-      # vhost is the one public entry point. A Telegram-only deployment
-      # (custom_domain blank) publishes no port at all.
-      - "127.0.0.1:{{ app_port }}:8080"
-{% endif %}
     # The image's own HEALTHCHECK (GET /healthz inside the container) still
     # applies; this only makes the first result arrive sooner after a deploy.
     healthcheck:

@@ -6,7 +6,7 @@ import time
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 
-from . import db, timezones
+from . import db, flows, timezones
 from .config import CHECKIN_INTERVAL_MINUTES
 
 MAX_REMINDER_MINUTES = 60 * 24 * 30
@@ -225,8 +225,6 @@ def _set_timezone(uid: int, a: dict) -> str:
     except Exception:
         return "error: unknown timezone; use an IANA name like Europe/Athens"
     switched_on = db.confirm_timezone(uid, name)
-    from . import flows  # here, not at the top: flows uses the model, which uses these tools
-
     flows.settle_timezone(uid)
     if switched_on:
         return f"ok: timezone set to {name}; check-ins were switched on automatically (about every {CHECKIN_INTERVAL_MINUTES} minutes of quiet): mention it briefly"
@@ -327,11 +325,15 @@ def coaching_state(user_id: int) -> str:
     goals, open_obj = db.active_goals(user_id), db.open_objectives(user_id)
     zone = _local_zone(user_id)
     local = datetime.now(zone)
-    tz_note = (
-        "set from what the user told us; if they say it is wrong, correct it with set_timezone"
-        if user["tz_set"]
-        else "NOT confirmed yet (the system asks for it and switches check-ins on once it is set; do not ask yourself)"
-    )
+    pending_tz = flows.timezone_pending(user_id)
+    if user["tz_set"]:
+        tz_note = "set from what the user told us; if they say it is wrong, correct it with set_timezone"
+    elif user["tz_state"] == "skipped":
+        tz_note = "NOT set: they declined to give it; don't ask again unless they bring it up"
+    elif pending_tz:
+        tz_note = "NOT set yet: the system has just asked for their city; don't ask again"
+    else:
+        tz_note = "NOT set yet: ask for their city once when it fits, then save it with set_timezone"
     checkins = (
         f"on, about every {user['interval_min']} min between {user['morning_hour']}:00 and {user['evening_hour']}:59"
         if user["interval_min"] and user["morning_hour"] >= 0 and user["evening_hour"] >= 0

@@ -12,11 +12,11 @@
       ansible.builtin.assert:
         that:
           - llm_api_key | default('') | length > 0
-          - (telegram_bot_token | default('') | length > 0) or (viber_auth_token | default('') | length > 0) or (whatsapp_token | default('') | length > 0)
+          - telegram_bot_token | default('') | length > 0
           - (allowed_users | default('') | length > 0) or (open_access | default(false) | bool)
         fail_msg: >-
-          Missing settings. Set the LLM_API_KEY secret, at least one channel token (TELEGRAM_BOT_TOKEN, VIBER_AUTH_TOKEN
-          or WHATSAPP_TOKEN) and ALLOWED_USERS (or deliberately pass -e open_access=true).
+          Missing settings. Set the LLM_API_KEY and TELEGRAM_BOT_TOKEN secrets and ALLOWED_USERS (or deliberately pass
+          -e open_access=true).
       no_log: true
 
     - name: Verify Docker and the compose plugin are available
@@ -129,27 +129,3 @@
       register: prune_result
       changed_when: "'Total reclaimed space: 0B' not in prune_result.stdout"
       failed_when: false
-
-    # Touches nginx config shared with every other site on this VPS: only a
-    # new file is written, no existing vhost is touched, and the reload
-    # handler refuses to reload if `nginx -t` doesn't pass first. Skipped
-    # entirely when custom_domain is blank (Telegram-only deployments).
-    - name: Render custom-domain nginx vhost
-      ansible.builtin.template:
-        src: ../templates/custom-domain.conf.j2
-        dest: "/etc/nginx/conf.d/{{ custom_domain }}.conf"
-        mode: "0644"
-      when: custom_domain is defined and custom_domain | length > 0
-      notify:
-        - Test nginx config
-        - Reload nginx
-
-  handlers:
-    - name: Test nginx config
-      ansible.builtin.command: nginx -t
-      changed_when: false
-
-    - name: Reload nginx
-      ansible.builtin.systemd:
-        name: nginx
-        state: reloaded

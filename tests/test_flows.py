@@ -76,11 +76,6 @@ async def test_the_bot_asks_no_goal_or_step_question_of_its_own(person, model):
     assert await say("ok, I'll try that tomorrow") == "coached" and flows.get(person) is None
 
 
-async def test_the_timezone_is_asked_again_after_a_few_messages_if_it_was_never_settled(person, model):
-    assert "where do you live" in await say("hello")
-    assert flows.get(person)["step"] == "asked"
-
-
 async def test_an_unanswered_question_expires_after_a_day(newcomer):
     await say("/agree")
     state = json.loads(db.get_user(newcomer)["flow_state"])
@@ -100,9 +95,6 @@ async def test_checkins_wait_while_the_timezone_question_is_pending(person, monk
 
     class Fake:
         name = "telegram"
-
-        def can_send(self, u, template_ok=True):
-            return True
 
         async def send(self, u, text):
             sent.append(text)
@@ -124,3 +116,9 @@ def _make_due(uid):
     """Open the daily window and the interval gate no matter what time the test runs."""
     db.set_fields(uid, morning_hour=0, evening_hour=23, last_morning=_midday().date().isoformat(), tz="Europe/Athens")
     return db.get_user(uid)
+
+
+async def test_a_leftover_question_of_a_removed_flow_is_dropped_not_left_blocking_check_ins(person):
+    flows.put(person, "intake", "why")
+    assert await say("hello", "4004") == "coached"
+    assert flows.get(person) is None

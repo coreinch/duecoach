@@ -57,7 +57,7 @@ def new_user(monkeypatch):
 
     monkeypatch.setattr(llm, "reply", fake_reply)
     row = db.get_or_create_user("telegram", "8008", "8008", "en")
-    db.set_fields(row["user_id"], consent_at=1.0, intake_state="done")
+    db.set_fields(row["user_id"], consent_at=1.0)
     db.add_goal(row["user_id"], "a goal")  # so the goal and step questions don't come before the timezone one
     db.add_objective(row["user_id"], None, "a step", "")
     return 8008
@@ -72,20 +72,10 @@ def clock_in(zone: str) -> str:
 
 
 async def ask(uid):
-    """Reach the point where the bot has asked for the city."""
-    seed_history(uid)
-    reply = await say("hi")
-    assert "where do you live" in reply
+    """Reach the point where the bot has asked for the city (it does so right after /agree)."""
+    reply = flows.ask_timezone(uid, "AGREED")
+    assert flows.get(uid)["step"] == "asked"
     return reply
-
-
-async def test_the_question_is_asked_once_after_a_few_messages(new_user):
-    assert await say("hello") == "coached"  # too early
-    seed_history(new_user)
-    reply = await say("I can't focus")
-    assert reply.startswith("coached") and "where do you live" in reply
-    assert flows.get(new_user)["flow"] == "timezone" and flows.get(new_user)["step"] == "asked"
-    assert "where do you live" not in await say("and my desk is a mess here")  # not asked twice
 
 
 async def test_a_city_is_taken_as_correct_and_the_zone_and_local_time_are_shown(new_user):
@@ -146,11 +136,8 @@ async def test_skipping_and_failing_three_times_both_stop_the_questions(new_user
     assert "check-ins start once it's set" in await say("skip")
     assert db.get_user(new_user)["tz_state"] == "skipped" and "where do you live" not in await say("another message")
     other = db.get_or_create_user("telegram", "9009", "9009")["user_id"]
-    db.set_fields(other, consent_at=1.0, intake_state="done")
-    db.add_goal(other, "a goal")
-    db.add_objective(other, None, "a step", "")
-    seed_history(other)
-    await say("hi", "9009")
+    db.set_fields(other, consent_at=1.0)
+    flows.ask_timezone(other)
     assert "couldn't work out" in await say("blah", "9009")
     assert "couldn't work out" in await say("zzz", "9009")
     assert "check-ins start once it's set" in await say("qqq", "9009")
@@ -187,8 +174,7 @@ async def test_the_coachs_timezone_tool_switches_check_ins_on_too(new_user):
 
 async def test_greek_conversation(new_user):
     db.set_field(new_user, "lang", "el")
-    seed_history(new_user)
-    assert "πού μένεις" in await say("γεια")
+    assert "πού μένεις" in await ask(new_user)
     reply = await say("Θεσσαλονίκη")
     assert "Europe/Athens" in reply and "όρισα τη ζώνη ώρας" in reply and "30 λεπτά" in reply
 
@@ -201,18 +187,14 @@ async def test_crisis_wording_after_the_zone_was_set_keeps_the_zone(new_user):
     assert user["tz"] == "Europe/Athens" and user["tz_state"] == "done"
 
 
-async def test_no_question_after_a_failed_model_call_or_for_confirmed_users(new_user, monkeypatch):
-    async def broken(uid, text, instruction=None):
-        raise RuntimeError("down")
+async def test_the_coach_is_told_whether_the_timezone_is_set_and_whether_to_ask(new_user):
+    from duecoach import tools
 
-    monkeypatch.setattr(llm, "reply", broken)
-    seed_history(new_user)
-    assert "where do you live" not in await say("hello")
-    assert db.get_user(new_user)["tz_state"] == ""
-    db.set_field(new_user, "tz_set", 1)
-
-    async def fine(uid, text, instruction=None):
-        return "coached"
-
-    monkeypatch.setattr(llm, "reply", fine)
-    assert "where do you live" not in await say("hello again")
+    assert "ask for their city once" in tools.coaching_state(new_user)
+    flows.ask_timezone(new_user)
+    assert "has just asked" in tools.coaching_state(new_user)
+    await say("skip")
+    assert "declined" in tools.coaching_state(new_user)
+    other = db.get_or_create_user("telegram", "9010", "9010")["user_id"]
+    db.confirm_timezone(other, "Asia/Tokyo")
+    assert "set from what the user told us" in tools.coaching_state(other)

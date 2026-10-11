@@ -59,9 +59,6 @@ class TelegramChannel:
     async def _on_error(update: object, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         log.error("update handling failed", exc_info=ctx.error)
 
-    def can_send(self, user, template_ok: bool = True) -> bool:
-        return True
-
     async def send(self, user, text: str) -> None:
         try:
             await self.app.bot.send_message(int(user["chat_id"]), text)

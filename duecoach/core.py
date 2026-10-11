@@ -69,7 +69,7 @@ async def handle_text(channel: str, ext_id: str, chat_id: str, text: str, lang_h
             return await handler(uid, args)
         if (answer := await chat.flow_answer(uid, text)) is not None:
             return answer
-        return await chat.coach_with_question(uid, text)
+        return await chat.coach(uid, text)
 
 
 async def handle_unsupported(channel: str, ext_id: str, chat_id: str, lang_hint: str = "en") -> str | None:

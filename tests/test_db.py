@@ -48,13 +48,6 @@ def test_new_users_start_with_checkins_off_and_no_consent():
     assert u["interval_min"] == 0 and not u["consent_at"] and not u["tz_set"] and u["lang"] == "el"
 
 
-def test_other_channels_get_negative_ids_that_do_not_clash_with_telegram():
-    a = db.get_or_create_user("viber", "abc=", "abc=")
-    b = db.get_or_create_user("whatsapp", "3069", "3069")
-    assert a["user_id"] == -1 and b["user_id"] == -2
-    assert db.get_or_create_user("viber", "abc=", "abc=")["user_id"] == -1
-
-
 def test_checkin_counts_as_unanswered_only_if_the_user_stayed_silent(user):
     uid = user["user_id"]
     db.set_field(uid, "last_inbound", 100.0)
@@ -118,11 +111,6 @@ def test_delete_user_data_removes_everything(user):
     assert db.get_user(uid) is None
     for table in ("messages", "goals", "objectives", "toolbox", "reminders"):
         assert db._conn.execute(f"SELECT COUNT(*) FROM {table} WHERE user_id=?", (uid,)).fetchone()[0] == 0
-
-
-def test_webhook_duplicates_are_detected():
-    assert db.mark_seen("whatsapp:abc") is True
-    assert db.mark_seen("whatsapp:abc") is False
 
 
 def test_users_for_checkins_skips_those_who_cannot_be_due(user):

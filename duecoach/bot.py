@@ -7,30 +7,19 @@ import time
 from datetime import date, datetime
 from zoneinfo import ZoneInfo
 
-import httpx
 from aiohttp import web
 
 from . import backoff, channels, chat, core, db, flows, llm, prompts, strings
 from .channels.telegram import TelegramChannel
-from .channels.viber import ViberChannel
-from .channels.whatsapp import WhatsAppChannel
 from .config import (
     DB_PATH,
     INACTIVE_DELETE_DAYS,
-    PUBLIC_URL,
     REMINDER_GIVE_UP_HOURS,
     RETENTION_DAYS,
     REVIEW_WEEKDAY,
     TELEGRAM_BOT_TOKEN,
-    VIBER_AUTH_TOKEN,
-    VIBER_BOT_NAME,
     WEB_HOST,
     WEB_PORT,
-    WHATSAPP_APP_SECRET,
-    WHATSAPP_PHONE_NUMBER_ID,
-    WHATSAPP_TEMPLATE,
-    WHATSAPP_TOKEN,
-    WHATSAPP_VERIFY_TOKEN,
 )
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(levelname)s %(message)s")
@@ -51,8 +40,8 @@ _last_maintenance = 0.0
 async def deliver_reminders() -> None:
     for r in db.due_reminders():
         user = db.get_user(r["user_id"])
-        if user is None or not channels.can_send(user):
-            continue  # e.g. WhatsApp 24h window closed: stays pending until the user writes again
+        if user is None:
+            continue
         try:
             await channels.send(user, strings.t(user["lang"], "REMIND_PREFIX", text=r["text"]))
         except channels.Unreachable:
@@ -125,9 +114,6 @@ async def checkin(u) -> None:
         if plan is None:
             return
         instruction, marks = plan
-        # frequent pulses must be free messages; the once-a-day and re-engagement ones may use a paid template
-        if not channels.can_send(u, template_ok=instruction != prompts.PULSE):
-            return
         seen_inbound = u["last_inbound"] or 0
         try:
             await channels.send(u, await llm.reply(uid, "", instruction))
@@ -199,7 +185,6 @@ async def healthz(request: web.Request) -> web.Response:
     stale = [name for name, t in _heartbeat.items() if now - t > STALE_AFTER]
     body = {
         "ok": not stale,
-        "channels": list(channels.REGISTRY),
         "stale_loops": stale,
         "llm": llm.status(),
     }  # model trouble is shown, not failed on: a gateway outage is not a reason to restart
@@ -223,40 +208,18 @@ async def main(stop: asyncio.Event | None = None) -> None:
     """Run until SIGINT/SIGTERM (or until `stop` is set, which is how tests end it)."""
     lock_handle = acquire_instance_lock()
     db.init()
-    http = httpx.AsyncClient(timeout=20)
-    routes: list[web.RouteDef] = [web.get("/healthz", healthz)]
-    telegram = viber = None
-
-    if TELEGRAM_BOT_TOKEN:
-        telegram = TelegramChannel(TELEGRAM_BOT_TOKEN)
-        channels.register(telegram)
-    if VIBER_AUTH_TOKEN:
-        viber = ViberChannel(VIBER_AUTH_TOKEN, VIBER_BOT_NAME, http)
-        channels.register(viber)
-        routes.append(web.post("/viber", viber.handle_request))
-    if WHATSAPP_TOKEN and WHATSAPP_PHONE_NUMBER_ID:
-        if not (WHATSAPP_APP_SECRET and WHATSAPP_VERIFY_TOKEN):
-            raise SystemExit("WhatsApp needs WHATSAPP_APP_SECRET and WHATSAPP_VERIFY_TOKEN (webhooks are verified with them)")
-        wa = WhatsAppChannel(WHATSAPP_TOKEN, WHATSAPP_PHONE_NUMBER_ID, WHATSAPP_VERIFY_TOKEN, WHATSAPP_APP_SECRET, WHATSAPP_TEMPLATE, http)
-        channels.register(wa)
-        routes += [web.get("/whatsapp", wa.handle_verify), web.post("/whatsapp", wa.handle_request)]
-    if not channels.REGISTRY:
-        raise SystemExit("No channel configured: set TELEGRAM_BOT_TOKEN, VIBER_AUTH_TOKEN or the WHATSAPP_* variables")
+    if not TELEGRAM_BOT_TOKEN:
+        raise SystemExit("TELEGRAM_BOT_TOKEN is not set (see .env.example)")
+    telegram = TelegramChannel(TELEGRAM_BOT_TOKEN)
+    channels.register(telegram)
 
     web_app = web.Application()
-    web_app.add_routes(routes)
+    web_app.add_routes([web.get("/healthz", healthz)])
     runner = web.AppRunner(web_app)
     await runner.setup()
     await web.TCPSite(runner, WEB_HOST, WEB_PORT).start()
     log.info("web server listening on %s:%s", WEB_HOST, WEB_PORT)
-    if telegram:
-        await telegram.start()
-    if viber and PUBLIC_URL:
-        try:
-            await viber.set_webhook(f"{PUBLIC_URL}/viber")
-        except Exception:
-            log.exception("could not register the Viber webhook")
-    log.info("channels enabled: %s", ", ".join(channels.REGISTRY))
+    await telegram.start()
 
     stop = stop or asyncio.Event()
     loop = asyncio.get_running_loop()
@@ -273,13 +236,11 @@ async def main(stop: asyncio.Event | None = None) -> None:
     log.info("shutting down")
     for task in loops:
         task.cancel()
-    if telegram:
-        await telegram.stop()
+    await telegram.stop()
     pending = [t for t in chat.background if not t.done()]
     if pending:
         await asyncio.wait(pending, timeout=10)  # let in-flight note updates finish
     await runner.cleanup()
-    await http.aclose()
     db.close()
     lock_handle.close()
 
