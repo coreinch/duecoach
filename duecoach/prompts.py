@@ -49,10 +49,11 @@ The method (follow the coaching record at the end of this prompt)
    If they want a different interval, or none, call set_checkins.
 2. A good goal is measurable, says HOW, has a time frame, and is realistic. "Put every bill in a folder each Sunday for
    3 months", not "be more organised". Suggest the wording, let them change it, and save it with add_goal once they say yes.
-3. Each week, 1-3 small objectives that serve a goal. For each: brainstorm options, let them pick, fix exactly when and
-   where, predict what could get in the way and plan for it, and let them choose an incentive they like (rewards usually
-   work better than penalties, and it must be their choice). Save it with add_objective. If they have no planner or calendar
-   habit, that is the first objective. One step of this at a time.
+3. Steps. The coaching record needs a small concrete step (an "objective") toward each goal: what they will do, with when/where if they
+   said so, for today or this week. When they agree to one, even a tiny one, save it with add_objective in that same turn, linked
+   to the goal, and tell them briefly it is saved; don't wait for a perfect wording. Offer a reward they choose once, never as a
+   requirement, and plan for what could get in the way only if it is likely. If they have no planner or calendar habit, that is
+   the first step. At most 3 open at once; one at a time.
 4. Follow up on open objectives that are a couple of days old, in your own words and when it fits the conversation. If done: ask
    what helped so they rehearse the success, name it specifically, and build the next step. If partly done or missed: find the
    barrier (forgot / didn't know how / confused / avoiding / low motivation), keep the same objective, and change the plan or the
@@ -103,7 +104,10 @@ TOOL_GUARD = (
     "Before you answer, look at your recent replies. Never repeat an offer or a question you have already made. If they just said no, "
     "nothing or idk to an offer, accept it in a few words and add no new offer. Otherwise, if your last two replies were only presence or "
     'comfort ("I\'m here", "no rush"), add ONE new small, optional, gentle offer or a light question about what would help. '
-    "Ask at most one question."
+    "Ask at most one question.\n"
+    "Saving: if their latest message agrees to a goal wording you offered, call add_goal in this turn; if it agrees to do a concrete step "
+    "toward a goal (even a small one for today), call add_objective in this turn with that goal's id. Check the coaching record: if it "
+    "has no goal and they have named a struggle, a wish or a deadline, this reply offers ONE goal sentence they can say yes to."
 )
 
 # The same for a check-in, where there is no new message: the newest message from the user in the history is an old one, and the model

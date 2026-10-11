@@ -91,7 +91,7 @@ TOOLS = [
     ),
     _fn(
         "add_objective",
-        "Save a small objective for the coming week that the user agreed to, with when/where in the text. Max 3 open at once.",
+        "Save a small concrete step toward a goal that the user just agreed to do (today or this week), with when/where in the text if they said so. Call it in the same turn they agree. Max 3 open at once.",
         {
             "text": {"type": "string", "description": "The objective including when/where, in the user's language."},
             "goal_id": {"type": "integer", "description": "The goal it serves, if any."},
@@ -114,7 +114,12 @@ TOOLS = [
         "save_to_toolbox",
         "Save a coping strategy that actually worked for the user (or a mantra they chose) so you can bring it back later. Only that: "
         "never facts about them, their projects, names, or anything you were told rather than something that helped.",
-        {"text": {"type": "string", "description": "The strategy in one short line, in the user's language."}},
+        {
+            "text": {
+                "type": "string",
+                "description": 'The strategy in one short line, in the user\'s language, in the second person or neutral ("Setting a 20-minute timer keeps you from drifting"), never "me" or "my".',
+            }
+        },
         ["text"],
     ),
     _fn(
