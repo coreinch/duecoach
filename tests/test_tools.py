@@ -127,3 +127,28 @@ def test_a_reminder_that_already_fired_is_listed_and_a_near_duplicate_is_refused
     db._conn.execute("UPDATE reminders SET sent=1, due=?", (time.time() - 600,))  # it fired ten minutes ago
     state = tools.coaching_state(uid)
     assert "already delivered" in state and "Test reminder" in state and "Reminders waiting: none." in state
+
+
+def test_a_reminder_is_refused_when_the_latest_message_is_only_a_question(user):
+    uid = user["user_id"]
+    db.add_message(uid, "user", "are you working now?")
+    assert run(uid, "set_reminder", minutes=1, message="Check-in!").startswith("error: the user's latest message did not ask")
+    assert db.pending_reminders(uid) == []
+    db.add_message(uid, "user", "can you remind me in 10 minutes?")
+    assert run(uid, "set_reminder", minutes=10, message="Stretch").startswith("ok")
+    db.add_message(uid, "user", "υπενθύμιση σε 10 δευτερόλεπτα")
+    assert run(uid, "set_reminder", minutes=1, message="Πάμε").startswith("ok")
+    db.add_message(uid, "user", "yes")  # accepting a reminder the coach offered
+    assert run(uid, "set_reminder", minutes=45, message="Walk").startswith("ok")
+
+
+def test_the_toolbox_shows_ids_and_wrong_items_can_be_removed(user):
+    uid = user["user_id"]
+    assert run(uid, "save_to_toolbox", text="The bot is called Duecoach").startswith("ok")
+    item = db.toolbox(uid)[0]
+    assert f"#{item['id']} The bot is called Duecoach" in tools.coaching_state(uid)
+    assert run(uid, "remove_from_toolbox", tool_id=item["id"]) == "ok: removed from the toolbox"
+    assert run(uid, "remove_from_toolbox", tool_id=item["id"]).startswith("error")
+    other = db.get_or_create_user("telegram", "2002", "2002")["user_id"]
+    db.add_tool(other, "someone else's")
+    assert run(uid, "remove_from_toolbox", tool_id=db.toolbox(other)[0]["id"]).startswith("error")  # not another user's item

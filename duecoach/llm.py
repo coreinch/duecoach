@@ -60,6 +60,35 @@ def _history(user_id: int) -> list[dict]:
     return out
 
 
+# A check-in that is a goodbye ("Talk tomorrow.", "Sleep well.") is wrong whatever the time: the model copies the sign-off that ended the
+# chat hours ago. Only the evening wrap-up and the last "I'll go quiet" message may say goodnight.
+_SIGN_OFF = re.compile(
+    r"sleep well|talk (to you )?tomorrow|see you tomorrow|good ?night|have a (good|great|nice|lovely) (evening|night|day)|"
+    r"καληνύχτα|καλό βράδυ|τα λέμε αύριο",
+    re.IGNORECASE,
+)
+_QUESTION_ENDINGS = ("?", ";", "\u037e")
+_MARKDOWN = [
+    (re.compile(r"\*\*(.+?)\*\*|__(.+?)__", re.DOTALL), lambda m: m.group(1) or m.group(2)),
+    (re.compile(r"^\s*#{1,6}\s*", re.MULTILINE), ""),
+    (re.compile(r"^(\s*)\*\s+", re.MULTILINE), r"\1- "),
+]
+
+
+def _plain(text: str) -> str:
+    """Chat apps show the model's markdown as literal asterisks and hashes: strip bold and headings, keep the words."""
+    for pattern, repl in _MARKDOWN:
+        text = pattern.sub(repl, text)
+    return text
+
+
+def _unfit_checkin(text: str, instruction: str | None) -> bool:
+    """A check-in must coach: not a few words with nothing to answer, and not a goodnight at the wrong time."""
+    if len(text.split()) < 6 and not text.rstrip().endswith(_QUESTION_ENDINGS):
+        return True
+    return bool(_SIGN_OFF.search(text)) and instruction not in (prompts.EVENING, prompts.REENGAGE_LAST)
+
+
 class ModelError(RuntimeError):
     """The model produced no completion (outage, rate limit, timeout), with what it reported."""
 
@@ -125,7 +154,11 @@ async def reply(user_id: int, user_text: str, instruction: str | None = None) ->
         # A check-in: the last thing in the chat must not look like an unanswered message from the user, so the instruction closes it
         # as an automatic trigger (a system message at the end leaves their old request as the last thing they said).
         since = _since(db.get_user(user_id)["last_inbound"])
-        trigger = "[Automatic check-in trigger. This is not a message from the user." + (f" {since}" if since else "") + "]"
+        trigger = (
+            "[Automatic check-in trigger. This is not a message from the user."
+            + (f" {since}" if since else "")
+            + " Whatever ended the earlier chat (a goodnight, 'talk tomorrow') is over: time has passed, so never answer with a sign-off.]"
+        )
         messages.append({"role": "user", "content": f"{trigger}\n{instruction}"})
     # A check-in has no new message from the user, and the model acts on their last (old) one: no tools then, so it can't, for example,
     # set again the reminder they asked for hours ago. Their answer to the check-in is a normal turn with tools.
@@ -136,10 +169,13 @@ async def reply(user_id: int, user_text: str, instruction: str | None = None) ->
         text = (msg.content or "").strip()
         truncated = getattr(msg, "finish_reason", None) == "length"
         if not msg.tool_calls:
-            if (text and not truncated) or empty_retries >= MAX_EMPTY_RETRIES:
+            unfit = bool(text) and not user_text and _unfit_checkin(text, instruction)
+            if (text and not truncated and not unfit) or empty_retries >= MAX_EMPTY_RETRIES:
                 break
-            empty_retries += 1  # the free models sometimes return only hidden reasoning, or stop mid-sentence: ask again
-            log.warning("%s model reply, retrying (%d)", "cut-off" if text else "empty", empty_retries)
+            empty_retries += (
+                1  # the model sometimes returns only hidden reasoning, stops mid-sentence, or (check-in) says goodbye: ask again
+            )
+            log.warning("%s model reply, retrying (%d)", "unfit check-in" if unfit else "cut-off" if text else "empty", empty_retries)
             continue
         messages.append(
             {
@@ -159,8 +195,13 @@ async def reply(user_id: int, user_text: str, instruction: str | None = None) ->
             messages.append({"role": "tool", "tool_call_id": call.id, "content": result})
     if truncated and text:
         text = _trim_to_sentence(text)
+    if not user_text and text and _unfit_checkin(text, instruction):
+        raise ModelError("the check-in was a goodbye or too short to coach")  # nothing is sent; the caller backs off and tries later
+    text = _plain(text)
     if not text:
         # Say so honestly, and keep it out of the history: stored as the coach's own words it makes the model imitate it.
+        if not user_text:
+            raise ModelError("the check-in came back empty")  # never send the apology as a check-in
         return strings.t(db.get_user(user_id)["lang"], "EMPTY_REPLY")
     db.add_message(user_id, "assistant", text)
     return text

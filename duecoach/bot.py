@@ -84,7 +84,9 @@ def plan_checkin(u, now_ts: float, now: datetime) -> tuple[str, dict] | None:
         return None
 
     has_record = bool(db.active_goals(u["user_id"]) or db.open_objectives(u["user_id"]))
-    days_since_review = (now.date() - date.fromisoformat(u["last_review"])).days if u["last_review"] else 99
+    # never reviewed: count from when they started, so the first weekly review comes a week in, not on day two
+    started = datetime.fromtimestamp(u["created_at"] or now_ts, now.tzinfo).date()
+    days_since_review = (now.date() - (date.fromisoformat(u["last_review"]) if u["last_review"] else started)).days
     # weekly review: on the chosen weekday, or whenever it has become overdue (so back-off or snoozing can't skip it for weeks)
     review_due = has_record and days_since_review >= 6 and (now.weekday() == REVIEW_WEEKDAY or days_since_review >= 8)
 

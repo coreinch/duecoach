@@ -1,6 +1,7 @@
 """Tools the coach can call (OpenAI function-calling format) and the coaching-state summary shown to the model."""
 
 import json
+import re
 import time
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
@@ -107,9 +108,16 @@ TOOLS = [
     ),
     _fn(
         "save_to_toolbox",
-        "Save a strategy that worked for the user (or a mantra they chose) so you can bring it back later.",
+        "Save a coping strategy that actually worked for the user (or a mantra they chose) so you can bring it back later. Only that: "
+        "never facts about them, their projects, names, or anything you were told rather than something that helped.",
         {"text": {"type": "string", "description": "The strategy in one short line, in the user's language."}},
         ["text"],
+    ),
+    _fn(
+        "remove_from_toolbox",
+        "Delete a toolbox item that is wrong, a duplicate, or not a strategy, when the user asks or you notice it. Use the id from the toolbox list.",
+        {"tool_id": {"type": "integer", "description": "The #id shown in the toolbox list."}},
+        ["tool_id"],
     ),
 ]
 
@@ -146,7 +154,25 @@ def _local_zone(uid: int) -> ZoneInfo:
         return ZoneInfo("UTC")
 
 
+_REMINDER_WORDS = re.compile(
+    r"remind|timer|alarm|ping|notify|nudge|wake|check (in )?(on|with|back)|\d|υπενθ|θύμισ|θυμισ|χρονομετρ|ξύπν|ξυπν|ειδοποι",
+    re.IGNORECASE,
+)
+
+
+def _asked_for_reminder(uid: int) -> bool:
+    """False when the user's latest message is only a question ("are you working now?") that says nothing about a reminder.
+
+    The prompt forbids setting one then, but the model still does it; this is the check that does not depend on the model.
+    """
+    latest = next((m["content"] for m in reversed(db.recent_messages(uid, 4)) if m["role"] == "user"), "")
+    asking = latest.rstrip().endswith(("?", ";", "\u037e"))
+    return not (asking and len(latest.split()) > 3 and not _REMINDER_WORDS.search(latest))
+
+
 def _set_reminder(uid: int, a: dict) -> str:
+    if not _asked_for_reminder(uid):
+        return "error: the user's latest message did not ask for a reminder or timer. Reply in plain text and do not set one"
     message, daily = _text(a, "message"), bool(a.get("daily"))
     if a.get("at"):
         zone = _local_zone(uid)
@@ -269,6 +295,10 @@ def _save_to_toolbox(uid: int, a: dict) -> str:
     return "ok: saved to toolbox" if db.add_tool(uid, text) else "error: toolbox is full"
 
 
+def _remove_from_toolbox(uid: int, a: dict) -> str:
+    return "ok: removed from the toolbox" if db.remove_tool(uid, int(a["tool_id"])) else "error: no such toolbox item"
+
+
 _DISPATCH = {
     "set_timezone": _set_timezone,
     "set_checkins": _set_checkins,
@@ -280,6 +310,7 @@ _DISPATCH = {
     "add_objective": _add_objective,
     "close_objective": _close_objective,
     "save_to_toolbox": _save_to_toolbox,
+    "remove_from_toolbox": _remove_from_toolbox,
 }
 
 
@@ -348,5 +379,5 @@ def coaching_state(user_id: int) -> str:
     tools = db.toolbox(user_id, 8)
     if tools:
         lines.append("Toolbox (what has worked for them):")
-        lines += [f"  - {t['text']}" for t in tools]
+        lines += [f"  #{t['id']} {t['text']}" for t in tools]
     return "\n".join(lines)

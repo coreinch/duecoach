@@ -177,3 +177,15 @@ def test_overdue_weekly_review_is_not_skipped(clock, user):
     clock.advance(6 * 60)  # 12:00 on a Monday: not the review weekday, but the review is 9 days old
     plan = bot.plan_checkin(db.get_user(uid), clock.t, clock.local())
     assert plan[0] == prompts.WEEKLY_REVIEW and plan[1] == {"last_review": clock.local().date().isoformat()}
+
+
+@pytest.mark.parametrize(("days_since_start", "is_review"), [(1, False), (5, False), (9, True)])
+def test_the_first_weekly_review_comes_a_week_after_starting_not_on_day_two(clock, user, days_since_start, is_review):
+    uid = user["user_id"]
+    db.add_goal(uid, "a goal")
+    enable_checkins(uid, last_morning=clock.local().date().isoformat())
+    db._conn.execute("UPDATE users SET created_at=? WHERE user_id=?", (clock.t - days_since_start * 86400, uid))  # never reviewed
+    db._conn.commit()
+    clock.advance(6 * 60)
+    plan = bot.plan_checkin(db.get_user(uid), clock.t, clock.local())
+    assert (plan[0] == prompts.WEEKLY_REVIEW) is is_review

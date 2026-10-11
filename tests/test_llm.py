@@ -167,3 +167,33 @@ def test_the_check_in_trigger_says_how_long_ago_the_user_last_wrote():
     assert "30 minutes ago" in llm._since(llm.time.time() - 1800)
     assert "5 hours ago" in llm._since(llm.time.time() - 5 * 3600)
     assert "3 days ago" in llm._since(llm.time.time() - 3 * 86400)
+
+
+@pytest.mark.parametrize("goodbye", ["Talk tomorrow.", "Sleep well.", "Have a good evening.", "Καληνύχτα, τα λέμε αύριο.", "ok"])
+async def test_a_check_in_that_is_a_goodbye_or_a_few_words_is_redrawn_and_never_sent(model, user, goodbye):
+    model.queue += [message(goodbye), message("Good morning. What is the one thing you want to move today?")]
+    out = await llm.reply(1001, "", llm.prompts.MORNING)
+    assert out == "Good morning. What is the one thing you want to move today?" and len(model.calls) == 2
+    model.queue += [message(goodbye)] * 3
+    with pytest.raises(llm.ModelError):
+        await llm.reply(1001, "", llm.prompts.PULSE)
+    assert [m["content"] for m in db.recent_messages(1001, 9) if m["role"] == "assistant"] == [out]  # the goodbye is not stored
+
+
+async def test_the_evening_wrap_up_may_say_goodnight_but_not_be_empty(model, user):
+    model.queue += [message("That was a solid day, rest now and sleep well.")]
+    assert "sleep well" in await llm.reply(1001, "", llm.prompts.EVENING)
+    model.queue += [message("")] * 3
+    with pytest.raises(llm.ModelError):
+        await llm.reply(1001, "", llm.prompts.EVENING)  # an empty check-in is an error, not the apology sent to the user
+
+
+async def test_the_check_in_trigger_says_a_goodbye_in_the_chat_is_over(model, user):
+    model.queue += [message("How is the first step going today?")]
+    await llm.reply(1001, "", "PULSE INSTRUCTION")
+    assert "never answer with a sign-off" in model.calls[0]["messages"][-1]["content"]
+
+
+def test_markdown_is_stripped_but_plain_text_is_left_alone():
+    raw = "**Phase 1** foundations\n## Next\n* buy the domain\n- keep this 2*3 and __that__"
+    assert llm._plain(raw) == "Phase 1 foundations\nNext\n- buy the domain\n- keep this 2*3 and that"

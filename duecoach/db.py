@@ -616,5 +616,11 @@ def add_tool(user_id: int, text: str) -> int | None:
     return cur.lastrowid
 
 
+def remove_tool(user_id: int, tool_id: int) -> bool:
+    cur = _conn.execute("DELETE FROM toolbox WHERE id=? AND user_id=?", (tool_id, user_id))
+    _conn.commit()
+    return cur.rowcount > 0
+
+
 def toolbox(user_id: int, n: int = MAX_TOOLBOX) -> list[sqlite3.Row]:
     return _conn.execute("SELECT * FROM toolbox WHERE user_id=? ORDER BY id DESC LIMIT ?", (user_id, n)).fetchall()
