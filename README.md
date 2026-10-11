@@ -99,10 +99,9 @@ python -m venv .venv && .venv/bin/pip install -r requirements-dev.txt
 .venv/bin/python -m duecoach.bot       # run locally (needs .env)
 ```
 
-Layout: `duecoach/core.py` (the order a message is handled in: rate limit, consent, crisis, commands, flows, coaching),
-`duecoach/commands.py` (slash commands), `duecoach/chat.py` (the coach's reply plus at most one question of the bot's own, and the
-crisis answer), `duecoach/flows/` (the one bot-led conversation, the timezone question, in `timezone`, with
-`moments` deciding when it may be asked and spotting crisis wording, and `state` where a flow is stored), `duecoach/llm.py` (model calls,
+Layout: `duecoach/core.py` (the order a message is handled in: rate limit, consent, crisis, commands, coaching),
+`duecoach/commands.py` (slash commands), `duecoach/chat.py` (the coach's reply and the
+crisis answer), `duecoach/crisis.py` (the one thing the bot recognises itself: crisis wording), `duecoach/llm.py` (model calls,
 tool loop), `duecoach/tools.py` and `duecoach/playbook.py` (what the coach can do and the strategy cards),
 `duecoach/prompts.py` and `duecoach/strings.py` (model prompts, fixed texts in both languages), `duecoach/bot.py` (reminders, check-ins,
 housekeeping, startup), `duecoach/channels/` (Telegram), `duecoach/db.py` (SQLite, numbered migrations). The Docker base image is pinned by digest; Dependabot proposes updates.

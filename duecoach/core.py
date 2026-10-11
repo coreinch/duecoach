@@ -1,18 +1,19 @@
 """Channel-independent entry point: one inbound message in, the reply text out.
 
 The order matters and is the safety design: rate limit, then the consent gate (nothing is processed before the user agreed), then
-crisis wording (answered before any command or pending question can mistake it for something else), then commands, then the
-question in progress, and only then ordinary coaching.
+crisis wording (answered before any command or pending question can mistake it for something else), then commands, and
+then ordinary coaching.
 """
 
 import asyncio
 import logging
 import time
 
-from . import chat, db, flows, ratelimit
+from . import chat, db, ratelimit
 from .chat import say
 from .commands import BEFORE_CONSENT, COMMANDS, agree
 from .config import is_allowed
+from .crisis import is_crisis
 
 log = logging.getLogger("duecoach.core")
 _locks: dict[int, asyncio.Lock] = {}
@@ -50,7 +51,7 @@ async def handle_text(channel: str, ext_id: str, chat_id: str, text: str, lang_h
         word, *args = text.split()
         command = word[1:].split("@")[0].lower()
     # Crisis wording is answered first, whatever the message is: plain text, or inside a command ("/stuck I want to die").
-    crisis = flows.is_crisis(text) and command not in ("deletedata", "forget")
+    crisis = is_crisis(text) and command not in ("deletedata", "forget")
     async with user_lock(uid):
         if not user["consent_at"]:
             # health-related chat goes to a third-party AI provider: nothing is processed before the user has agreed
@@ -67,8 +68,6 @@ async def handle_text(channel: str, ext_id: str, chat_id: str, text: str, lang_h
         handler = COMMANDS.get(command) if command else None
         if handler:
             return await handler(uid, args)
-        if (answer := await chat.flow_answer(uid, text)) is not None:
-            return answer
         return await chat.coach(uid, text)
 
 

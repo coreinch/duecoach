@@ -81,10 +81,6 @@ STRINGS = {
         "EMPTY_REPLY": "Δεν κατάφερα να σκεφτώ σωστή απάντηση αυτή τη στιγμή. Μπορείς να το ξαναγράψεις σε λίγο;",
         "CHECKIN_ORDER": "Η ώρα έναρξης πρέπει να είναι πριν την ώρα λήξης (π.χ. /morning 9 και /evening 21).",
         "NEED_TZ": "Πρώτα πες μου τη ζώνη ώρας σου για να έρχονται τα check-in σε λογικές ώρες: /timezone Europe/Athens (ή πες μου απλώς την πόλη σου).",
-        "TZ_ASK": "Παρεμπιπτόντως, πού μένεις; Πες μου την πόλη (ή τη χώρα) σου και θα ορίσω τη ζώνη ώρας, ώστε υπενθυμίσεις και check-in να έρχονται στη σωστή ώρα. Μπορείς και να πεις «παράλειψη».",
-        "TZ_MULTI": "Η χώρα {country} έχει πολλές ζώνες ώρας. Ποια πόλη είναι πιο κοντά σου;",
-        "TZ_RETRY": "Δεν κατάλαβα τη ζώνη ώρας από αυτό. Δοκίμασε μια μεγαλύτερη κοντινή πόλη, ή τη μορφή Περιοχή/Πόλη (π.χ. Europe/Athens), ή πες «παράλειψη».",
-        "TZ_SKIPPED": "Κανένα πρόβλημα. Μπορείς να την ορίσεις όποτε θέλεις με /timezone Europe/Athens· τα check-in ξεκινούν μόλις οριστεί.",
         "CRISIS": (
             "Λυπάμαι πολύ που νιώθεις έτσι, και χαίρομαι που μου το είπες. Μετράς και δεν χρειάζεται να το αντιμετωπίσεις μόνος ή μόνη. "
             "Αν υπάρχει πιθανότητα να πράξεις σύμφωνα με αυτές τις σκέψεις ή βρίσκεσαι σε κίνδυνο, κάλεσε τώρα τον τοπικό αριθμό έκτακτης "
@@ -99,7 +95,6 @@ STRINGS = {
         "PROFILE_strength": "Δυνατά σου σημεία",
         "PROFILE_rhythm": "Η μέρα σου",
         "PROFILE_mood": "Διάθεση",
-        "TZ_ASSUMED": "Εντάξει, όρισα τη ζώνη ώρας {zone}: εκεί είναι τώρα {time}. Αν δεν είναι σωστό, πες μου.",
         "CHECKINS_ENABLED": "Θα σε ρωτάω αφού περάσουν περίπου {minutes} λεπτά ησυχίας, και πιο αραιά αν δεν απαντάς. Με /interval off σταματούν, με /interval 60 τα αραιώνεις.",
         "UNSUPPORTED": "Προς το παρόν διαβάζω μόνο γραπτά μηνύματα. Γράψε μου τι σκέφτεσαι;",
     },
@@ -170,10 +165,6 @@ STRINGS = {
         "EMPTY_REPLY": "I couldn't put a proper answer together just now. Could you send that again in a moment?",
         "CHECKIN_ORDER": "The start hour must be earlier than the end hour (for example /morning 9 and /evening 21).",
         "NEED_TZ": "First tell me your timezone so check-ins arrive at sensible times: /timezone Europe/Athens (or just tell me your city).",
-        "TZ_ASK": 'By the way, where do you live? Tell me your city (or country) and I\'ll set your timezone, so reminders and check-ins land at the right time. You can also say "skip".',
-        "TZ_MULTI": "{country} spans several timezones. Which city are you closest to?",
-        "TZ_RETRY": 'I couldn\'t work out a timezone from that. Try a bigger nearby city, or the Area/City form like Europe/Athens, or say "skip".',
-        "TZ_SKIPPED": "No problem. You can set it any time with /timezone Europe/Athens; check-ins start once it's set.",
         "CRISIS": (
             "I'm really sorry you're feeling this way, and I'm glad you told me. You matter, and you don't have to face this alone. "
             "If you might act on these thoughts or you're in danger, please call your local emergency number now (112 in the EU) or go to "
@@ -188,7 +179,6 @@ STRINGS = {
         "PROFILE_strength": "Your strengths",
         "PROFILE_rhythm": "Your day",
         "PROFILE_mood": "Mood",
-        "TZ_ASSUMED": "Got it, I've set your timezone to {zone}: it's {time} there now. If that's off, just tell me.",
         "CHECKINS_ENABLED": "I'll check in after about {minutes} minutes of quiet, and less often if you don't reply. /interval off stops it, /interval 60 spaces it out.",
         "UNSUPPORTED": "I can only read text messages for now. Could you type it out?",
     },

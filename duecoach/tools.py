@@ -6,7 +6,7 @@ import time
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 
-from . import db, flows, timezones
+from . import db
 from .config import CHECKIN_INTERVAL_MINUTES
 
 MAX_REMINDER_MINUTES = 60 * 24 * 30
@@ -59,12 +59,16 @@ TOOLS = [
     ),
     _fn(
         "set_timezone",
-        "Save or correct the user's timezone: when they tell you their city or region, or say the one saved is wrong. Give the IANA name, "
-        "or, if they only tell you what time it is for them, local_time. Needed before check-ins can be turned on.",
-        {
-            "name": {"type": "string", "description": "IANA timezone name such as Europe/Athens or America/New_York."},
-            "local_time": {"type": "string", "description": "Their clock right now, such as 15:30 or 3:30pm (use instead of name)."},
-        },
+        "Save or correct the user's timezone: when they tell you their city or country, or say the saved one is wrong. Work out the IANA "
+        "name yourself from the place (for a country with several zones, ask which city). If they only give the time it is for them, "
+        "work it out from the 'Now' line in the record, or ask for their city. Needed before check-ins can be turned on.",
+        {"name": {"type": "string", "description": "IANA timezone name such as Europe/Athens or America/New_York."}},
+        ["name"],
+    ),
+    _fn(
+        "skip_timezone",
+        "Record that the user does not want to give their timezone (they said skip, no, or declined). Then never ask again unless they bring it up.",
+        {},
         [],
     ),
     _fn(
@@ -211,24 +215,25 @@ def _cancel_reminder(uid: int, a: dict) -> str:
 
 
 def _set_timezone(uid: int, a: dict) -> str:
-    name = str(a.get("name") or "").strip()
-    if not name and a.get("local_time"):
-        clock = timezones.parse_clock(str(a["local_time"]))
-        found = clock and timezones.zone_for_offset(timezones.offset_from_clock(*clock), near=db.get_user(uid)["tz"])
-        if not found:
-            return "error: could not work out a timezone from that time; ask for their city"
-        name = found
-    if not name:
-        return "error: give name or local_time"
+    name = _text(a, "name")
     try:
-        ZoneInfo(name)
+        zone = ZoneInfo(name)
     except Exception:
-        return "error: unknown timezone; use an IANA name like Europe/Athens"
+        return "error: unknown timezone; use an IANA name like Europe/Athens (Area/City)"
     switched_on = db.confirm_timezone(uid, name)
-    flows.settle_timezone(uid)
+    db.set_field(uid, "tz_state", "done")
+    local = datetime.now(zone).strftime("%H:%M")
+    result = f"ok: timezone set to {name}; it is {local} there now: tell the user that time so they can correct you"
     if switched_on:
-        return f"ok: timezone set to {name}; check-ins were switched on automatically (about every {CHECKIN_INTERVAL_MINUTES} minutes of quiet): mention it briefly"
-    return f"ok: timezone set to {name}"
+        result += (
+            f"; check-ins were switched on automatically (about every {CHECKIN_INTERVAL_MINUTES} minutes of quiet): mention it briefly"
+        )
+    return result
+
+
+def _skip_timezone(uid: int, a: dict) -> str:
+    db.set_field(uid, "tz_state", "skipped")
+    return "ok: noted that they would rather not say; don't ask again unless they bring it up"
 
 
 def _set_checkins(uid: int, a: dict) -> str:
@@ -300,6 +305,7 @@ def _remove_from_toolbox(uid: int, a: dict) -> str:
 
 _DISPATCH = {
     "set_timezone": _set_timezone,
+    "skip_timezone": _skip_timezone,
     "set_checkins": _set_checkins,
     "snooze_checkins": _snooze_checkins,
     "set_reminder": _set_reminder,
@@ -325,13 +331,15 @@ def coaching_state(user_id: int) -> str:
     goals, open_obj = db.active_goals(user_id), db.open_objectives(user_id)
     zone = _local_zone(user_id)
     local = datetime.now(zone)
-    pending_tz = flows.timezone_pending(user_id)
     if user["tz_set"]:
         tz_note = "set from what the user told us; if they say it is wrong, correct it with set_timezone"
     elif user["tz_state"] == "skipped":
         tz_note = "NOT set: they declined to give it; don't ask again unless they bring it up"
-    elif pending_tz:
-        tz_note = "NOT set yet: the system has just asked for their city; don't ask again"
+    elif user["tz_state"] == "asked":
+        tz_note = (
+            "NOT set yet: the welcome message asked for their city, and they may answer in any message (call set_timezone when they do). "
+            "If they ignore it, ask at most once more, at a calm moment; if they decline, call skip_timezone"
+        )
     else:
         tz_note = "NOT set yet: ask for their city once when it fits, then save it with set_timezone"
     checkins = (

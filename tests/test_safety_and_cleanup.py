@@ -4,7 +4,7 @@ from types import SimpleNamespace
 import pytest
 import telegram.error
 
-from duecoach import bot, channels, core, db, flows, llm
+from duecoach import bot, channels, core, db, llm
 from duecoach.channels import SendError, Unreachable
 from duecoach.channels.telegram import TelegramChannel
 
@@ -192,4 +192,3 @@ def test_maintenance_runs_all_the_cleanups(monkeypatch):
     db._conn.execute("UPDATE users SET created_at=?, last_inbound=0 WHERE user_id=?", (time.time() - 900 * 86400, other))
     bot.maintain()
     assert db.get_user(other) is not None
-    assert flows  # (module imported for the crisis helpers used above)

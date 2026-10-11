@@ -1,8 +1,7 @@
 """Crisis wording: the one thing the bot recognises itself, because the safety reply must not depend on the model."""
 
 import re
-
-from ..timezones import normalize
+import unicodedata
 
 CRISIS_PATTERNS = [
     r"\b(kill myself|suicid\w*|end(ing)? (it all|my life)|take my own life|want to die|wanna die|hurt(ing)? myself|harm(ing)? myself|self harm|no reason to live)\b",
@@ -15,9 +14,16 @@ CRISIS_PATTERNS = [
 # softer than a crisis: the person is struggling (anxiety, overwhelm, harsh self-criticism). Not the moment for a form.
 
 
+def _normalize(text: str) -> str:
+    """Lower-case, accents and punctuation removed, single spaces: 'Αθήνα!' -> 'αθηνα'."""
+    text = unicodedata.normalize("NFKD", text)
+    text = "".join(c for c in text if not unicodedata.combining(c))
+    return re.sub(r"[\s_\-.,;:!?()'\"/]+", " ", text.casefold()).strip()
+
+
 _CRISIS = [re.compile(p) for p in CRISIS_PATTERNS]
 
 
 def is_crisis(text: str) -> bool:
-    said = normalize(text)
+    said = _normalize(text)
     return any(p.search(said) for p in _CRISIS)

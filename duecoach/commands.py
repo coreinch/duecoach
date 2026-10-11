@@ -3,7 +3,7 @@
 import time
 from zoneinfo import ZoneInfo
 
-from . import db, flows, prompts, ratelimit, strings
+from . import db, prompts, ratelimit, strings
 from .chat import coach, privacy, say
 from .config import CHECKIN_INTERVAL_MINUTES
 
@@ -92,7 +92,7 @@ async def _timezone(uid, args):
     except Exception:
         return say(uid, "TZ_UNKNOWN")
     switched_on = db.confirm_timezone(uid, args[0])
-    flows.settle_timezone(uid)  # answered by command: a timezone question that was open is over
+    db.set_field(uid, "tz_state", "done")
     note = "\n\n" + say(uid, "CHECKINS_ENABLED", minutes=CHECKIN_INTERVAL_MINUTES) if switched_on else ""
     return say(uid, "TZ_SET", tz=args[0]) + note
 
@@ -103,7 +103,7 @@ async def _privacy(uid, args):
 
 async def agree(uid, args):
     db.set_field(uid, "consent_at", time.time())
-    flows.ask_timezone(uid)  # the greeting ends with the timezone question, so the flow is opened here
+    db.set_field(uid, "tz_state", "asked")  # the greeting ends with the timezone question; the coach is told it was asked
     return say(uid, "AGREED")
 
 

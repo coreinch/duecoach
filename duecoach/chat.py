@@ -4,13 +4,17 @@ import asyncio
 import logging
 import time
 
-from . import db, flows, llm
+from . import db, llm, strings
 from .config import CRISIS_HELP, INACTIVE_DELETE_DAYS, RETENTION_DAYS
-from .flows.state import say  # noqa: F401  (the fixed texts, in the user's language; re-exported for the commands)
 
 log = logging.getLogger("duecoach.chat")
 background: set[asyncio.Task] = set()  # fire-and-forget jobs (notes refresh); shutdown waits for them
 CRISIS_QUIET_SECONDS = 24 * 3600  # no proactive check-ins for a day after someone writes about harming themselves
+
+
+def say(uid: int, key: str, **kw) -> str:
+    """A fixed text, in the user's language."""
+    return strings.t(db.get_user(uid)["lang"], key, **kw)
 
 
 def _spawn(coro) -> None:
@@ -37,11 +41,6 @@ async def coach(uid: int, text: str, instruction: str | None = None) -> str:
     return out
 
 
-async def flow_answer(uid: int, text: str) -> str | None:
-    """Reply to the timezone question in progress, if any. None: ordinary chat."""
-    return await flows.answer(uid, text)
-
-
 def privacy(uid: int) -> str:
     """The privacy notice, with the retention periods this deployment actually uses (0 means kept for good, so not mentioned)."""
     keeping = ""
@@ -64,7 +63,6 @@ async def crisis(uid: int, text: str) -> str:
     and a zone already in use stays), proactive check-ins pause, and no new bot question is asked for a while. The exchange is
     stored, so the coach has the context when the conversation continues.
     """
-    flows.clear(uid)
     reply = crisis_message(uid)
     db.add_message(uid, "user", text)
     db.add_message(uid, "assistant", reply)

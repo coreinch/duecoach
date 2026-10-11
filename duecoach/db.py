@@ -258,7 +258,6 @@ USER_FIELDS = {
     "checkin_retry_at",
     "last_review",
     "tz_state",
-    "flow_state",
     "profile",
     "notes_at_count",
 }
