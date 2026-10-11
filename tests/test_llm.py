@@ -312,3 +312,47 @@ async def test_if_it_keeps_repeating_the_repeated_sentence_is_cut_not_the_whole_
 def test_short_sentences_and_different_sentences_are_not_repeats(user):
     db.add_message(1001, "assistant", "Go. Nice work. Timer set for 14:39, you will hear from me then.")
     assert llm._repeated("Go. Nice work. Open the folder and type the first title.", 1001) == []
+
+
+@pytest.mark.parametrize(
+    ("text", "claims"),
+    [
+        ("Saved. Park the 3-month client until Thursday.", True),
+        ("Saving that to the toolbox.", True),
+        ("Το αποθήκευσα, πάμε.", True),
+        ("That strategy is already saved in your toolbox.", False),
+        ("Go do the three sends, you got this.", False),
+    ],
+)
+def test_claiming_something_was_saved_is_recognised(text, claims):
+    assert llm._claims_save(text) is claims
+
+
+async def test_saying_saved_without_a_save_tool_is_redrawn_until_the_tool_is_called(model, user):
+    model.queue += [
+        message("Saved. Go do the three sends."),
+        message(None, calls=[("add_objective", {"text": "Send the three finished invoices today"})]),
+        message("Saved: send the three finished invoices today."),
+    ]
+    out = await llm.reply(1001, "yeah save it, lets do it")
+    assert out == "Saved: send the three finished invoices today."
+    assert db.open_objectives(1001)[0]["text"] == "Send the three finished invoices today"
+    assert "no save tool succeeded" in model.calls[1]["messages"][-1]["content"]
+
+
+async def test_saying_saved_after_a_failed_save_is_also_refused(model, user):
+    model.queue += [
+        message(None, calls=[("add_objective", {"text": "x"})]),
+        message("Saved."),
+        message("I couldn't save that one just now."),
+    ]
+    db.add_goal(1001, "g")
+    for i in range(3):
+        db.add_objective(1001, None, f"open {i}", "")  # three open already: the tool refuses a fourth
+    assert await llm.reply(1001, "save it") == "I couldn't save that one just now."
+
+
+async def test_record_ids_are_not_spoken_and_are_cut_if_the_model_insists(model, user):
+    model.queue += [message("Saved as goal #1, invoices cleared by Thursday.")] * 3
+    out = await llm.reply(1001, "ok")
+    assert "#" not in out and out.startswith("Saved as goal")

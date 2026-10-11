@@ -148,6 +148,23 @@ def _without(text: str, sentences: list[str]) -> str:
     return rest if rest else text
 
 
+# Claiming something was saved without calling the tool ("Saved." after the user said yes, but nothing was written), and saying a record id.
+_SAVE_TOOLS = {"add_goal", "retire_goal", "add_objective", "close_objective", "save_to_toolbox"}
+_SAVE_CLAIM = re.compile(
+    r"(?<!already )(?<!was )\b(?:saved|saving|i(?:'ll| will) save)\b|αποθήκευσα|αποθηκεύω|το κράτησα|σώθηκε|το έσωσα|το σημείωσα",
+    re.IGNORECASE,
+)
+_ID_MENTION = re.compile(r"\b(?:goal|objective|step|reminder|item)\s+#\d+", re.IGNORECASE)
+
+
+def _claims_save(text: str) -> bool:
+    return bool(_SAVE_CLAIM.search(text))
+
+
+def _without_ids(text: str) -> str:
+    return _ID_MENTION.sub(lambda m: m.group(0).split("#")[0].rstrip(), text)
+
+
 def _leaked_call(text: str) -> bool:
     return bool(_LEAKED_CALL.search(text))
 
@@ -237,6 +254,8 @@ async def reply(user_id: int, user_text: str, instruction: str | None = None) ->
     results: list[str] = []
     wrong_times: list[str] = []
     repeats: list[str] = []
+    saved: set[str] = set()
+    false_save = id_mention = False
     for _ in range(MAX_TOOL_ROUNDS + MAX_EMPTY_RETRIES):
         msg = await _chat(messages, tool_defs, max_tokens=REPLY_TOKENS)
         text = (msg.content or "").strip()
@@ -245,8 +264,15 @@ async def reply(user_id: int, user_text: str, instruction: str | None = None) ->
             if text:
                 text, wrong_times = _fix_reminder_times(text, results, user_text)
             repeats = _repeated(text, user_id) if text else []
+            false_save = bool(text) and bool(user_text) and _claims_save(text) and not saved & _SAVE_TOOLS
+            id_mention = bool(text) and bool(_ID_MENTION.search(text))
             unfit = bool(text) and (
-                bool(wrong_times) or bool(repeats) or _leaked_call(text) or (not user_text and _unfit_checkin(text, instruction))
+                bool(wrong_times)
+                or bool(repeats)
+                or false_save
+                or id_mention
+                or _leaked_call(text)
+                or (not user_text and _unfit_checkin(text, instruction))
             )
             if (text and not truncated and not unfit) or empty_retries >= MAX_EMPTY_RETRIES:
                 break
@@ -267,11 +293,23 @@ async def reply(user_id: int, user_text: str, instruction: str | None = None) ->
                         + ". Say it once only: leave it out or say something new.",
                     }
                 )
+            if false_save:
+                messages.append(
+                    {
+                        "role": "system",
+                        "content": "Your draft says something was saved, but no save tool succeeded in this turn. If the user agreed to a goal, "
+                        "a step or a strategy, call the tool now; otherwise do not say anything is saved.",
+                    }
+                )
+            if id_mention:
+                messages.append(
+                    {"role": "system", "content": 'Don\'t say record ids or numbers like "goal #1" to the user; leave them out.'}
+                )
             # the model sometimes returns only hidden reasoning, stops mid-sentence, or (check-in) says goodbye: ask again
             empty_retries += 1
             log.warning(
                 "%s model reply, retrying (%d)",
-                "leaked tool call, wrong time, repeated sentence or unfit check-in" if unfit else "cut-off" if text else "empty",
+                "leaked call, wrong time, repeat, unsaved claim, id or unfit check-in" if unfit else "cut-off" if text else "empty",
                 empty_retries,
             )
             continue
@@ -291,6 +329,8 @@ async def reply(user_id: int, user_text: str, instruction: str | None = None) ->
             # text, so it is logged in full: it is what explains why a call failed.
             log.info("tool %s -> %s", call.function.name, result[:120] if result.startswith("error") else result.split(":", 1)[0])
             results.append(result)
+            if not result.startswith("error"):
+                saved.add(call.function.name)
             messages.append({"role": "tool", "tool_call_id": call.id, "content": result})
     if truncated and text:
         text = _trim_to_sentence(text)
@@ -303,7 +343,7 @@ async def reply(user_id: int, user_text: str, instruction: str | None = None) ->
         raise ModelError("the check-in was a goodbye or too short to coach")  # nothing is sent; the caller backs off and tries later
     if text and repeats:
         text = _without(text, repeats)  # still repeating after the retries: say it without the repeated sentences
-    text = _plain(text)
+    text = _without_ids(_plain(text))
     if not text:
         # Say so honestly, and keep it out of the history: stored as the coach's own words it makes the model imitate it.
         if not user_text:
