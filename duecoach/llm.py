@@ -3,6 +3,7 @@ import difflib
 import logging
 import re
 import time
+from collections.abc import Callable
 from typing import Any
 
 import openai
@@ -78,7 +79,7 @@ _LEAKED_CALL = re.compile(rf"\b(?:{_TOOL_NAMES})\b|<\s*/?\s*(?:tool_call|functio
 # Old stored markers of the removed scripted flows, which are not things the user wrote
 _MARKER = re.compile(r"^\((?:finished the intake interview|step result)")
 _QUESTION_ENDINGS = ("?", ";", "\u037e")
-_MARKDOWN = [
+_MARKDOWN: list[tuple[re.Pattern[str], str | Callable[[re.Match[str]], str]]] = [
     (re.compile(r"\*\*(.+?)\*\*|__(.+?)__", re.DOTALL), lambda m: m.group(1) or m.group(2)),
     (re.compile(r"^\s*#{1,6}\s*", re.MULTILINE), ""),
     (re.compile(r"^(\s*)\*\s+", re.MULTILINE), r"\1- "),
@@ -232,7 +233,10 @@ async def reply(user_id: int, user_text: str, instruction: str | None = None) ->
     # A check-in has no new message from the user, and the model acts on their last (old) one: no tools then, so it can't, for example,
     # set again the reminder they asked for hours ago. Their answer to the check-in is a normal turn with tools.
     tool_defs = tools.TOOLS if user_text else None
-    text, empty_retries, results, wrong_times, repeats = "", 0, [], [], []
+    text, empty_retries = "", 0
+    results: list[str] = []
+    wrong_times: list[str] = []
+    repeats: list[str] = []
     for _ in range(MAX_TOOL_ROUNDS + MAX_EMPTY_RETRIES):
         msg = await _chat(messages, tool_defs, max_tokens=REPLY_TOKENS)
         text = (msg.content or "").strip()
