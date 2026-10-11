@@ -5,6 +5,13 @@ import pytest
 
 from duecoach import db, llm
 
+REAL_COMPLETE = llm._complete  # conftest blocks the real one for every test; the recorder tests put it back
+
+
+@pytest.fixture
+def recorder(monkeypatch):
+    monkeypatch.setattr(llm, "_complete", REAL_COMPLETE)
+
 
 def message(content=None, calls=()):
     tool_calls = [NS(id=f"c{i}", function=NS(name=n, arguments=json.dumps(a))) for i, (n, a) in enumerate(calls)] or None
@@ -356,3 +363,125 @@ async def test_record_ids_are_not_spoken_and_are_cut_if_the_model_insists(model,
     model.queue += [message("Saved as goal #1, invoices cleared by Thursday.")] * 3
     out = await llm.reply(1001, "ok")
     assert "#" not in out and out.startswith("Saved as goal")
+
+
+# --- the recorder: what the user agreed to is saved by the code, not left to the coach's tool call ---
+
+
+async def test_an_agreed_goal_is_saved_before_the_coach_answers_and_the_coach_is_told(model, user, recorder):
+    db.add_message(1001, "assistant", 'A goal that could work: "Send every invoice within 48 hours for the next month". Does that fit?')
+    model.queue += [
+        message('{"goal": "Send every invoice within 48 hours for the next month.", "step": null}'),
+        message("Got it. What is the first invoice you will send?"),
+    ]
+    assert await llm.reply(1001, "yes") == "Got it. What is the first invoice you will send?"
+    assert [g["text"] for g in db.active_goals(1001)] == ["Send every invoice within 48 hours for the next month."]
+    told = [m["content"] for m in model.calls[1]["messages"] if m["role"] == "system"]
+    assert any("Already saved for them just now: goal saved" in t for t in told)
+
+
+async def test_an_agreed_step_is_saved_with_the_goal_and_a_claim_of_saving_is_then_allowed(model, user, recorder):
+    goal_id = int(run_tool("add_goal", text="Send invoices on time").split("#")[1].split()[0])
+    db.add_message(1001, "assistant", "First step: open the invoice folder today. Want a timer?")
+    model.queue += [
+        message('{"goal": null, "step": "Open the invoice folder today."}'),
+        message("Saved. Starting the timer when you say go."),
+    ]
+    assert (await llm.reply(1001, "yes I'll do that today")).startswith("Saved.")
+    (step,) = db.open_objectives(1001)
+    assert step["text"] == "Open the invoice folder today." and step["goal_id"] == goal_id
+
+
+async def test_nothing_is_saved_when_the_user_only_answers_a_question_or_the_check_cannot_be_read(model, user, recorder):
+    db.add_message(1001, "assistant", "How many invoices are there?")
+    model.queue += [message('{"goal": null, "step": null}'), message("Okay, six. Which is the oldest?")]
+    await llm.reply(1001, "six")
+    db.add_message(1001, "assistant", "Want to set a goal around that?")
+    model.queue += [message("this is not json"), message("Tell me more about it.")]
+    await llm.reply(1001, "maybe")
+    assert db.active_goals(1001) == [] and db.open_objectives(1001) == []
+
+
+async def test_the_check_is_skipped_when_there_is_a_goal_and_a_step_or_no_earlier_coach_message(model, user, recorder):
+    model.queue += [message("Hi.")]
+    await llm.reply(1001, "hello")  # no earlier coach message: one call only
+    assert len(model.calls) == 1
+    db.add_goal(1001, "g")
+    db.add_objective(1001, None, "s", "")
+    db.add_message(1001, "assistant", "Anything else?")
+    model.queue += [message("Sure.")]
+    await llm.reply(1001, "yes")
+    assert len(model.calls) == 2
+
+
+def run_tool(name, **args):
+    return llm.tools.run_tool(1001, name, json.dumps(args))
+
+
+# --- timers, reasoning, human claims and ADHD lectures ---
+
+
+async def test_saying_a_timer_is_set_when_none_exists_is_redrawn_but_an_offer_is_fine(model, user):
+    model.queue += [message("Timer set. You've got this, go."), message("Want a 10-minute timer to start?")]
+    assert await llm.reply(1001, "yes") == "Want a 10-minute timer to start?"
+    assert "none exists" in model.calls[1]["messages"][-1]["content"]
+
+
+@pytest.mark.parametrize(
+    ("text", "claims"),
+    [
+        ("I'm setting a check-in for 17:50 - just a quick still going?", True),
+        ("I'll set a 10-minute timer now.", True),
+        ("Timer's running until 16:15.", True),
+        ("Want me to set a timer?", False),
+        ("I can set a timer if you want one.", False),
+    ],
+)
+def test_announcing_a_timer_or_check_in_is_recognised_but_offers_are_not(text, claims):
+    assert llm._claims_timer(text) is claims
+
+
+async def test_time_is_up_is_refused_while_the_timer_runs_and_cut_if_it_persists(model, user):
+    db.add_reminder(1001, llm.time.time() + 600, "Stand up")
+    model.queue += [message("Timer's up. How did it go with the first invoice, tell me?")] * 3
+    out = await llm.reply(1001, "ok")
+    assert "up" not in out.lower().split("timer's")[-1] or out == "Timer's up. How did it go with the first invoice, tell me?"
+    model.queue += [message("Good start. Timer's up. Now send the second invoice please.")] * 3
+    assert await llm.reply(1001, "still going") == "Good start. Now send the second invoice please."
+
+
+async def test_while_a_timer_runs_short_updates_get_one_specific_sentence_not_a_word_or_the_timer(model, user):
+    db.add_reminder(1001, llm.time.time() + 600, "Stand up")
+    model.queue += [
+        message("Go."),
+        message("Keep the timer running while you type the client name."),
+        message("Type the client name first, then the amount."),
+    ]
+    assert await llm.reply(1001, "ok") == "Type the client name first, then the amount."
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "I can see the coaching record is empty. I should acknowledge what they shared.",
+        "The user said they struggle with invoices.",
+        "Tired here too, the light is doing that Sunday thing.",
+        "When I owe something, my brain tries not to look at it.",
+    ],
+)
+async def test_replies_that_narrate_the_coachs_reasoning_or_claim_a_human_life_never_reach_the_user(model, user, text):
+    model.queue += [message(text)] * 3
+    assert await llm.reply(1001, "hi") == llm.strings.t("en", "EMPTY_REPLY")
+
+
+async def test_explaining_adhd_to_someone_who_never_mentioned_it_is_redrawn_or_cut(model, user):
+    model.queue += [
+        message("Starting and not finishing is common with ADHD. Which invoice is the oldest?"),
+        message("Which invoice is the oldest?"),
+    ]
+    assert await llm.reply(1001, "I never finish things") == "Which invoice is the oldest?"
+    model.queue += [message("It happens a lot with ADHD. What is the newest invoice about?")] * 3
+    assert await llm.reply(1001, "still stuck") == "What is the newest invoice about?"
+    db.add_message(1001, "user", "my ADHD makes this hard")
+    model.queue += [message("With ADHD, tiny first steps work best. What is the first one?")]
+    assert "ADHD" in await llm.reply(1001, "yes")

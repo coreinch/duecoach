@@ -1,5 +1,6 @@
 import asyncio
 import difflib
+import json
 import logging
 import re
 import time
@@ -148,17 +149,85 @@ def _without(text: str, sentences: list[str]) -> str:
     return rest if rest else text
 
 
-# Claiming something was saved without calling the tool ("Saved." after the user said yes, but nothing was written), and saying a record id.
-_SAVE_TOOLS = {"add_goal", "retire_goal", "add_objective", "close_objective", "save_to_toolbox"}
+# Claiming something was saved although no tool succeeded this turn ("Saved." after the user said yes, but nothing was written), and ids.
 _SAVE_CLAIM = re.compile(
     r"(?<!already )(?<!was )\b(?:saved|saving|i(?:'ll| will) save)\b|αποθήκευσα|αποθηκεύω|το κράτησα|σώθηκε|το έσωσα|το σημείωσα",
     re.IGNORECASE,
+)
+# A timer or reminder announced although none exists, and "time's up" while the timer is still running.
+_TIMER_CLAIM = re.compile(
+    r"\b(?:timer|reminder|nudge)(?:'s| is| was)? (?:now )?(?:set|running|on|started|going)\b|\bi'?ve set (?:a|the|your)\b"
+    r"|\bset (?:a|the|your) [\w-]* ?(?:timer|reminder) for\b|\bi(?:'m| am|'ll| will) (?:now )?(?:setting|set) (?:a |the |your )?[\w-]* ?"
+    r"(?:check-?in|nudge|timer|reminder)\b|έβαλα (?:το )?(?:χρονόμετρο|υπενθύμιση)|ορίστηκε",
+    re.IGNORECASE,
+)
+_TIME_UP = re.compile(
+    r"\btime'?s up\b|\btime is up\b|\btimer(?:'s| is| has)? (?:up|done|ended|finished|went off|is over)\b|τέλειωσε ο χρόνος", re.IGNORECASE
 )
 _ID_MENTION = re.compile(r"\b(?:goal|objective|step|reminder|item)\s+#\d+", re.IGNORECASE)
 
 
 def _claims_save(text: str) -> bool:
     return bool(_SAVE_CLAIM.search(text))
+
+
+_OFFER = re.compile(r"\s*(?:want|would|should|shall|do|does|can|could|is|are)\b", re.IGNORECASE)
+
+
+def _claims_timer(text: str) -> bool:
+    """A statement that a timer or reminder is set. An offer ("Want me to set a timer?") is a question, not a claim."""
+    sentences = re.split(r"(?<=[.!;\u037e])\s+|\n+", text)
+    return any(_TIMER_CLAIM.search(s) for s in sentences if not (s.rstrip().endswith("?") and _OFFER.match(s)))
+
+
+_UPDATE_MENTIONS = re.compile(
+    r"\btimer\b|\breminder\b|check(?:ing)? (?:back )?in\b|\b\d{1,2}:\d{2}\b|i'?ll be here|almost there|nearly (?:there|done)|one last (?:look|check)",
+    re.IGNORECASE,
+)
+
+
+def _running_timer_hint(user_id: int, text: str, saved: set[str], user_text: str = "") -> str | None:
+    """What is wrong with a timer statement, or None. Checked against the reminders that really exist."""
+    pending = db.pending_reminders(user_id)
+    if _claims_timer(text) and "set_reminder" not in saved and not pending:
+        return "Your draft says a timer or reminder is set, but none exists. Call set_reminder now if they asked for one, or don't say it."
+    if _TIME_UP.search(text) and any(r["due"] > time.time() + 30 for r in pending):
+        soonest = min(r["due"] for r in pending)
+        return f"The timer has not ended yet (about {max(1, round((soonest - time.time()) / 60))} minutes left). Don't say the time is up."
+    if pending and len(user_text.split()) <= 4 and "set_reminder" not in saved and len(text.split()) < 4:
+        return "That reply is too short. Write one specific sentence about the task itself (6-15 words), not just a word or two."
+    if pending and len(user_text.split()) <= 4 and "set_reminder" not in saved and _UPDATE_MENTIONS.search(text):
+        return "A timer is running and they sent a short update. Answer about the task only: don't mention the timer, a time, checking in or how far along they are."
+    return None
+
+
+# The model's own reasoning written into the reply ("I can see the coaching record is empty. I should acknowledge what they shared"):
+# the coach talks TO them, so it never says "the user", mentions the record, or narrates what it should do.
+_META = re.compile(
+    r"\bmy (?:brain|body)\b|\bI(?:'m| am) (?:tired|hungry)\b|\btired here too\b|"
+    r"\bthe user\b|\bcoaching record\b|\bI should (?:acknowledge|offer|ask|respond|start|give|keep|not|use|check|follow|reflect|validate)\b"
+    r"|\bmy (?:instructions|guidelines|system prompt)\b|\bthey'?ve named\b|\baccording to (?:the|my) (?:record|guidelines|instructions)\b",
+    re.IGNORECASE,
+)
+
+
+def _meta_reasoning(text: str) -> bool:
+    return bool(_META.search(text))
+
+
+def _adhd_lecture(user_id: int, text: str) -> bool:
+    """The coach explains ADHD to someone who never brought it up ("common with ADHD"): they know, and it reads as a lecture."""
+    if not re.search(r"\bADHD\b", text):
+        return False
+    said = " ".join(m["content"] for m in db.recent_messages(user_id, 10) if m["role"] == "user")
+    return not re.search(r"\bADHD\b|\bAD/?HD\b|ΔΕΠΥ", said, re.IGNORECASE)
+
+
+def _drop_sentences(text: str, pattern: re.Pattern[str]) -> str:
+    """The text without the sentences that match, or unchanged if nothing would remain."""
+    parts = re.split(r"(?<=[.!?;\u037e])\s+|\n+", text)
+    kept = [p for p in parts if p.strip() and not pattern.search(p)]
+    return " ".join(kept) if kept else text
 
 
 def _without_ids(text: str) -> str:
@@ -223,18 +292,67 @@ def _since(last_inbound: float | None) -> str:
     return f"The user last wrote {ago} ago, so anything they asked for in that message (a timer, a reminder) is already done or over."
 
 
+async def record_agreements(user_id: int, user_text: str) -> list[str]:
+    """Before the coach answers: if the user just agreed to a goal or a step the coach proposed, save it.
+
+    Saving is not left to the coach's own tool call, which the model skips about half the time. A separate small call reads the one
+    exchange and returns what, if anything, was agreed; the code writes it. Only runs while a goal or a step is still missing.
+    Returns notes for the coach about what was saved.
+    """
+    goals, steps = db.active_goals(user_id), db.open_objectives(user_id)
+    if (goals and steps) or user_text.startswith("/"):
+        return []
+    last = next((m["content"] for m in reversed(db.recent_messages(user_id, 6)) if m["role"] == "assistant"), None)
+    if not last:
+        return []
+    prompt = prompts.RECORDER.format(
+        coach=last[:1200],
+        user=user_text[:600],
+        goals="; ".join(g["text"] for g in goals) or "none",
+        steps="; ".join(o["text"] for o in steps) or "none",
+        language=prompts.LANGUAGE_NAME.get(db.get_user(user_id)["lang"], "English"),
+    )
+    try:
+        out = await _complete([{"role": "user", "content": prompt}], max_tokens=SHORT_JOB_TOKENS)
+        found = json.loads(re.search(r"\{.*\}", out, re.DOTALL).group(0))  # type: ignore[union-attr]
+    except Exception:
+        log.warning("could not read the agreement check, leaving the saving to the coach")
+        return []
+    notes = []
+    goal, step = found.get("goal"), found.get("step")
+    if isinstance(goal, str) and goal.strip() and not goals:
+        result = tools.run_tool(user_id, "add_goal", json.dumps({"text": goal.strip()}))
+        if result.startswith("ok"):
+            notes.append(f"goal saved: {goal.strip()}")
+            goals = db.active_goals(user_id)
+    if isinstance(step, str) and step.strip() and not steps:
+        args = {"text": step.strip()} | ({"goal_id": goals[0]["id"]} if goals else {})
+        if tools.run_tool(user_id, "add_objective", json.dumps(args)).startswith("ok"):
+            notes.append(f"step saved: {step.strip()}")
+    return notes
+
+
 async def reply(user_id: int, user_text: str, instruction: str | None = None) -> str:
     """Chat with history, in one model call: the whole playbook is in the system prompt, so no lookup round is needed.
 
     `instruction` is a hidden steering note for this turn (e.g. a /stuck command or a check-in's purpose).
     """
+    recorded = await record_agreements(user_id, user_text) if user_text and not instruction else []
     if user_text:
         db.add_message(user_id, "user", user_text)
     messages = [
         {"role": "system", "content": _system(user_id)},
         *_history(user_id),
-        {"role": "system", "content": prompts.TOOL_GUARD if user_text else prompts.PROACTIVE_GUARD},
     ]
+    if recorded:
+        messages.append(
+            {
+                "role": "system",
+                "content": "Already saved for them just now: " + "; ".join(recorded) + ". You may confirm it in a few words (no ids); "
+                "do not save it again.",
+            }
+        )
+    messages.append({"role": "system", "content": prompts.TOOL_GUARD if user_text else prompts.PROACTIVE_GUARD})
     if instruction and user_text:
         messages.append({"role": "system", "content": instruction})
     elif instruction:
@@ -254,8 +372,9 @@ async def reply(user_id: int, user_text: str, instruction: str | None = None) ->
     results: list[str] = []
     wrong_times: list[str] = []
     repeats: list[str] = []
-    saved: set[str] = set()
-    false_save = id_mention = False
+    saved: set[str] = {"add_goal" if n.startswith("goal") else "add_objective" for n in recorded}
+    false_save = id_mention = lecture = meta = False
+    timer_hint: str | None = None
     for _ in range(MAX_TOOL_ROUNDS + MAX_EMPTY_RETRIES):
         msg = await _chat(messages, tool_defs, max_tokens=REPLY_TOKENS)
         text = (msg.content or "").strip()
@@ -264,13 +383,19 @@ async def reply(user_id: int, user_text: str, instruction: str | None = None) ->
             if text:
                 text, wrong_times = _fix_reminder_times(text, results, user_text)
             repeats = _repeated(text, user_id) if text else []
-            false_save = bool(text) and bool(user_text) and _claims_save(text) and not saved & _SAVE_TOOLS
+            false_save = bool(text) and bool(user_text) and _claims_save(text) and not saved
             id_mention = bool(text) and bool(_ID_MENTION.search(text))
+            timer_hint = _running_timer_hint(user_id, text, saved, user_text) if text and user_text else None
+            lecture = bool(text) and bool(user_text) and _adhd_lecture(user_id, text)
+            meta = bool(text) and _meta_reasoning(text)
             unfit = bool(text) and (
                 bool(wrong_times)
                 or bool(repeats)
                 or false_save
                 or id_mention
+                or bool(timer_hint)
+                or lecture
+                or meta
                 or _leaked_call(text)
                 or (not user_text and _unfit_checkin(text, instruction))
             )
@@ -305,6 +430,22 @@ async def reply(user_id: int, user_text: str, instruction: str | None = None) ->
                 messages.append(
                     {"role": "system", "content": 'Don\'t say record ids or numbers like "goal #1" to the user; leave them out.'}
                 )
+            if timer_hint:
+                messages.append({"role": "system", "content": timer_hint})
+            if meta:
+                messages.append(
+                    {
+                        "role": "system",
+                        "content": 'Your draft described your own reasoning or a human life. Write only the message to them, talking to "you".',
+                    }
+                )
+            if lecture:
+                messages.append(
+                    {
+                        "role": "system",
+                        "content": "They never mentioned ADHD. Don't explain ADHD or their pattern; go to the next concrete thing.",
+                    }
+                )
             # the model sometimes returns only hidden reasoning, stops mid-sentence, or (check-in) says goodbye: ask again
             empty_retries += 1
             log.warning(
@@ -334,7 +475,7 @@ async def reply(user_id: int, user_text: str, instruction: str | None = None) ->
             messages.append({"role": "tool", "tool_call_id": call.id, "content": result})
     if truncated and text:
         text = _trim_to_sentence(text)
-    if text and (_leaked_call(text) or wrong_times):
+    if text and (_leaked_call(text) or wrong_times or _meta_reasoning(text)):
         if user_text:
             text = ""  # the apology below; a tool call written out is never shown to the user
         else:
@@ -343,6 +484,10 @@ async def reply(user_id: int, user_text: str, instruction: str | None = None) ->
         raise ModelError("the check-in was a goodbye or too short to coach")  # nothing is sent; the caller backs off and tries later
     if text and repeats:
         text = _without(text, repeats)  # still repeating after the retries: say it without the repeated sentences
+    if text and user_text and timer_hint and "not ended" in timer_hint:
+        text = _drop_sentences(text, _TIME_UP)  # "time's up" while the timer is still running: cut that sentence
+    if text and lecture:
+        text = _drop_sentences(text, re.compile(r"\bADHD\b"))  # explained ADHD to someone who never brought it up: cut that sentence
     text = _without_ids(_plain(text))
     if not text:
         # Say so honestly, and keep it out of the history: stored as the coach's own words it makes the model imitate it.
