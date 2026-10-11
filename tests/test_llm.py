@@ -242,3 +242,45 @@ def test_stored_leaks_and_old_flow_markers_are_not_shown_to_the_model_again(user
     db.add_message(1001, "user", "(finished the intake interview)")
     db.add_message(1001, "user", "hello")
     assert llm._history(1001) == [{"role": "user", "content": "hello"}]
+
+
+def _local_clock(due):
+    from datetime import datetime
+    from zoneinfo import ZoneInfo
+
+    return datetime.fromtimestamp(due, ZoneInfo(db.get_user(1001)["tz"])).strftime("%H:%M")
+
+
+async def test_a_wrong_clock_time_after_setting_a_reminder_is_corrected_to_the_tool_time(model, user):
+    model.queue += [
+        message(None, calls=[("set_reminder", {"minutes": 60, "message": "Stand up"})]),
+        message("OK, I'll remind you in an hour, at 21:03, to stand up."),
+    ]
+    out = await llm.reply(1001, "remind me in an hour")
+    real = _local_clock(db.pending_reminders(1001)[0]["due"])
+    assert out == f"OK, I'll remind you in an hour, at {real}, to stand up." and "21:03" not in out or real == "21:03"
+
+
+async def test_times_the_tool_reported_or_the_user_gave_are_left_alone(model, user):
+    model.queue += [
+        message(None, calls=[("set_reminder", {"minutes": 60, "message": "Call"})]),
+        message("Set. Your call at 15:00 is first, the reminder follows."),
+    ]
+    out = await llm.reply(1001, "remind me in an hour, my call is at 15:00")
+    assert "15:00" in out and len(model.calls) == 2
+
+
+async def test_two_unexplained_times_are_redrawn_with_the_real_time_in_the_hint(model, user):
+    model.queue += [
+        message(None, calls=[("set_reminder", {"minutes": 30, "message": "Walk"})]),
+        message("Set for 03:11 and again 04:22."),
+        message("Done, I will remind you soon."),
+    ]
+    assert await llm.reply(1001, "remind me in half an hour") == "Done, I will remind you soon."
+    hint = model.calls[2]["messages"][-1]
+    assert hint["role"] == "system" and "03:11" in hint["content"] and "04:22" in hint["content"]
+
+
+def test_no_times_are_checked_when_no_reminder_was_set():
+    assert llm._fix_reminder_times("Try 6:30 or 7:00.", [], "help me wake up") == ("Try 6:30 or 7:00.", [])
+    assert llm._fix_reminder_times("At 9:00.", ["error: nope"], "x") == ("At 9:00.", [])

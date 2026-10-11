@@ -91,6 +91,36 @@ def _plain(text: str) -> str:
     return text
 
 
+# Clock times in a reply that confirms a reminder must be the ones the tool reported: the model has written "in an hour, at 21:00" at 10:02.
+_CLOCK = re.compile(r"(?<![\d:.])([01]?\d|2[0-3]):([0-5]\d)(?![\d:])")
+
+
+def _clocks(text: str) -> set[tuple[int, int]]:
+    return {(int(h), int(m)) for h, m in _CLOCK.findall(text)}
+
+
+def _reminder_times(results: list[str]) -> set[tuple[int, int]]:
+    """The local times the set_reminder calls of this turn reported ("ok: reminder #3 set for Sat 11:33 local time")."""
+    return {t for r in results if r.startswith("ok: reminder #") for t in _clocks(r)}
+
+
+def _fix_reminder_times(text: str, results: list[str], user_text: str) -> tuple[str, list[str]]:
+    """Check the clock times a reply states after a reminder was set. Returns the text, corrected when the fix is unambiguous, and the
+    invented times still left in it (empty when the reply is fine)."""
+    reported = _reminder_times(results)
+    if not reported:
+        return text, []
+    known = reported | {(h % 24, m) for h, m in _clocks(user_text)} | {((h + 12) % 24, m) for h, m in _clocks(user_text)}
+    invented = sorted(_clocks(text) - known)
+    if not invented:
+        return text, []
+    if len(reported) == 1 and len(invented) == 1:
+        (h, m), (rh, rm) = invented[0], next(iter(reported))
+        pattern = re.compile(rf"(?<![\d:.]){h:02d}:{m:02d}(?![\d:])|(?<![\d:.]){h}:{m:02d}(?![\d:])")
+        return pattern.sub(f"{rh:02d}:{rm:02d}", text), []
+    return text, [f"{h:02d}:{m:02d}" for h, m in invented]
+
+
 def _leaked_call(text: str) -> bool:
     return bool(_LEAKED_CALL.search(text))
 
@@ -176,21 +206,30 @@ async def reply(user_id: int, user_text: str, instruction: str | None = None) ->
     # A check-in has no new message from the user, and the model acts on their last (old) one: no tools then, so it can't, for example,
     # set again the reminder they asked for hours ago. Their answer to the check-in is a normal turn with tools.
     tool_defs = tools.TOOLS if user_text else None
-    text, empty_retries = "", 0
+    text, empty_retries, results, wrong_times = "", 0, [], []
     for _ in range(MAX_TOOL_ROUNDS + MAX_EMPTY_RETRIES):
         msg = await _chat(messages, tool_defs, max_tokens=REPLY_TOKENS)
         text = (msg.content or "").strip()
         truncated = getattr(msg, "finish_reason", None) == "length"
         if not msg.tool_calls:
-            unfit = bool(text) and (_leaked_call(text) or (not user_text and _unfit_checkin(text, instruction)))
+            if text:
+                text, wrong_times = _fix_reminder_times(text, results, user_text)
+            unfit = bool(text) and (bool(wrong_times) or _leaked_call(text) or (not user_text and _unfit_checkin(text, instruction)))
             if (text and not truncated and not unfit) or empty_retries >= MAX_EMPTY_RETRIES:
                 break
-            empty_retries += (
-                1  # the model sometimes returns only hidden reasoning, stops mid-sentence, or (check-in) says goodbye: ask again
-            )
+            if wrong_times:
+                messages.append(
+                    {
+                        "role": "system",
+                        "content": f"Your draft gave the time {', '.join(wrong_times)}, which is not the time of the reminder you set. "
+                        "Give only the time from the tool result, exactly as it is, or no clock time at all.",
+                    }
+                )
+            # the model sometimes returns only hidden reasoning, stops mid-sentence, or (check-in) says goodbye: ask again
+            empty_retries += 1
             log.warning(
                 "%s model reply, retrying (%d)",
-                "leaked tool call or unfit check-in" if unfit else "cut-off" if text else "empty",
+                "leaked tool call, wrong time or unfit check-in" if unfit else "cut-off" if text else "empty",
                 empty_retries,
             )
             continue
@@ -209,14 +248,15 @@ async def reply(user_id: int, user_text: str, instruction: str | None = None) ->
             # log the outcome, not the arguments: they contain what the user wrote about their life. A refusal is our own fixed
             # text, so it is logged in full: it is what explains why a call failed.
             log.info("tool %s -> %s", call.function.name, result[:120] if result.startswith("error") else result.split(":", 1)[0])
+            results.append(result)
             messages.append({"role": "tool", "tool_call_id": call.id, "content": result})
     if truncated and text:
         text = _trim_to_sentence(text)
-    if text and _leaked_call(text):
+    if text and (_leaked_call(text) or wrong_times):
         if user_text:
             text = ""  # the apology below; a tool call written out is never shown to the user
         else:
-            raise ModelError("the check-in contained a tool call written as text")
+            raise ModelError("the check-in contained a tool call written as text or a wrong time")
     if not user_text and text and _unfit_checkin(text, instruction):
         raise ModelError("the check-in was a goodbye or too short to coach")  # nothing is sent; the caller backs off and tries later
     text = _plain(text)
