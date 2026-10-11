@@ -297,10 +297,21 @@ def _close_objective(uid: int, a: dict) -> str:
     return "ok: objective recorded" if ok else "error: no such open objective"
 
 
+def _words(text: str) -> set[str]:
+    return set(re.findall(r"[\w-]+", text.casefold()))
+
+
+def _similar(a: str, b: str) -> bool:
+    """The same idea in other words ("shrink the task, use a 10-minute timer" saved twice): most of the words are shared."""
+    wa, wb = _words(a), _words(b)
+    return bool(wa and wb) and len(wa & wb) / len(wa | wb) >= 0.6
+
+
 def _save_to_toolbox(uid: int, a: dict) -> str:
     text = _text(a)
-    if any(_norm(t["text"]) == _norm(text) for t in db.toolbox(uid)):
-        return "ok: already in the toolbox"
+    for t in db.toolbox(uid):
+        if _norm(t["text"]) == _norm(text) or _similar(t["text"], text):
+            return f"ok: already in the toolbox as #{t['id']}; not saved again"
     return "ok: saved to toolbox" if db.add_tool(uid, text) else "error: toolbox is full"
 
 

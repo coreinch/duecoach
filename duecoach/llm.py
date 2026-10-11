@@ -1,4 +1,5 @@
 import asyncio
+import difflib
 import logging
 import re
 import time
@@ -121,6 +122,31 @@ def _fix_reminder_times(text: str, results: list[str], user_text: str) -> tuple[
     return text, [f"{h:02d}:{m:02d}" for h, m in invented]
 
 
+def _sentences(text: str) -> list[str]:
+    parts = re.split(r"(?<=[.!?;\u037e])\s+|\n+", text)
+    return [p.strip() for p in parts if len(p.split()) >= 5]  # shorter ones ("Go.", "Nice work.") may repeat
+
+
+def _norm_sentence(sentence: str) -> str:
+    return " ".join(re.findall(r"\w+", sentence.casefold()))
+
+
+def _repeated(text: str, user_id: int) -> list[str]:
+    """Sentences of this draft that the coach already said, almost word for word, in its last three replies."""
+    earlier = [m["content"] for m in db.recent_messages(user_id, 10) if m["role"] == "assistant"][-3:]
+    seen = [_norm_sentence(s) for message in earlier for s in _sentences(message)]
+    return [s for s in _sentences(text) if any(difflib.SequenceMatcher(None, _norm_sentence(s), old).ratio() >= 0.85 for old in seen)]
+
+
+def _without(text: str, sentences: list[str]) -> str:
+    """The text with those sentences left out, or unchanged if nothing else would remain."""
+    rest = text
+    for sentence in sentences:
+        rest = rest.replace(sentence, "")
+    rest = re.sub(r"[ \t]+", " ", re.sub(r"\n{3,}", "\n\n", rest)).strip()
+    return rest if rest else text
+
+
 def _leaked_call(text: str) -> bool:
     return bool(_LEAKED_CALL.search(text))
 
@@ -206,7 +232,7 @@ async def reply(user_id: int, user_text: str, instruction: str | None = None) ->
     # A check-in has no new message from the user, and the model acts on their last (old) one: no tools then, so it can't, for example,
     # set again the reminder they asked for hours ago. Their answer to the check-in is a normal turn with tools.
     tool_defs = tools.TOOLS if user_text else None
-    text, empty_retries, results, wrong_times = "", 0, [], []
+    text, empty_retries, results, wrong_times, repeats = "", 0, [], [], []
     for _ in range(MAX_TOOL_ROUNDS + MAX_EMPTY_RETRIES):
         msg = await _chat(messages, tool_defs, max_tokens=REPLY_TOKENS)
         text = (msg.content or "").strip()
@@ -214,7 +240,10 @@ async def reply(user_id: int, user_text: str, instruction: str | None = None) ->
         if not msg.tool_calls:
             if text:
                 text, wrong_times = _fix_reminder_times(text, results, user_text)
-            unfit = bool(text) and (bool(wrong_times) or _leaked_call(text) or (not user_text and _unfit_checkin(text, instruction)))
+            repeats = _repeated(text, user_id) if text else []
+            unfit = bool(text) and (
+                bool(wrong_times) or bool(repeats) or _leaked_call(text) or (not user_text and _unfit_checkin(text, instruction))
+            )
             if (text and not truncated and not unfit) or empty_retries >= MAX_EMPTY_RETRIES:
                 break
             if wrong_times:
@@ -225,11 +254,20 @@ async def reply(user_id: int, user_text: str, instruction: str | None = None) ->
                         "Give only the time from the tool result, exactly as it is, or no clock time at all.",
                     }
                 )
+            if repeats and not wrong_times:
+                messages.append(
+                    {
+                        "role": "system",
+                        "content": "Your draft repeats what you already said in an earlier reply: "
+                        + " / ".join(f'"{s}"' for s in repeats[:2])
+                        + ". Say it once only: leave it out or say something new.",
+                    }
+                )
             # the model sometimes returns only hidden reasoning, stops mid-sentence, or (check-in) says goodbye: ask again
             empty_retries += 1
             log.warning(
                 "%s model reply, retrying (%d)",
-                "leaked tool call, wrong time or unfit check-in" if unfit else "cut-off" if text else "empty",
+                "leaked tool call, wrong time, repeated sentence or unfit check-in" if unfit else "cut-off" if text else "empty",
                 empty_retries,
             )
             continue
@@ -259,6 +297,8 @@ async def reply(user_id: int, user_text: str, instruction: str | None = None) ->
             raise ModelError("the check-in contained a tool call written as text or a wrong time")
     if not user_text and text and _unfit_checkin(text, instruction):
         raise ModelError("the check-in was a goodbye or too short to coach")  # nothing is sent; the caller backs off and tries later
+    if text and repeats:
+        text = _without(text, repeats)  # still repeating after the retries: say it without the repeated sentences
     text = _plain(text)
     if not text:
         # Say so honestly, and keep it out of the history: stored as the coach's own words it makes the model imitate it.

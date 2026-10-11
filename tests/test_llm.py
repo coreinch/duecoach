@@ -284,3 +284,31 @@ async def test_two_unexplained_times_are_redrawn_with_the_real_time_in_the_hint(
 def test_no_times_are_checked_when_no_reminder_was_set():
     assert llm._fix_reminder_times("Try 6:30 or 7:00.", [], "help me wake up") == ("Try 6:30 or 7:00.", [])
     assert llm._fix_reminder_times("At 9:00.", ["error: nope"], "x") == ("At 9:00.", [])
+
+
+EARLIER = "I'll check in after the timer to see how many you got through."
+
+
+async def test_a_sentence_the_coach_already_said_is_redrawn_without_it(model, user):
+    db.add_message(1001, "assistant", f"Go for it. {EARLIER}")
+    model.queue += [
+        message("Nice, keep going. I'll check in after 3 PM to see how many you got through."),
+        message("Nice, keep going. Tell me when the timer is done."),
+    ]
+    assert await llm.reply(1001, "started") == "Nice, keep going. Tell me when the timer is done."
+    hint = model.calls[1]["messages"][-1]
+    assert hint["role"] == "system" and "repeats what you already said" in hint["content"] and "check in after 3 PM" in hint["content"]
+
+
+async def test_if_it_keeps_repeating_the_repeated_sentence_is_cut_not_the_whole_reply(model, user):
+    db.add_message(1001, "assistant", EARLIER)
+    model.queue += [message(f"Good pace. {EARLIER}")] * 3
+    assert await llm.reply(1001, "still going") == "Good pace."
+    db.add_message(1001, "assistant", EARLIER)
+    model.queue += [message(EARLIER)] * 3
+    assert await llm.reply(1001, "ok") == EARLIER  # nothing else to say: the reply is kept rather than emptied
+
+
+def test_short_sentences_and_different_sentences_are_not_repeats(user):
+    db.add_message(1001, "assistant", "Go. Nice work. Timer set for 14:39, you will hear from me then.")
+    assert llm._repeated("Go. Nice work. Open the folder and type the first title.", 1001) == []

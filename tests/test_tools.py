@@ -152,3 +152,13 @@ def test_the_toolbox_shows_ids_and_wrong_items_can_be_removed(user):
     other = db.get_or_create_user("telegram", "2002", "2002")["user_id"]
     db.add_tool(other, "someone else's")
     assert run(uid, "remove_from_toolbox", tool_id=db.toolbox(other)[0]["id"]).startswith("error")  # not another user's item
+
+
+def test_the_same_toolbox_idea_in_other_words_is_not_saved_twice(user):
+    uid = user["user_id"]
+    first = "Shrinking the task to a tiny first step and using a 10-minute timer gets you started without overthinking."
+    again = "Shrinking the task to three words only and using a 10-minute timer gets you started without overthinking."
+    assert run(uid, "save_to_toolbox", text=first) == "ok: saved to toolbox"
+    assert run(uid, "save_to_toolbox", text=again).startswith("ok: already in the toolbox as #")
+    assert run(uid, "save_to_toolbox", text="Jotting down a distracting idea gets it out of your head").startswith("ok: saved")
+    assert len(db.toolbox(uid)) == 2
