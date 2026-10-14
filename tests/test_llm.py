@@ -467,3 +467,21 @@ async def test_the_verifier_sends_back_time_is_up_while_the_timer_still_runs(mod
         message('{"unbacked": [], "unhandled": []}'),
     ]
     assert (await llm.reply(1001, "done early?")).startswith("Still about 20 minutes")
+
+
+async def test_the_verifier_sends_back_a_reply_that_ignores_what_the_user_asked(model, user, recorder, verifier):
+    model.queue += [
+        message("You found the fix, and now it is done. What is next?"),
+        message('{"unbacked": [], "unhandled": [], "off_target": ["user asked what the message meant; the draft assumes they finished"]}'),
+        message("That was the reminder for the scraper sprint. Do you still want to do it?"),
+        message('{"unbacked": [], "unhandled": [], "off_target": []}'),
+    ]
+    assert (await llm.reply(1001, "what?")).startswith("That was the reminder")
+    assert "check found" in model.calls[2]["messages"][-1]["content"]
+
+
+async def test_a_clean_verifier_pass_is_logged(model, user, recorder, verifier, caplog):
+    model.queue += [message("Sounds good."), message('{"unbacked": [], "unhandled": [], "off_target": []}')]
+    with caplog.at_level("INFO", logger="duecoach.llm"):
+        await llm.reply(1001, "ok")
+    assert "verifier ok" in caplog.text

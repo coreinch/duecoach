@@ -308,6 +308,7 @@ async def _verify(user_id: int, user_text: str, draft: str, done: list[str]) -> 
     Returns feedback for the coach, or None when the draft stands. A verifier that fails or answers badly never blocks a reply.
     """
     prompt = prompts.VERIFIER.format(
+        recent="\n".join(f"{m['role']}: {m['content'][:300]}" for m in db.recent_messages(user_id, 5)[:-1]) or "(none)",
         user=user_text[:600],
         draft=draft[:1200],
         done=", ".join(done) or "none",
@@ -321,16 +322,17 @@ async def _verify(user_id: int, user_text: str, draft: str, done: list[str]) -> 
             if out:
                 break
         found = json.loads(re.search(r"\{.*\}", out, re.DOTALL).group(0))  # type: ignore[union-attr]
-        problems = [str(x) for k in ("unbacked", "unhandled") for x in found.get(k, []) if str(x).strip()]
+        problems = [str(x) for k in ("unbacked", "unhandled", "off_target") for x in found.get(k, []) if str(x).strip()]
     except Exception as error:  # the answer itself is not logged: it quotes the user
         log.warning("could not use the verifier answer (%s, %d chars), sending the reply unchecked", type(error).__name__, len(out))
         return None
     if not problems:
+        log.info("verifier ok")
         return None
     log.warning("verifier sent a draft back: %d problem(s)", len(problems))
     return (
         f'Your draft was: "{draft[:600]}"\nA check found: ' + "; ".join(problems) + ". Call the missing tools now, then write the reply "
-        "so that it says only what is true after them. Do not mention this check."
+        "so that it says only what is true after them and answers what they said. Do not mention this check."
     )
 
 

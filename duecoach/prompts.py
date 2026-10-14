@@ -217,6 +217,9 @@ Questions, "maybe", "I don't know", a reply that changes the subject, and replie
 VERIFIER = """You check ONE turn of a coaching bot before its reply is sent. The bot can only change things by calling tools; saying
 it did something is not doing it.
 
+Recent chat (oldest first):
+{recent}
+
 The user wrote:
 {user}
 
@@ -236,9 +239,13 @@ Find problems of two kinds, judging by meaning, in any language:
 2. "unhandled": something in the user's message that needs a tool call and did not get one. Look at every pending reminder and open
    item in the state: does what the user said make it obsolete (they already did the thing, changed their mind, gave a different time),
    or ask for a change nobody made? If yes, name the tool and the exact item.
-Do not flag style, tone or the quality of coaching. When in doubt, the draft is fine.
+3. "off_target": the draft does not answer what the user actually said. For example they ask "what?" or say they are confused about a
+   message or reminder they just received (see the reminders delivered recently in the state) and the draft ignores it, or the draft
+   assumes progress or an outcome the user never reported.
+Do not flag style, tone or the quality of coaching otherwise. When in doubt, the draft is fine.
 
-Answer with JSON only: {{"unbacked": [short strings], "unhandled": [short strings]}}. Use empty lists when there is nothing."""
+Answer with JSON only: {{"unbacked": [short strings], "unhandled": [short strings], "off_target": [short strings]}}. Use empty lists when
+there is nothing."""
 
 SUMMARIZE = """Update the coaching notes about this user. Keep durable facts learned in conversation only: recurring struggles,
 what strategies worked or failed, routines, preferences, how they like to be coached. Record only what the user said or did, never your own explanations or guesses (such as why something happens). Do not repeat goals, objectives or toolbox
