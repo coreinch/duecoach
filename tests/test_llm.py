@@ -3,7 +3,7 @@ from types import SimpleNamespace as NS
 
 import pytest
 
-from duecoach import db, llm
+from duecoach import db, llm, tools
 
 REAL_COMPLETE = llm._complete  # conftest blocks the real one for every test; the recorder tests put it back
 
@@ -485,3 +485,29 @@ async def test_explaining_adhd_to_someone_who_never_mentioned_it_is_redrawn_or_c
     db.add_message(1001, "user", "my ADHD makes this hard")
     model.queue += [message("With ADHD, tiny first steps work best. What is the first one?")]
     assert "ADHD" in await llm.reply(1001, "yes")
+
+
+async def test_the_verifier_sends_a_false_cancel_back_and_the_coach_then_cancels(model, user, recorder, verifier):
+    reminder = tools.run_tool(1001, "set_reminder", json.dumps({"minutes": 10, "message": "Pick up the parcel."}))
+    assert reminder.startswith("ok") and len(db.pending_reminders(1001)) == 1
+    rid = db.pending_reminders(1001)[0]["id"]
+    model.queue += [
+        message("Nice, I am cancelling that reminder then."),  # the draft claims it, no tool ran
+        message('{"unbacked": ["says the reminder is cancelled"], "unhandled": ["cancel_reminder for the parcel reminder"]}'),
+        message(calls=[("cancel_reminder", {"reminder_id": rid})]),
+        message("Nice, the reminder is gone."),
+        message('{"unbacked": [], "unhandled": []}'),
+    ]
+    assert await llm.reply(1001, "i did it") == "Nice, the reminder is gone."
+    assert db.pending_reminders(1001) == []
+
+
+async def test_a_verifier_that_fails_never_blocks_the_reply(model, user, recorder, verifier):
+    model.queue += [message("Sounds good."), message("this is not json")]
+    assert await llm.reply(1001, "ok") == "Sounds good."
+
+
+async def test_the_verifier_may_send_a_draft_back_only_twice(model, user, recorder, verifier):
+    flagged = message('{"unbacked": ["claims a save"], "unhandled": []}')
+    model.queue += [message("Fine."), flagged, message("Fine, then."), flagged, message("Fine, really."), flagged]
+    assert await llm.reply(1001, "ok") == "Fine, really."

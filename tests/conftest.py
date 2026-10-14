@@ -36,6 +36,24 @@ def no_real_model(monkeypatch):
     monkeypatch.setattr(llm, "_complete", refuse)
 
 
+REAL_VERIFY = llm._verify
+
+
+@pytest.fixture(autouse=True)
+def no_verifier(monkeypatch):
+    """Tests script the model call by call; the verifier's extra call is switched on only by the tests about it."""
+
+    async def pass_draft(*args, **kwargs):
+        return None
+
+    monkeypatch.setattr(llm, "_verify", pass_draft)
+
+
+@pytest.fixture
+def verifier(monkeypatch):
+    monkeypatch.setattr(llm, "_verify", REAL_VERIFY)
+
+
 @pytest.fixture
 def user():
     """A Telegram user who has agreed to the privacy notice and confirmed their timezone."""

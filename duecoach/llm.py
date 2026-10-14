@@ -17,6 +17,8 @@ log = logging.getLogger("duecoach.llm")
 
 MAX_TOOL_ROUNDS = 4
 MAX_EMPTY_RETRIES = 2
+VERIFY_TOKENS = 4000  # the verifier thinks before it answers; 2000 was often used up with nothing left for the JSON
+MAX_VERIFY_ROUNDS = 2  # times the verifier may send a draft back to the model
 REPLY_TOKENS = 3000  # reasoning models spend part of this thinking; too small a limit cuts the answer off mid-sentence
 MAX_CONSECUTIVE_ASSISTANT = 2  # in the history sent to the model: proactive check-ins pile up while a user is silent
 MODEL_ATTEMPTS = 2  # tries per call: a provider hiccup is retried once
@@ -332,6 +334,38 @@ async def record_agreements(user_id: int, user_text: str) -> list[str]:
     return notes
 
 
+async def _verify(user_id: int, user_text: str, draft: str, done: list[str]) -> str | None:
+    """Ask a separate model call whether the draft claims something no tool did, or leaves something the user said unhandled.
+
+    Returns feedback for the coach, or None when the draft stands. A verifier that fails or answers badly never blocks a reply.
+    """
+    prompt = prompts.VERIFIER.format(
+        user=user_text[:600],
+        draft=draft[:1200],
+        done=", ".join(done) or "none",
+        tools=", ".join(t["function"]["name"] for t in tools.TOOLS),
+        state=tools.coaching_state(user_id),
+    )
+    out = ""
+    try:
+        for _ in range(2):  # a reasoning model sometimes spends the whole budget thinking and answers with nothing: ask once more
+            out = await _complete([{"role": "user", "content": prompt}], max_tokens=VERIFY_TOKENS)
+            if out:
+                break
+        found = json.loads(re.search(r"\{.*\}", out, re.DOTALL).group(0))  # type: ignore[union-attr]
+        problems = [str(x) for k in ("unbacked", "unhandled") for x in found.get(k, []) if str(x).strip()]
+    except Exception as error:  # the answer itself is not logged: it quotes the user
+        log.warning("could not use the verifier answer (%s, %d chars), sending the reply unchecked", type(error).__name__, len(out))
+        return None
+    if not problems:
+        return None
+    log.warning("verifier sent a draft back: %d problem(s)", len(problems))
+    return (
+        f'Your draft was: "{draft[:600]}"\nA check found: ' + "; ".join(problems) + ". Call the missing tools now, then write the reply "
+        "so that it says only what is true after them. Do not mention this check."
+    )
+
+
 async def reply(user_id: int, user_text: str, instruction: str | None = None) -> str:
     """Chat with history, in one model call: the whole playbook is in the system prompt, so no lookup round is needed.
 
@@ -375,7 +409,8 @@ async def reply(user_id: int, user_text: str, instruction: str | None = None) ->
     saved: set[str] = {"add_goal" if n.startswith("goal") else "add_objective" for n in recorded}
     false_save = id_mention = lecture = meta = False
     timer_hint: str | None = None
-    for _ in range(MAX_TOOL_ROUNDS + MAX_EMPTY_RETRIES):
+    verify_rounds = 0
+    for _ in range(MAX_TOOL_ROUNDS + MAX_EMPTY_RETRIES + MAX_VERIFY_ROUNDS):
         msg = await _chat(messages, tool_defs, max_tokens=REPLY_TOKENS)
         text = (msg.content or "").strip()
         truncated = getattr(msg, "finish_reason", None) == "length"
@@ -399,6 +434,12 @@ async def reply(user_id: int, user_text: str, instruction: str | None = None) ->
                 or _leaked_call(text)
                 or (not user_text and _unfit_checkin(text, instruction))
             )
+            if text and not truncated and not unfit and user_text and verify_rounds < MAX_VERIFY_ROUNDS:
+                feedback = await _verify(user_id, user_text, text, sorted(saved))
+                if feedback:
+                    verify_rounds += 1
+                    messages.append({"role": "system", "content": feedback})
+                    continue
             if (text and not truncated and not unfit) or empty_retries >= MAX_EMPTY_RETRIES:
                 break
             if wrong_times:
