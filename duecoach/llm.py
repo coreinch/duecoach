@@ -151,35 +151,8 @@ def _without(text: str, sentences: list[str]) -> str:
     return rest if rest else text
 
 
-# Claiming something was saved although no tool succeeded this turn ("Saved." after the user said yes, but nothing was written), and ids.
-_SAVE_CLAIM = re.compile(
-    r"(?<!already )(?<!was )\b(?:saved|saving|i(?:'ll| will) save)\b|αποθήκευσα|αποθηκεύω|το κράτησα|σώθηκε|το έσωσα|το σημείωσα",
-    re.IGNORECASE,
-)
-# A timer or reminder announced although none exists, and "time's up" while the timer is still running.
-_TIMER_CLAIM = re.compile(
-    r"\b(?:timer|reminder|nudge)(?:'s| is| was)? (?:now )?(?:set|running|on|started|going)\b|\bi'?ve set (?:a|the|your)\b"
-    r"|\bset (?:a|the|your) [\w-]* ?(?:timer|reminder) for\b|\bi(?:'m| am|'ll| will) (?:now )?(?:setting|set) (?:a |the |your )?[\w-]* ?"
-    r"(?:check-?in|nudge|timer|reminder)\b|έβαλα (?:το )?(?:χρονόμετρο|υπενθύμιση)|ορίστηκε",
-    re.IGNORECASE,
-)
-_TIME_UP = re.compile(
-    r"\btime'?s up\b|\btime is up\b|\btimer(?:'s| is| has)? (?:up|done|ended|finished|went off|is over)\b|τέλειωσε ο χρόνος", re.IGNORECASE
-)
+# Ids in a reply: the user never sees record ids.
 _ID_MENTION = re.compile(r"\b(?:goal|objective|step|reminder|item)\s+#\d+", re.IGNORECASE)
-
-
-def _claims_save(text: str) -> bool:
-    return bool(_SAVE_CLAIM.search(text))
-
-
-_OFFER = re.compile(r"\s*(?:want|would|should|shall|do|does|can|could|is|are)\b", re.IGNORECASE)
-
-
-def _claims_timer(text: str) -> bool:
-    """A statement that a timer or reminder is set. An offer ("Want me to set a timer?") is a question, not a claim."""
-    sentences = re.split(r"(?<=[.!;\u037e])\s+|\n+", text)
-    return any(_TIMER_CLAIM.search(s) for s in sentences if not (s.rstrip().endswith("?") and _OFFER.match(s)))
 
 
 _UPDATE_MENTIONS = re.compile(
@@ -189,13 +162,8 @@ _UPDATE_MENTIONS = re.compile(
 
 
 def _running_timer_hint(user_id: int, text: str, saved: set[str], user_text: str = "") -> str | None:
-    """What is wrong with a timer statement, or None. Checked against the reminders that really exist."""
+    """Style hint for a short update while a timer runs, or None. (Whether a timer claim is true is the verifier's job.)"""
     pending = db.pending_reminders(user_id)
-    if _claims_timer(text) and "set_reminder" not in saved and not pending:
-        return "Your draft says a timer or reminder is set, but none exists. Call set_reminder now if they asked for one, or don't say it."
-    if _TIME_UP.search(text) and any(r["due"] > time.time() + 30 for r in pending):
-        soonest = min(r["due"] for r in pending)
-        return f"The timer has not ended yet (about {max(1, round((soonest - time.time()) / 60))} minutes left). Don't say the time is up."
     if pending and len(user_text.split()) <= 4 and "set_reminder" not in saved and len(text.split()) < 4:
         return "That reply is too short. Write one specific sentence about the task itself (6-15 words), not just a word or two."
     if pending and len(user_text.split()) <= 4 and "set_reminder" not in saved and _UPDATE_MENTIONS.search(text):
@@ -407,7 +375,7 @@ async def reply(user_id: int, user_text: str, instruction: str | None = None) ->
     wrong_times: list[str] = []
     repeats: list[str] = []
     saved: set[str] = {"add_goal" if n.startswith("goal") else "add_objective" for n in recorded}
-    false_save = id_mention = lecture = meta = False
+    id_mention = lecture = meta = False
     timer_hint: str | None = None
     verify_rounds = 0
     for _ in range(MAX_TOOL_ROUNDS + MAX_EMPTY_RETRIES + MAX_VERIFY_ROUNDS):
@@ -418,7 +386,6 @@ async def reply(user_id: int, user_text: str, instruction: str | None = None) ->
             if text:
                 text, wrong_times = _fix_reminder_times(text, results, user_text)
             repeats = _repeated(text, user_id) if text else []
-            false_save = bool(text) and bool(user_text) and _claims_save(text) and not saved
             id_mention = bool(text) and bool(_ID_MENTION.search(text))
             timer_hint = _running_timer_hint(user_id, text, saved, user_text) if text and user_text else None
             lecture = bool(text) and bool(user_text) and _adhd_lecture(user_id, text)
@@ -426,7 +393,6 @@ async def reply(user_id: int, user_text: str, instruction: str | None = None) ->
             unfit = bool(text) and (
                 bool(wrong_times)
                 or bool(repeats)
-                or false_save
                 or id_mention
                 or bool(timer_hint)
                 or lecture
@@ -457,14 +423,6 @@ async def reply(user_id: int, user_text: str, instruction: str | None = None) ->
                         "content": "Your draft repeats what you already said in an earlier reply: "
                         + " / ".join(f'"{s}"' for s in repeats[:2])
                         + ". Say it once only: leave it out or say something new.",
-                    }
-                )
-            if false_save:
-                messages.append(
-                    {
-                        "role": "system",
-                        "content": "Your draft says something was saved, but no save tool succeeded in this turn. If the user agreed to a goal, "
-                        "a step or a strategy, call the tool now; otherwise do not say anything is saved.",
                     }
                 )
             if id_mention:
@@ -525,8 +483,6 @@ async def reply(user_id: int, user_text: str, instruction: str | None = None) ->
         raise ModelError("the check-in was a goodbye or too short to coach")  # nothing is sent; the caller backs off and tries later
     if text and repeats:
         text = _without(text, repeats)  # still repeating after the retries: say it without the repeated sentences
-    if text and user_text and timer_hint and "not ended" in timer_hint:
-        text = _drop_sentences(text, _TIME_UP)  # "time's up" while the timer is still running: cut that sentence
     if text and lecture:
         text = _drop_sentences(text, re.compile(r"\bADHD\b"))  # explained ADHD to someone who never brought it up: cut that sentence
     text = _without_ids(_plain(text))

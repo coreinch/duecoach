@@ -321,44 +321,6 @@ def test_short_sentences_and_different_sentences_are_not_repeats(user):
     assert llm._repeated("Go. Nice work. Open the folder and type the first title.", 1001) == []
 
 
-@pytest.mark.parametrize(
-    ("text", "claims"),
-    [
-        ("Saved. Park the 3-month client until Thursday.", True),
-        ("Saving that to the toolbox.", True),
-        ("Το αποθήκευσα, πάμε.", True),
-        ("That strategy is already saved in your toolbox.", False),
-        ("Go do the three sends, you got this.", False),
-    ],
-)
-def test_claiming_something_was_saved_is_recognised(text, claims):
-    assert llm._claims_save(text) is claims
-
-
-async def test_saying_saved_without_a_save_tool_is_redrawn_until_the_tool_is_called(model, user):
-    model.queue += [
-        message("Saved. Go do the three sends."),
-        message(None, calls=[("add_objective", {"text": "Send the three finished invoices today"})]),
-        message("Saved: send the three finished invoices today."),
-    ]
-    out = await llm.reply(1001, "yeah save it, lets do it")
-    assert out == "Saved: send the three finished invoices today."
-    assert db.open_objectives(1001)[0]["text"] == "Send the three finished invoices today"
-    assert "no save tool succeeded" in model.calls[1]["messages"][-1]["content"]
-
-
-async def test_saying_saved_after_a_failed_save_is_also_refused(model, user):
-    model.queue += [
-        message(None, calls=[("add_objective", {"text": "x"})]),
-        message("Saved."),
-        message("I couldn't save that one just now."),
-    ]
-    db.add_goal(1001, "g")
-    for i in range(3):
-        db.add_objective(1001, None, f"open {i}", "")  # three open already: the tool refuses a fourth
-    assert await llm.reply(1001, "save it") == "I couldn't save that one just now."
-
-
 async def test_record_ids_are_not_spoken_and_are_cut_if_the_model_insists(model, user):
     model.queue += [message("Saved as goal #1, invoices cleared by Thursday.")] * 3
     out = await llm.reply(1001, "ok")
@@ -419,35 +381,6 @@ def run_tool(name, **args):
 
 
 # --- timers, reasoning, human claims and ADHD lectures ---
-
-
-async def test_saying_a_timer_is_set_when_none_exists_is_redrawn_but_an_offer_is_fine(model, user):
-    model.queue += [message("Timer set. You've got this, go."), message("Want a 10-minute timer to start?")]
-    assert await llm.reply(1001, "yes") == "Want a 10-minute timer to start?"
-    assert "none exists" in model.calls[1]["messages"][-1]["content"]
-
-
-@pytest.mark.parametrize(
-    ("text", "claims"),
-    [
-        ("I'm setting a check-in for 17:50 - just a quick still going?", True),
-        ("I'll set a 10-minute timer now.", True),
-        ("Timer's running until 16:15.", True),
-        ("Want me to set a timer?", False),
-        ("I can set a timer if you want one.", False),
-    ],
-)
-def test_announcing_a_timer_or_check_in_is_recognised_but_offers_are_not(text, claims):
-    assert llm._claims_timer(text) is claims
-
-
-async def test_time_is_up_is_refused_while_the_timer_runs_and_cut_if_it_persists(model, user):
-    db.add_reminder(1001, llm.time.time() + 600, "Stand up")
-    model.queue += [message("Timer's up. How did it go with the first invoice, tell me?")] * 3
-    out = await llm.reply(1001, "ok")
-    assert "up" not in out.lower().split("timer's")[-1] or out == "Timer's up. How did it go with the first invoice, tell me?"
-    model.queue += [message("Good start. Timer's up. Now send the second invoice please.")] * 3
-    assert await llm.reply(1001, "still going") == "Good start. Now send the second invoice please."
 
 
 async def test_while_a_timer_runs_short_updates_get_one_specific_sentence_not_a_word_or_the_timer(model, user):
@@ -511,3 +444,26 @@ async def test_the_verifier_may_send_a_draft_back_only_twice(model, user, record
     flagged = message('{"unbacked": ["claims a save"], "unhandled": []}')
     model.queue += [message("Fine."), flagged, message("Fine, then."), flagged, message("Fine, really."), flagged]
     assert await llm.reply(1001, "ok") == "Fine, really."
+
+
+async def test_the_verifier_refuses_saved_without_a_save_tool_and_the_coach_then_saves(model, user, recorder, verifier):
+    model.queue += [
+        message("Saved. Starting the timer when you say go."),
+        message('{"unbacked": ["says the goal is saved"], "unhandled": ["add_goal for the tax return"]}'),
+        message(calls=[("add_goal", {"text": "File my tax return."})]),
+        message("Goal saved."),
+        message('{"unbacked": [], "unhandled": []}'),
+    ]
+    assert await llm.reply(1001, "yes, that is my goal") == "Goal saved."
+    assert [g["text"] for g in db.active_goals(1001)] == ["File my tax return."]
+
+
+async def test_the_verifier_sends_back_time_is_up_while_the_timer_still_runs(model, user, recorder, verifier):
+    tools.run_tool(1001, "set_reminder", json.dumps({"minutes": 20, "message": "Sprint is over."}))
+    model.queue += [
+        message("Time's up! How did it go?"),
+        message('{"unbacked": ["says time is up but the timer has 20 minutes left"], "unhandled": []}'),
+        message("Still about 20 minutes on the clock. What are you working on?"),
+        message('{"unbacked": [], "unhandled": []}'),
+    ]
+    assert (await llm.reply(1001, "done early?")).startswith("Still about 20 minutes")

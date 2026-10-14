@@ -231,7 +231,8 @@ State right now (after those tools):
 
 Find problems of two kinds, judging by meaning, in any language:
 1. "unbacked": something the draft says or promises (set, saved, cancelled, removed, changed, "I will remind you") that no tool above did,
-   or that contradicts the state (for example a reminder is said to be cancelled but it is still listed).
+   or that contradicts the state (for example a reminder is said to be cancelled but it is still listed, or "time's up" is said while
+   the state shows the timer still has minutes left).
 2. "unhandled": something in the user's message that needs a tool call and did not get one. Look at every pending reminder and open
    item in the state: does what the user said make it obsolete (they already did the thing, changed their mind, gave a different time),
    or ask for a change nobody made? If yes, name the tool and the exact item.
