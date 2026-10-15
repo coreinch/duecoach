@@ -259,7 +259,11 @@ def _since(last_inbound: float | None) -> str:
         return ""
     minutes = int((time.time() - last_inbound) // 60)
     ago = f"{minutes} minutes" if minutes < 90 else f"{minutes // 60} hours" if minutes < 2880 else f"{minutes // 1440} days"
-    return f"The user last wrote {ago} ago, so anything they asked for in that message (a timer, a reminder) is already done or over."
+    return (
+        f"The user last wrote {ago} ago, so a timer or reminder they asked for in that message has already fired. "
+        "An appointment, call or plan they named for a later time is NOT over until the Now line has passed that time: "
+        "check the clock before saying it passed or asking how it went."
+    )
 
 
 async def record_agreements(user_id: int, user_text: str) -> list[str]:

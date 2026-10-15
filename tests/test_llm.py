@@ -174,6 +174,7 @@ def test_the_check_in_trigger_says_how_long_ago_the_user_last_wrote():
     assert "30 minutes ago" in llm._since(llm.time.time() - 1800)
     assert "5 hours ago" in llm._since(llm.time.time() - 5 * 3600)
     assert "3 days ago" in llm._since(llm.time.time() - 3 * 86400)
+    assert "NOT over until the Now line" in llm._since(llm.time.time() - 1800)  # a 12:45 appointment is not over at 10:00
 
 
 @pytest.mark.parametrize("goodbye", ["Talk tomorrow.", "Sleep well.", "Have a good evening.", "Καληνύχτα, τα λέμε αύριο.", "ok"])

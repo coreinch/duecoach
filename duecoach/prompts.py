@@ -139,7 +139,9 @@ _CHECKIN_RULES = (
     "Don't mention a timer or reminder unless one was delivered in the last few minutes (see the coaching state). Write in the language "
     "of their last message. "
     'Compare the "Now" line with the days in their objectives: if the day an objective is planned for has not come yet, help them prepare '
-    "for it, and never ask how it went."
+    "for it, and never ask how it went. The same holds for clock times today: if an appointment or plan they mentioned (in the chat or in a "
+    "waiting reminder) is at a time later than the \"Now\" line, it has NOT happened yet: help them get ready or leave on time, and never "
+    "say it passed or ask how it went."
 )
 MORNING = (
     "Start-of-day coaching check-in. Do real coaching, not small talk. Use their coaching record: if they have an open objective, "
