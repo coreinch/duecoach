@@ -344,7 +344,9 @@ async def _verify(user_id: int, user_text: str, draft: str, done: list[str]) -> 
         + (
             "Rewrite the check-in without those claims: ask instead of asserting. No tools. "
             if checkin
-            else "Call the missing tools now, then write the reply so that it says only what is true after them and answers what they said. "
+            else "For what the user asked for or agreed to, call the missing tools now; for anything only the draft promised or assumed, "
+            "delete it (never set a reminder, timer or save they did not ask for). Then write the reply so that it says only what "
+            "is true and answers what they said. "
         )
         + "Do not mention this check."
     )

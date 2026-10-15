@@ -499,3 +499,16 @@ async def test_the_verifier_sends_back_a_check_in_that_invents_what_the_user_did
     assert await llm.reply(1001, "", prompts.PULSE) == "How is the coffee break going? Will you make the call now or later?"
     assert "Rewrite the check-in" in model.calls[2]["messages"][-1]["content"]
     assert "I will have my coffee first" in model.calls[1]["messages"][0]["content"]  # the last chat line is shown to the verifier
+
+
+async def test_the_verifier_feedback_removes_a_promise_the_user_never_asked_for(model, user, recorder, verifier):
+    model.queue += [
+        message("Reminder set for 10 minutes from now."),
+        message('{"unbacked": ["promises a reminder the user never asked for"], "unhandled": [], "off_target": []}'),
+        message("Which account feels closest?"),
+        message('{"unbacked": [], "unhandled": [], "off_target": []}'),
+    ]
+    assert await llm.reply(1001, "@coreinch") == "Which account feels closest?"
+    feedback = model.calls[2]["messages"][-1]["content"]
+    assert "delete it" in feedback and "did not ask for" in feedback
+    assert db.pending_reminders(1001) == []
