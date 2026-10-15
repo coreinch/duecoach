@@ -140,7 +140,7 @@ _CHECKIN_RULES = (
     "of their last message. "
     'Compare the "Now" line with the days in their objectives: if the day an objective is planned for has not come yet, help them prepare '
     "for it, and never ask how it went. The same holds for clock times today: if an appointment or plan they mentioned (in the chat or in a "
-    "waiting reminder) is at a time later than the \"Now\" line, it has NOT happened yet: help them get ready or leave on time, and never "
+    'waiting reminder) is at a time later than the "Now" line, it has NOT happened yet: help them get ready or leave on time, and never '
     "say it passed or ask how it went."
 )
 MORNING = (
