@@ -3,7 +3,7 @@ from types import SimpleNamespace as NS
 
 import pytest
 
-from duecoach import db, llm, tools
+from duecoach import db, llm, prompts, tools
 
 REAL_COMPLETE = llm._complete  # conftest blocks the real one for every test; the recorder tests put it back
 
@@ -486,3 +486,16 @@ async def test_a_clean_verifier_pass_is_logged(model, user, recorder, verifier, 
     with caplog.at_level("INFO", logger="duecoach.llm"):
         await llm.reply(1001, "ok")
     assert "verifier ok" in caplog.text
+
+
+async def test_the_verifier_sends_back_a_check_in_that_invents_what_the_user_did(model, user, recorder, verifier):
+    db.add_message(1001, "user", "I will have my coffee first")
+    model.queue += [
+        message("Glad you rested after your coffee. Will you make the call now or later?"),
+        message('{"unbacked": [], "unhandled": [], "off_target": ["says they rested, which they never said"]}'),
+        message("How is the coffee break going? Will you make the call now or later?"),
+        message('{"unbacked": [], "unhandled": [], "off_target": []}'),
+    ]
+    assert await llm.reply(1001, "", prompts.PULSE) == "How is the coffee break going? Will you make the call now or later?"
+    assert "Rewrite the check-in" in model.calls[2]["messages"][-1]["content"]
+    assert "I will have my coffee first" in model.calls[1]["messages"][0]["content"]  # the last chat line is shown to the verifier

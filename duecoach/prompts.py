@@ -130,7 +130,8 @@ PROACTIVE_GUARD = (
     "This is a check-in you are starting yourself. The user has written nothing new, and no tools are available this turn: don't say "
     "you set, saved or changed anything or that you WILL set a reminder (the reminders listed in the record are the only ones that exist), "
     "never write a tool call or a tool name, and don't act on, repeat or answer an earlier request of theirs (such as a timer or reminder "
-    "they asked for before)."
+    "they asked for before). Never state or assume what they did or felt since they last wrote (that they rested, finished, went, "
+    "are glad); ask instead."
 )
 
 # Appended to every proactive check-in: the model tends to parrot the instruction's label and to ask several questions at once.
@@ -244,7 +245,7 @@ Find problems of two kinds, judging by meaning, in any language:
 3. "off_target": the draft does not answer what the user actually said. For example they ask "what?" or say they are confused about a
    message or reminder they just received (see the reminders delivered recently in the state) and the draft ignores it, or the draft
    assumes progress or an outcome the user never reported.
-Do not flag style, tone or the quality of coaching otherwise. When in doubt, the draft is fine.
+{checkin}Do not flag style, tone or the quality of coaching otherwise. When in doubt, the draft is fine.
 
 Answer with JSON only: {{"unbacked": [short strings], "unhandled": [short strings], "off_target": [short strings]}}. Use empty lists when
 there is nothing."""
@@ -259,6 +260,12 @@ Current notes:
 
 Recent conversation:
 {convo}
+"""
+
+VERIFIER_CHECKIN = """This draft is an automatic check-in the bot started itself: the user wrote nothing new and the bot has no tools this turn.
+Judge only "off_target" (leave the other lists empty): the draft states or assumes something about the user that they never
+said in the recent chat above, such as that they rested, finished, went somewhere, felt a certain way or did what they planned.
+An appointment or plan they named for a later clock time than the "Now" line has not happened yet. Asking is fine; asserting is not.
 """
 
 LANGUAGE = {

@@ -311,9 +311,12 @@ async def _verify(user_id: int, user_text: str, draft: str, done: list[str]) -> 
 
     Returns feedback for the coach, or None when the draft stands. A verifier that fails or answers badly never blocks a reply.
     """
+    checkin = not user_text  # an automatic check-in: nothing new from the user, and the draft is not stored yet
+    recent = db.recent_messages(user_id, 5)
     prompt = prompts.VERIFIER.format(
-        recent="\n".join(f"{m['role']}: {m['content'][:300]}" for m in db.recent_messages(user_id, 5)[:-1]) or "(none)",
-        user=user_text[:600],
+        recent="\n".join(f"{m['role']}: {m['content'][:300]}" for m in (recent if checkin else recent[:-1])) or "(none)",
+        user="(nothing: automatic check-in)" if checkin else user_text[:600],
+        checkin=prompts.VERIFIER_CHECKIN if checkin else "",
         draft=draft[:1200],
         done=", ".join(done) or "none",
         tools=", ".join(t["function"]["name"] for t in tools.TOOLS),
@@ -335,8 +338,15 @@ async def _verify(user_id: int, user_text: str, draft: str, done: list[str]) -> 
         return None
     log.warning("verifier sent a draft back: %d problem(s)", len(problems))
     return (
-        f'Your draft was: "{draft[:600]}"\nA check found: ' + "; ".join(problems) + ". Call the missing tools now, then write the reply "
-        "so that it says only what is true after them and answers what they said. Do not mention this check."
+        f'Your draft was: "{draft[:600]}"\nA check found: '
+        + "; ".join(problems)
+        + ". "
+        + (
+            "Rewrite the check-in without those claims: ask instead of asserting. No tools. "
+            if checkin
+            else "Call the missing tools now, then write the reply so that it says only what is true after them and answers what they said. "
+        )
+        + "Do not mention this check."
     )
 
 
@@ -406,7 +416,7 @@ async def reply(user_id: int, user_text: str, instruction: str | None = None) ->
                 or _leaked_call(text)
                 or (not user_text and _unfit_checkin(text, instruction))
             )
-            if text and not truncated and not unfit and user_text and verify_rounds < MAX_VERIFY_ROUNDS:
+            if text and not truncated and not unfit and verify_rounds < MAX_VERIFY_ROUNDS:
                 feedback = await _verify(user_id, user_text, text, sorted(saved))
                 if feedback:
                     verify_rounds += 1
