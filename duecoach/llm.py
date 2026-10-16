@@ -373,7 +373,7 @@ async def _verify(user_id: int, user_text: str, draft: str, done: list[str]) -> 
             if out:
                 break
         found = json.loads(re.search(r"\{.*\}", out, re.DOTALL).group(0))  # type: ignore[union-attr]
-        kinds = ("unbacked", "unhandled", "off_target", "invented_time")
+        kinds = ("unbacked", "unhandled", "off_target", "invented_time", "unclear_reference")
         problems = [str(x) for k in kinds for x in found.get(k, []) if str(x).strip()]
         flagged = tuple(k for k in kinds if any(str(x).strip() for x in found.get(k, [])))
     except Exception as error:  # the answer itself is not logged: it quotes the user
@@ -393,6 +393,11 @@ async def _verify(user_id: int, user_text: str, draft: str, done: list[str]) -> 
             else "For what the user asked for or agreed to, call the missing tools now; for anything only the draft promised or assumed, "
             "delete it (never set a reminder, timer or save they did not ask for). Then write the reply so that it says only what "
             "is true and answers what they said. "
+        )
+        + (
+            "Where something is unclear, say in a few words what it is, in the user's own terms, not in the wording it was saved with. "
+            if "unclear_reference" in flagged
+            else ""
         )
         + "Do not mention this check."
     )

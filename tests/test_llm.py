@@ -692,3 +692,54 @@ async def test_out_of_rounds_right_after_a_send_back_the_flagged_draft_is_not_se
     model.queue += [message(calls=[("cancel_reminder", {"reminder_id": 99})]) for _ in range(tool_rounds)]
     model.queue += [message("Reminder set."), flagged, message("Reminder set, really."), flagged]
     assert await llm.reply(1001, "remind me") == llm.strings.t("en", "UNSURE")
+
+
+async def test_a_check_in_naming_something_only_by_its_saved_label_goes_back_to_say_what_it_is(model, user, recorder, verifier):
+    db.add_objective(1001, None, "I will use a 10-minute timer on weekday to check the 3 messages.", "")
+    db.add_message(1001, "assistant", "Hey, how is the day going?")
+    model.queue += [
+        message("The 10-minute timer for the 3 messages: did you get to it?"),
+        message('{"unclear_reference": ["the 3 messages and the timer are named only by their saved label"]}'),
+        message("You messaged 3 people about your weekly note list. Any replies yet?"),
+        message('{"unclear_reference": []}'),
+    ]
+    assert await llm.reply(1001, "", prompts.PULSE) == "You messaged 3 people about your weekly note list. Any replies yet?"
+    feedback = model.calls[2]["messages"][-1]["content"]
+    assert "say in a few words what it is" in feedback and "Rewrite the check-in" in feedback
+    assert db._conn.execute("SELECT flags FROM turn_stats").fetchone()[0] == "unclear_reference"
+
+
+async def test_an_unclear_reference_never_blocks_a_reply_to_the_user_but_does_hold_back_a_check_in(model, user, recorder, verifier):
+    flagged = message('{"unclear_reference": ["what is the note"]}')
+    model.queue += [
+        message("Did you finish the note?"),
+        flagged,
+        message("Did you finish the note then?"),
+        flagged,
+        message("And the note?"),
+        flagged,
+    ]
+    assert await llm.reply(1001, "ok") == "And the note?"
+    db.add_message(1001, "assistant", "Hey.")
+    model.queue += [
+        message("Did you finish the note? Tell me."),
+        flagged,
+        message("Did you finish the note then?"),
+        flagged,
+        message("And the note, did it go out?"),
+        flagged,
+    ]
+    with pytest.raises(llm.CheckinWithheld):
+        await llm.reply(1001, "", prompts.PULSE)
+
+
+def test_the_check_in_rules_ask_for_context_and_saved_steps_carry_no_relative_days():
+    assert "knows what everything in it refers to" in prompts.PULSE and "never in the label" in prompts.PULSE
+    assert '"unclear_reference"' in prompts.VERIFIER and "unclear_reference" in prompts.VERIFIER_CHECKIN
+    assert 'never "today" or "tomorrow"' in prompts.RECORDER
+    assert (
+        'never "tomorrow"'
+        in next(t for t in tools.TOOLS if t["function"]["name"] == "add_objective")["function"]["parameters"]["properties"]["text"][
+            "description"
+        ]
+    )

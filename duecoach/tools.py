@@ -121,7 +121,10 @@ TOOLS = [
         "add_objective",
         "Save a small concrete step toward a goal that the user just agreed to do (today or this week), with when/where in the text if they said so. Call it in the same turn they agree. Max 3 open at once.",
         {
-            "text": {"type": "string", "description": "The objective including when/where, in the user's language."},
+            "text": {
+                "type": "string",
+                "description": 'The objective including when/where, in the user\'s language. Use a weekday or clock time, never "tomorrow" or "today": it is read again later.',
+            },
             "goal_id": {"type": "integer", "description": "The goal it serves, if any."},
             "incentive": {"type": "string", "description": "The reward or consequence the user chose, if any."},
         },

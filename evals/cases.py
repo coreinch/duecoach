@@ -86,6 +86,26 @@ def _quiet_after_bio() -> None:
     db.set_field(UID, "unanswered", 1)
 
 
+def _after_a_gap() -> None:
+    db.add_message(UID, "user", "I messaged 3 people who followed duecoachbot on X, to invite them to my weekly note list")
+    db.add_objective(
+        UID, None, "I will use a 10-minute timer tomorrow to check the 3 messages and write one next-step sentence for the note.", ""
+    )
+    db.add_message(UID, "assistant", "Nice, that was the brave part. I'll be here.")
+    db._conn.execute("UPDATE messages SET ts=?", (time.time() - 2 * 86400,))
+    # as in production: the explanation is days back, behind more than the five lines the verifier sees
+    _chat(
+        "assistant: Hey, how is your day going?",
+        "assistant: Hey, easy check-in. No pressure at all.",
+        "assistant: Quick one: anything you want to park for later?",
+        "user: Bio is fine",
+        "assistant: Cool. Want to talk about what would help the account move, or park it for later?",
+        "user: Later",
+        "assistant: Later is fine. I'll be here when you're ready.",
+    )
+    db.set_field(UID, "last_inbound", _in_hours(-0.5))
+
+
 def _events() -> list:
     return db._conn.execute("SELECT * FROM events WHERE user_id=?", (UID,)).fetchall()
 
@@ -137,6 +157,17 @@ CASES = [
         judge=[
             "Does the message mention or propose a work task, step or objective (such as the bio, messages or an account)? "
             "A suggestion that is not work, like a glass of water, a stretch or a short walk, does not count."
+        ],
+    ),
+    Case(
+        "checkin_after_a_gap_says_what_it_refers_to",
+        "'The 10-minute timer for the 3 messages — did you get to it?' was right to ask but the user could not tell what it meant",
+        _after_a_gap,
+        judge=[
+            "The user remembers what they themselves did and said, but not the bot's saved wording. Does the message name something "
+            "only by a short label or saved wording ('the 3 messages', 'the 10-minute timer', 'the note') so that the user could "
+            "not tell what it is? A description of what the user did ('the 3 people you messaged on X', 'your weekly note list') is "
+            "clear, so answer NO for it. A message that mentions no earlier task is fine."
         ],
     ),
     Case(

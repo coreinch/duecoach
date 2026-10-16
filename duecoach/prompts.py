@@ -161,7 +161,10 @@ _CHECKIN_RULES = (
     "(4) Don't assign a task if they just said they are busy or resting, and don't mention a timer or reminder unless one was delivered "
     "in the last few minutes (see the coaching state). "
     "(5) Never say again, in other words, what your last message said. "
-    "(6) Ask only ONE question, in at most 3 short sentences, in the language of their last message. Don't announce what kind of "
+    "(6) Write so that someone reading only this message, hours later, knows what everything in it refers to: when you bring up an "
+    'earlier step, task or plan, say in a few words what it is, in their own terms ("you messaged the 3 people who followed the bot"), '
+    'never in the label or wording the step was saved with ("the 10-minute timer", "the 3 messages", "tomorrow"). '
+    "(7) Ask only ONE question, in at most 3 short sentences, in the language of their last message. Don't announce what kind of "
     "check-in this is or quote these instructions."
 )
 MORNING = (
@@ -232,7 +235,8 @@ Answer with JSON only: {{"goal": ..., "step": ...}}
   25 words (use the coach's wording). Otherwise null.
 - "step": if no step is open yet and the user's reply agrees to do a concrete action the coach proposed for today or this week
   (including a timer sprint on a named task), or says they will do a concrete action, that action as one sentence in {language}, first
-  person, at most 25 words, with when/where only if said. Otherwise null.
+  person, at most 25 words, with when/where only if said (as a weekday or clock time, never "today" or "tomorrow": the wording is read
+  again days later). Otherwise null.
 Questions, "maybe", "I don't know", a reply that changes the subject, and replies to a question that offered no concrete wording are null.
 """
 
@@ -271,9 +275,15 @@ Find problems of these kinds, judging by meaning, in any language:
 {checkin}4. "invented_time": a reminder or event set this turn (it is in the state) for a time of day, or about an event time, that the user never gave
    in the chat: for example the time of an earlier or canceled appointment reused for a new one, or a day with a made-up hour.
    Name it and the tool that fixes it (cancel_reminder or cancel_event), then the draft must ask them for the real time.
+5. "unclear_reference": the draft mentions something the user could not identify from the draft alone if they read it cold hours
+   later: a step, task, timer, person, message or plan named only by a short label or by wording copied from a saved step ("the 3
+   messages", "the 10-minute timer", "the note") with no hint of what it is, or a relative day ("tomorrow") that no longer fits.
+   Check the recent chat: if the draft's reference was introduced in the last few messages it is clear. A description of something the
+   user did or said themselves ("the 3 people you messaged on X") is clear; only a label or saved wording alone is not. Name what is unclear.
 Do not flag style, tone or the quality of coaching otherwise. When in doubt, the draft is fine.
 
-Answer with JSON only: {{"unbacked": [short strings], "unhandled": [short strings], "off_target": [short strings], "invented_time": [short strings]}}. Use empty lists when
+Answer with JSON only: {{"unbacked": [short strings], "unhandled": [short strings], "off_target": [short strings], "invented_time": [short strings],
+"unclear_reference": [short strings]}}. Use empty lists when
 there is nothing."""
 
 SUMMARIZE = """Update the coaching notes about this user. Keep durable facts learned in conversation only: recurring struggles,
@@ -291,7 +301,7 @@ Recent conversation:
 """
 
 VERIFIER_CHECKIN = """This draft is an automatic check-in the bot started itself: the user wrote nothing new and the bot has no tools this turn.
-Judge only "off_target" (leave the other lists empty): the draft states or assumes something about the user that they never
+Judge only "off_target" and "unclear_reference" (leave the other lists empty): the draft states or assumes something about the user that they never
 said in the recent chat above, such as that they rested, finished, went somewhere, felt a certain way, did what they planned, or that an event changed (an appointment "rescheduled") or a number, duration or
 fact about their life that is in neither the chat nor the state. Also "off_target": the draft proposes again a task or step that the
 bot's recent messages above proposed and the user did not take up (said no, said they didn't do it, or didn't reply), including a
