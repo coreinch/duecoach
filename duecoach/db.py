@@ -355,6 +355,19 @@ def set_field(user_id: int, field: str, value: str | int | float) -> None:
     set_fields(user_id, **{field: value})
 
 
+def _keep_events_at_their_local_time(user_id: int, old: str, new: str) -> None:
+    """The user said "10:30" in the zone we had; when the zone is corrected, their events stay at 10:30 on the clock, now in the new zone."""
+    try:
+        before, after = ZoneInfo(old), ZoneInfo(new)
+    except Exception:
+        return
+    for e in _conn.execute(
+        "SELECT id, start FROM events WHERE user_id=? AND status='upcoming' AND start>?", (user_id, time.time())
+    ).fetchall():
+        wall = datetime.fromtimestamp(e["start"], before).replace(tzinfo=None)
+        _conn.execute("UPDATE events SET start=? WHERE id=?", (wall.replace(tzinfo=after).timestamp(), e["id"]))
+
+
 def confirm_timezone(user_id: int, zone: str) -> bool:
     """Save the user's timezone as the one to use. The first time, check-ins are switched on at the default interval.
 
@@ -362,6 +375,8 @@ def confirm_timezone(user_id: int, zone: str) -> bool:
     switched them off stays off.
     """
     user = get_user(user_id)
+    if user["tz"] and user["tz"] != zone:
+        _keep_events_at_their_local_time(user_id, user["tz"], zone)
     switched_on = not user["tz_set"] and not (user["interval_min"] or 0)
     fields: dict[str, Any] = {"tz": zone, "tz_set": 1}
     if switched_on:
@@ -529,7 +544,8 @@ def prune_messages(retention_days: int, keep_last: int = 40) -> int:
     """Delete messages older than the retention period, always keeping each user's most recent `keep_last`."""
     cur = _conn.execute(
         "DELETE FROM messages WHERE ts<? AND id NOT IN ("
-        " SELECT id FROM messages m2 WHERE m2.user_id=messages.user_id ORDER BY id DESC LIMIT ?)",
+        " SELECT id FROM messages m2 WHERE m2.user_id=messages.user_id ORDER BY id DESC LIMIT ?)"
+        " AND id NOT IN (SELECT message_id FROM flags)",  # a message a user reported stays until it is looked at (or they delete their data)
         (time.time() - retention_days * 86400, keep_last),
     )
     _conn.commit()

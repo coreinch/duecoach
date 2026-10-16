@@ -195,3 +195,29 @@ def test_flagging_needs_a_coach_message_and_points_at_the_latest_one(user):
     db.add_message(1001, "user", "no")
     assert db.flag_last_reply(1001)
     assert db._conn.execute("SELECT content FROM messages WHERE id=(SELECT message_id FROM flags)").fetchone()[0] == "second"
+
+
+def test_correcting_the_timezone_keeps_events_at_the_clock_time_the_user_said(user):
+    from datetime import datetime, timedelta
+    from zoneinfo import ZoneInfo
+
+    db.set_fields(1001, tz="UTC", tz_set=1)
+    said = (datetime.now(ZoneInfo("UTC")) + timedelta(days=2)).replace(hour=10, minute=30, second=0, microsecond=0)
+    eid = db.add_event(1001, "Dentist", said.timestamp())
+    db.confirm_timezone(1001, "Europe/Athens")
+    moved = datetime.fromtimestamp(db.events_for_state(1001, 0)[0]["start"], ZoneInfo("Europe/Athens"))
+    assert (moved.date(), moved.hour, moved.minute) == (said.date(), 10, 30) and eid == 1
+    db.confirm_timezone(1001, "Not/AZone")  # an unknown zone leaves the events alone
+    assert db.events_for_state(1001, 0)[0]["start"] == moved.timestamp()
+
+
+def test_a_message_a_user_reported_is_not_deleted_by_retention(user):
+    old = time.time() - 400 * 86400
+    db.add_message(1001, "assistant", "the wrong one")
+    db.flag_last_reply(1001)
+    for i in range(45):
+        db.add_message(1001, "user", f"m{i}")
+    db._conn.execute("UPDATE messages SET ts=?", (old,))
+    db.prune_messages(90)
+    assert db._conn.execute("SELECT COUNT(*) FROM messages WHERE content='the wrong one'").fetchone()[0] == 1
+    assert db.message_count(1001) == 41

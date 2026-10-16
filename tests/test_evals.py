@@ -83,3 +83,18 @@ def test_the_runner_lists_unknown_cases(capsys):
     assert asyncio.run(runner.main(["nope"])) == 2
     assert "no such case" in capsys.readouterr().out
     json.dumps([c.name for c in CASES])
+
+
+async def test_an_outage_during_a_check_in_case_is_a_failure_not_a_pass(monkeypatch):
+    case = next(c for c in CASES if c.name == "checkin_before_the_appointment")
+
+    async def outage(uid, text, instruction=None):
+        raise llm.ModelError("MiniMax-M3: APITimeoutError")
+
+    async def withheld(uid, text, instruction=None):
+        raise llm.CheckinWithheld("still flagged")
+
+    monkeypatch.setattr(llm, "reply", outage)
+    assert (await runner.run_once(case))[0].startswith("the model failed")
+    monkeypatch.setattr(llm, "reply", withheld)
+    assert await runner.run_once(case) == []

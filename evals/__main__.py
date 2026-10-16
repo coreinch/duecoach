@@ -25,10 +25,10 @@ async def run_once(case: Case) -> list[str]:
             case.seed()
             try:
                 reply = await llm.reply(UID, case.user_text, case.instruction)
+            except llm.CheckinWithheld:
+                return []  # a check-in the guards would not let through is a pass: nothing was sent
             except llm.ModelError as error:
-                if case.user_text:
-                    return [f"the model failed: {error}"]
-                return []  # a check-in the verifier would not let through is a pass: nothing was sent
+                return [f"the model failed (outage or timeout, not a result): {error}"]
             failed = [f"database: {what}" for what, test in case.database if not test()]
             for question in case.judge:
                 answer = await llm._complete(

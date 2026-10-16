@@ -101,7 +101,7 @@ python -m venv .venv && .venv/bin/pip install -r requirements-dev.txt
 
 Replay evals: `python -m evals [--runs 3] [case]` replays conversations that went wrong in production (`evals/cases.py`) against the **real**
 model and fails if the coach repeats the mistake. It needs `LLM_API_KEY` in `.env` and costs model calls, so it is run by hand before a deploy
-that changes prompts or the verifier, not in CI. Set `LLM_VERIFIER_MODEL` to judge and verify with a different model than the coach's.
+that changes prompts or the verifier, not in CI. Set `LLM_VERIFIER_MODEL` (and, for another provider, `LLM_VERIFIER_BASE_URL` and `LLM_VERIFIER_API_KEY`) to judge and verify with a different model than the coach's.
 Each turn also leaves a statistics row without any text (`turn_stats`: what the verifier flagged, which tools ran, how it ended; summarised
 hourly in the log), and `/wrong` records which message a user reported (`flags`).
 

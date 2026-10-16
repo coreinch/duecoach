@@ -156,7 +156,6 @@ async def test_the_configured_model_is_the_only_one_used_and_minimax_is_asked_to
         return NS(choices=[NS(message=NS(content="ok", tool_calls=None), finish_reason="stop")])
 
     monkeypatch.setattr(llm._client, "chat", NS(completions=NS(create=create)))
-    monkeypatch.setattr(llm, "_EXTRA", {"extra_body": {"reasoning_split": True}})
     await llm._chat([{"role": "user", "content": "hi"}])
     assert seen[0]["model"] == llm.LLM_MODEL and seen[0]["extra_body"] == {"reasoning_split": True}
     assert llm.status() == {"model": llm.LLM_MODEL}
@@ -633,3 +632,63 @@ async def test_a_failure_to_record_statistics_never_breaks_the_reply(model, user
     monkeypatch.setattr(db, "add_turn_stat", broken)
     model.queue += [message("Try a 5-minute timer.")]
     assert await llm.reply(1001, "I can't start") == "Try a 5-minute timer."
+
+
+def test_only_minimax_models_are_asked_to_split_their_reasoning():
+    assert llm._extra("MiniMax-M3") == {"extra_body": {"reasoning_split": True}}
+    assert llm._extra("gpt-oss-120b") == {}
+
+
+async def test_a_verifier_at_another_provider_gets_its_own_client_and_no_minimax_options(monkeypatch):
+    coach, other = [], []
+
+    async def coach_create(**kw):
+        coach.append(kw)
+        return NS(choices=[NS(message=NS(content="ok", tool_calls=None), finish_reason="stop")])
+
+    async def other_create(**kw):
+        other.append(kw)
+        return NS(choices=[NS(message=NS(content="ok", tool_calls=None), finish_reason="stop")])
+
+    monkeypatch.setattr(llm._client, "chat", NS(completions=NS(create=coach_create)))
+    monkeypatch.setattr(llm, "_verifier_client", NS(chat=NS(completions=NS(create=other_create))))
+    monkeypatch.setattr(llm, "LLM_VERIFIER_MODEL", "judge-model")
+    await llm._chat([{"role": "user", "content": "hi"}], model="judge-model")
+    await llm._chat([{"role": "user", "content": "hi"}])
+    assert [k["model"] for k in other] == ["judge-model"] and "extra_body" not in other[0]
+    assert [k["model"] for k in coach] == [llm.LLM_MODEL]
+
+
+async def test_the_verifier_is_told_no_task_at_all_once_the_user_stops_answering_check_ins(model, user, recorder, verifier):
+    db.add_message(1001, "user", "i didn't update the bio")
+    db.add_message(1001, "assistant", "What got in the way?")
+    db.set_field(1001, "unanswered", 2)
+    model.queue += [message("Just a 2-minute look at the bio?"), message('{"off_target": []}')]
+    await llm.reply(1001, "", prompts.REENGAGE_LIGHT.format(n=2))
+    prompt = model.calls[1]["messages"][0]["content"]
+    assert "has not replied to the bot's last 2 check-in(s)" in prompt and "did not take up" in prompt
+    db.set_field(1001, "unanswered", 0)
+    model.queue += [message("How is the afternoon going for you?"), message('{"off_target": []}')]
+    await llm.reply(1001, "", prompts.PULSE)
+    assert "has not replied to the bot's last" not in model.calls[3]["messages"][0]["content"]
+
+
+def test_the_check_in_rules_win_over_the_instruction_and_no_re_engagement_prompt_pushes_a_task():
+    assert "where the instruction above disagrees, follow these" in prompts.PULSE
+    for prompt in (prompts.REENGAGE_LIGHT, prompts.REENGAGE_LONG, prompts.REENGAGE_LAST):
+        assert "smaller version of their objective" not in prompt and "last good step" not in prompt
+
+
+async def test_out_of_rounds_on_tool_calls_the_unchecked_text_of_the_last_call_is_never_sent(model, user):
+    rounds = llm.MAX_TOOL_ROUNDS + llm.MAX_EMPTY_RETRIES + llm.MAX_VERIFY_ROUNDS
+    model.queue += [message("Setting that up now.", calls=[("cancel_reminder", {"reminder_id": 99})]) for _ in range(rounds)]
+    assert await llm.reply(1001, "remind me") == llm.strings.t("en", "EMPTY_REPLY")
+    assert len(model.calls) == rounds
+
+
+async def test_out_of_rounds_right_after_a_send_back_the_flagged_draft_is_not_sent(model, user, recorder, verifier):
+    tool_rounds = llm.MAX_TOOL_ROUNDS + llm.MAX_EMPTY_RETRIES
+    flagged = message('{"unbacked": ["claims the reminder is set"]}')
+    model.queue += [message(calls=[("cancel_reminder", {"reminder_id": 99})]) for _ in range(tool_rounds)]
+    model.queue += [message("Reminder set."), flagged, message("Reminder set, really."), flagged]
+    assert await llm.reply(1001, "remind me") == llm.strings.t("en", "UNSURE")

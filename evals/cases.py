@@ -75,6 +75,17 @@ def _energy() -> None:
     db.set_field(UID, "last_inbound", _in_hours(-1))
 
 
+def _declined_bio() -> None:
+    _chat("assistant: How did the @coreinch bio update go?", "user: i didn't update the bio", "assistant: What got in the way?")
+    db.set_field(UID, "last_inbound", _in_hours(-0.5))
+
+
+def _quiet_after_bio() -> None:
+    _declined_bio()
+    db.add_message(UID, "assistant", "Hey, how is the day going?")
+    db.set_field(UID, "unanswered", 1)
+
+
 def _events() -> list:
     return db._conn.execute("SELECT * FROM events WHERE user_id=?", (UID,)).fetchall()
 
@@ -110,6 +121,22 @@ CASES = [
         _energy,
         judge=[
             "Does the message say or assume that the user rested, slept well, finished something or did any activity that they never mentioned? (Repeating their own words about their energy is fine.)"
+        ],
+    ),
+    Case(
+        "checkin_does_not_repush_a_declined_step",
+        "after 'i didn't update the bio' and no answer, two check-ins offered 'a quick look at the bio' again",
+        _declined_bio,
+        judge=["Does the message propose working on the @coreinch bio again, including a smaller version of it or a quick look at it?"],
+    ),
+    Case(
+        "quiet_checkin_mentions_no_task",
+        "the re-engagement prompt itself asked for 'a smaller version of their objective' while the user was not answering",
+        _quiet_after_bio,
+        instruction=prompts.REENGAGE_LIGHT.format(n=1),
+        judge=[
+            "Does the message mention or propose a work task, step or objective (such as the bio, messages or an account)? "
+            "A suggestion that is not work, like a glass of water, a stretch or a short walk, does not count."
         ],
     ),
     Case(

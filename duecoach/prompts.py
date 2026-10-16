@@ -146,14 +146,23 @@ PROACTIVE_GUARD = (
 )
 
 # Appended to every proactive check-in: the model tends to parrot the instruction's label and to ask several questions at once.
+# Appended to every proactive check-in. One numbered list, in order of precedence: the model used to meet rules scattered over several
+# prompts that contradicted each other (a re-engagement prompt told it to offer "a smaller version of their objective" while another rule
+# said not to push a step they had ignored), so these rules say explicitly that they win over the instruction above.
 _CHECKIN_RULES = (
-    " Don't announce what kind of check-in this is or quote these instructions. Ask only ONE question. Max 3 short sentences. If they ignored a step or moved to another topic, don't propose that step again: follow where they went, and never say again, in other words, what your last message said. State only what the chat or the record shows: no counts, durations or activities you were not told. Don't assign a task if they just said they are busy or resting. "
-    "Don't mention a timer or reminder unless one was delivered in the last few minutes (see the coaching state). Write in the language "
-    "of their last message. "
-    'The "Events with a time" list says what is still ahead: before an event starts, help them get ready or leave on time and never say it passed or ask how it went; once it has started, you may ask how it went, once. A canceled event is not happening. Compare the "Now" line with the days in their objectives: if the day an objective is planned for has not come yet, help them prepare '
-    "for it, and never ask how it went. The same holds for clock times today: if an appointment or plan they mentioned (in the chat or in a "
-    'waiting reminder) is at a time later than the "Now" line, it has NOT happened yet: help them get ready or leave on time, and never '
-    "say it passed or ask how it went."
+    " These rules come first; where the instruction above disagrees, follow these: "
+    "(1) Never propose again a task or step that your recent messages proposed and the user did not take up (they said no or that "
+    "they didn't do it, or simply didn't reply): not the same task, not a smaller version of it, not a quick look at it. Offer something "
+    "different, or only be present. "
+    '(2) The "Events with a time" list is the truth about what is ahead: before an event starts, help them get ready or leave on time, '
+    "and never say it passed or ask how it went; once it has started you may ask how it went, once. A canceled event is not happening. "
+    'The same holds for objectives planned for a later day, and for any clock time later than the "Now" line. '
+    "(3) State only what the chat or the record shows: no activities, feelings, counts or durations you were not told. "
+    "(4) Don't assign a task if they just said they are busy or resting, and don't mention a timer or reminder unless one was delivered "
+    "in the last few minutes (see the coaching state). "
+    "(5) Never say again, in other words, what your last message said. "
+    "(6) Ask only ONE question, in at most 3 short sentences, in the language of their last message. Don't announce what kind of "
+    "check-in this is or quote these instructions."
 )
 MORNING = (
     "Start-of-day coaching check-in. Do real coaching, not small talk. Use their coaching record: if they have an open objective, "
@@ -183,18 +192,17 @@ WEEKLY_REVIEW = (
 ) + _CHECKIN_RULES
 REENGAGE_LIGHT = (
     "The user hasn't replied to your last {n} check-in(s). Send ONE brief, warm coaching message with zero guilt: don't say what "
-    "they should have done, and say it's fine to be quiet. Offer one tiny, low-effort option from the playbook card that fits (a "
-    "2-minute step, a smaller version of their objective, or 'not now'), and make replying effortless."
+    "they should have done, and say it's fine to be quiet. Don't bring up any task, step or objective: offer one easy thing that is not "
+    "work (a glass of water, a short walk, a stretch) or simply that you are here, and make replying effortless (a word is enough)."
 ) + _CHECKIN_RULES
 REENGAGE_LONG = (
-    "The user hasn't written for about {days} days. Send ONE brief coaching message: life gets busy, no guilt. Use the playbook "
-    "card that fits (for example restarting from the last good step, or shrinking the plan), and ask whether they'd like to keep "
-    "going, change the plan, or hear from you less often (offer weekly). Make replying effortless."
+    "The user hasn't written for about {days} days. Send ONE brief coaching message: life gets busy, no guilt. Don't bring up a specific "
+    "task or step; ask whether they'd like to keep going, change the plan, or hear from you less often (offer weekly). Make replying effortless."
 ) + _CHECKIN_RULES
 REENGAGE_LAST = (
     "This is your last check-in for now. Send ONE brief, kind message: say you'll stay quiet so you don't nag, that nothing is "
     "lost (their goals and toolbox are saved), and that they can message you any time, even just 'hi', to pick up where they "
-    "left off. Add one tiny idea they could try on their own, from the playbook card that fits."
+    "left off. Add one tiny idea they could try on their own from the playbook card that fits, not a task they left open."
 ) + _CHECKIN_RULES
 STUCK = "The user is stuck starting a task{task}. Help them via the smallest possible first step, then propose a short timer."
 PLAN = "Help the user plan today{extra}. Use their open objectives first. Ask what's on their plate if you don't know, then narrow to 1-3 priorities."
@@ -257,7 +265,8 @@ Find problems of these kinds, judging by meaning, in any language:
    the draft offers or promises (the user never asked for it) is not "unhandled": list it under "unbacked" as a promise to remove.
 3. "off_target": the draft does not answer what the user actually said. For example they ask "what?" or say they are confused about a
    message or reminder they just received (see the reminders delivered recently in the state) and the draft ignores it, or the draft
-   assumes progress or an outcome the user never reported, or states a fact about their life that is in neither the chat nor the state
+   assumes progress or an outcome the user never reported, or answers a harsh judgement they made of themselves ("I'm wasting time",
+   "I'm lazy") by agreeing with it or by handing them a fix or a plan before asking what is going on or what they want, or states a fact about their life that is in neither the chat nor the state
    (a number of days, "your week", what a tool is doing for them).
 {checkin}4. "invented_time": a reminder or event set this turn (it is in the state) for a time of day, or about an event time, that the user never gave
    in the chat: for example the time of an earlier or canceled appointment reused for a new one, or a day with a made-up hour.
@@ -284,8 +293,13 @@ Recent conversation:
 VERIFIER_CHECKIN = """This draft is an automatic check-in the bot started itself: the user wrote nothing new and the bot has no tools this turn.
 Judge only "off_target" (leave the other lists empty): the draft states or assumes something about the user that they never
 said in the recent chat above, such as that they rested, finished, went somewhere, felt a certain way, did what they planned, or that an event changed (an appointment "rescheduled") or a number, duration or
-fact about their life that is in neither the chat nor the state. A step they ignored or moved away from must not be proposed again.
+fact about their life that is in neither the chat nor the state. Also "off_target": the draft proposes again a task or step that the
+bot's recent messages above proposed and the user did not take up (said no, said they didn't do it, or didn't reply), including a
+smaller version of it or "a quick look" at it.
 An appointment or plan they named for a later clock time than the "Now" line has not happened yet. Asking is fine; asserting is not.
+"""
+VERIFIER_QUIET = """The user has not replied to the bot's last {n} check-in(s): the draft must not mention any task, step, objective or
+piece of work at all. If it does, that is "off_target".
 """
 
 LANGUAGE = {

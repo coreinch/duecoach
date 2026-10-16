@@ -120,6 +120,10 @@ async def checkin(u) -> None:
             log.info("user %s cannot be messaged: check-ins switched off", uid)
             db.set_fields(uid, interval_min=0)
             return
+        except llm.CheckinWithheld as why:
+            log.info("check-in for %s withheld (%s), trying again later", uid, why)  # the guards working: no traceback
+            db.record_checkin_failed(uid)
+            return
         except Exception:
             log.exception("check-in failed for %s, backing off", uid)
             db.record_checkin_failed(uid)

@@ -11,7 +11,17 @@ import openai
 from openai import AsyncOpenAI
 
 from . import db, playbook, prompts, strings, tools
-from .config import HISTORY_TURNS, LLM_API_KEY, LLM_BASE_URL, LLM_CONCURRENCY, LLM_MODEL, LLM_TIMEOUT, LLM_VERIFIER_MODEL
+from .config import (
+    HISTORY_TURNS,
+    LLM_API_KEY,
+    LLM_BASE_URL,
+    LLM_CONCURRENCY,
+    LLM_MODEL,
+    LLM_TIMEOUT,
+    LLM_VERIFIER_API_KEY,
+    LLM_VERIFIER_BASE_URL,
+    LLM_VERIFIER_MODEL,
+)
 
 log = logging.getLogger("duecoach.llm")
 
@@ -28,8 +38,19 @@ NOTES_EVERY = 20  # new chat messages between refreshes of the long-term notes
 SHORT_JOB_TOKENS = 2000
 
 _client = AsyncOpenAI(api_key=LLM_API_KEY, base_url=LLM_BASE_URL, timeout=LLM_TIMEOUT, max_retries=2)
+# The verifier may live at another provider; then it has its own client (otherwise it shares the coach's).
+_verifier_client = (
+    AsyncOpenAI(api_key=LLM_VERIFIER_API_KEY, base_url=LLM_VERIFIER_BASE_URL, timeout=LLM_TIMEOUT, max_retries=2)
+    if (LLM_VERIFIER_BASE_URL, LLM_VERIFIER_API_KEY) != (LLM_BASE_URL, LLM_API_KEY)
+    else _client
+)
+
+
 # MiniMax puts its reasoning inside the reply as <think>...</think> unless asked to split it off; the regex is a second safety net.
-_EXTRA: dict[str, Any] = {"extra_body": {"reasoning_split": True}} if LLM_MODEL.startswith("MiniMax-") else {}
+def _extra(model: str) -> dict[str, Any]:
+    return {"extra_body": {"reasoning_split": True}} if model.startswith("MiniMax-") else {}
+
+
 _THINK = re.compile(r"<think>.*?</think>\s*", re.DOTALL)
 _slots = asyncio.Semaphore(LLM_CONCURRENCY)  # one slow or rate-limited provider must not be hammered by every user at once
 
@@ -219,6 +240,10 @@ class ModelError(RuntimeError):
     """The model produced no completion (outage, rate limit, timeout), with what it reported."""
 
 
+class CheckinWithheld(ModelError):
+    """A check-in was written but is not fit to send (still flagged, a goodbye, a leaked call, empty): the guards working, not a failure."""
+
+
 def status() -> dict:
     """For /healthz: which model is in use."""
     return {"model": LLM_MODEL}
@@ -226,12 +251,15 @@ def status() -> dict:
 
 async def _chat(messages: Any, tool_defs: list[dict] | None = None, max_tokens: int = 1500, model: str | None = None):
     model = model or LLM_MODEL
+    client = _verifier_client if model == LLM_VERIFIER_MODEL and model != LLM_MODEL else _client
     kwargs: dict[str, Any] = {"tools": tool_defs} if tool_defs else {}
     problem = "no completion"
     for attempt in range(MODEL_ATTEMPTS):
         try:
             async with _slots:
-                resp = await _client.chat.completions.create(model=model, messages=messages, max_tokens=max_tokens, **kwargs, **_EXTRA)
+                resp = await client.chat.completions.create(
+                    model=model, messages=messages, max_tokens=max_tokens, **kwargs, **_extra(model)
+                )
         except openai.OpenAIError as error:  # connection, timeout, rate limit, server error, or a request the model rejects
             problem = f"{type(error).__name__}: {error}"[:200]
         else:
@@ -309,6 +337,12 @@ async def record_agreements(user_id: int, user_text: str) -> list[str]:
     return notes
 
 
+def _checkin_rules_for_verifier(user_id: int) -> str:
+    """The check-in rules for the verifier; stricter when the code knows the user has stopped answering check-ins."""
+    quiet = db.get_user(user_id)["unanswered"] or 0
+    return prompts.VERIFIER_CHECKIN + (prompts.VERIFIER_QUIET.format(n=quiet) if quiet > 0 else "")
+
+
 class Verdict(NamedTuple):
     """What the verifier found: the note that goes back to the coach, and which kinds of problem it was."""
 
@@ -326,7 +360,7 @@ async def _verify(user_id: int, user_text: str, draft: str, done: list[str]) -> 
     prompt = prompts.VERIFIER.format(
         recent="\n".join(f"{m['role']}: {m['content'][:300]}" for m in (recent if checkin else recent[:-1])) or "(none)",
         user="(nothing: automatic check-in)" if checkin else user_text[:600],
-        checkin=prompts.VERIFIER_CHECKIN if checkin else "",
+        checkin=_checkin_rules_for_verifier(user_id) if checkin else "",
         draft=draft[:1200],
         done=", ".join(done) or "none",
         tools=", ".join(t["function"]["name"] for t in tools.TOOLS),
@@ -449,9 +483,11 @@ async def _reply(user_id: int, user_text: str, instruction: str | None, stat: di
     timer_hint: str | None = None
     verify_rounds = 0
     unresolved: tuple[str, ...] = ()  # what the verifier still objected to after the last allowed send-back
+    sent_back: tuple[str, ...] = ()  # the kinds the verifier flagged in a draft that went back and has no successor yet
     for _ in range(MAX_TOOL_ROUNDS + MAX_EMPTY_RETRIES + MAX_VERIFY_ROUNDS):
         msg = await _chat(messages, tool_defs, max_tokens=REPLY_TOKENS)
         stat["rounds"] += 1
+        sent_back = ()
         text = (msg.content or "").strip()
         truncated = getattr(msg, "finish_reason", None) == "length"
         if not msg.tool_calls:
@@ -478,6 +514,7 @@ async def _reply(user_id: int, user_text: str, instruction: str | None, stat: di
                     stat["flags"] += verdict.kinds
                     if verify_rounds < MAX_VERIFY_ROUNDS:
                         verify_rounds += 1
+                        sent_back = verdict.kinds
                         messages.append({"role": "system", "content": verdict.feedback})
                         continue
                     unresolved = verdict.kinds  # the last draft is still flagged: see below
@@ -548,9 +585,16 @@ async def _reply(user_id: int, user_text: str, instruction: str | None, stat: di
             if not result.startswith("error"):
                 saved.add(call.function.name)
             messages.append({"role": "tool", "tool_call_id": call.id, "content": result})
+    else:
+        # Out of rounds without a final answer: the last thing the model produced was a tool call (its text, if any, was never checked),
+        # or a draft the verifier had just sent back. Neither may go out as it is.
+        if msg.tool_calls:
+            text = ""
+        elif sent_back:
+            unresolved = sent_back
     if unresolved:
         if not user_text:
-            raise ModelError("the check-in was still flagged by the verifier after the retries: " + ", ".join(unresolved))
+            raise CheckinWithheld("the check-in was still flagged by the verifier after the retries: " + ", ".join(unresolved))
         if {"unbacked", "invented_time"} & set(unresolved):  # it claims or sets something nobody asked for: don't send that
             if "invented_time" in unresolved:
                 _undo_new_times(user_id, results)
@@ -562,9 +606,9 @@ async def _reply(user_id: int, user_text: str, instruction: str | None, stat: di
         if user_text:
             text = ""  # the apology below; a tool call written out is never shown to the user
         else:
-            raise ModelError("the check-in contained a tool call written as text or a wrong time")
+            raise CheckinWithheld("the check-in contained a tool call written as text or a wrong time")
     if not user_text and text and _unfit_checkin(text, instruction):
-        raise ModelError("the check-in was a goodbye or too short to coach")  # nothing is sent; the caller backs off and tries later
+        raise CheckinWithheld("the check-in was a goodbye or too short to coach")  # nothing is sent; the caller backs off and tries later
     if text and repeats:
         text = _without(text, repeats)  # still repeating after the retries: say it without the repeated sentences
     if text and lecture:
@@ -573,7 +617,7 @@ async def _reply(user_id: int, user_text: str, instruction: str | None, stat: di
     if not text:
         # Say so honestly, and keep it out of the history: stored as the coach's own words it makes the model imitate it.
         if not user_text:
-            raise ModelError("the check-in came back empty")  # never send the apology as a check-in
+            raise CheckinWithheld("the check-in came back empty")  # never send the apology as a check-in
         stat["outcome"] = "fallback"
         return strings.t(db.get_user(user_id)["lang"], "EMPTY_REPLY")
     db.add_message(user_id, "assistant", text)

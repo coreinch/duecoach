@@ -186,3 +186,27 @@ def test_the_first_weekly_review_comes_a_week_after_starting_not_on_day_two(cloc
     clock.advance(6 * 60)
     plan = bot.plan_checkin(db.get_user(uid), clock.t, clock.local())
     assert (plan[0] == prompts.WEEKLY_REVIEW) is is_review
+
+
+async def test_a_withheld_check_in_backs_off_quietly_and_a_real_failure_logs_its_traceback(clock, outbox, user, monkeypatch, caplog):
+    uid = user["user_id"]
+    enable_checkins(uid)
+
+    async def withheld(uid, text, instruction=None):
+        raise llm.CheckinWithheld("the check-in was still flagged by the verifier after the retries: off_target")
+
+    monkeypatch.setattr(llm, "reply", withheld)
+    with caplog.at_level("INFO", logger="duecoach"):
+        await run_for(clock, 3)  # 06:00 -> 09:00: the morning check-in is due
+    assert outbox == [] and db.get_user(uid)["checkin_failures"] >= 1
+    assert "withheld" in caplog.text and "Traceback" not in caplog.text and not any(r.exc_info for r in caplog.records)
+
+    async def outage(uid, text, instruction=None):
+        raise llm.ModelError("MiniMax-M3: APITimeoutError")
+
+    monkeypatch.setattr(llm, "reply", outage)
+    db.set_fields(uid, checkin_retry_at=0)
+    caplog.clear()
+    with caplog.at_level("INFO", logger="duecoach"):
+        await bot.checkin(db.get_user(uid))
+    assert any(r.exc_info for r in caplog.records)  # a real failure keeps its traceback
