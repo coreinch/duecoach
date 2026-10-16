@@ -77,7 +77,9 @@ The method (follow the coaching record at the end of this prompt)
    apply the technique that best fits what they need right now, in your own words in 2-4 short sentences. Never paste a card or
    mention the playbook. When something works for them, keep it with save_to_toolbox and remind them of it later. The toolbox holds only strategies that worked,
    never facts about them or their projects; if a wrong item is in it, remove it with remove_from_toolbox.
-6. Reminders: set one only when their latest message asks for it, or accepts a reminder you offered. A question such as "are you
+6. Reminders: set one only when their latest message asks for it, or accepts a reminder you offered. The time must come from them: if they
+   named a day but no time of day for the event ("Wednesday"), ask what time before you set anything, and never reuse the time of an
+   earlier, canceled or different appointment, or its details (what they did to get ready). A question such as "are you
    there?" or "are you working?" is not a request, and a reminder you promised earlier is already set (or already delivered: see
    the lists below), so never set it a second time. For a time of day ("every morning at 9") pass `at` (their local date and time,
    worked out from the "Now" line) with daily=true, one call per time. Don't use `minutes` for those. Later, fade reminders out: ask
@@ -113,7 +115,8 @@ again, and never call a tool just because it exists. Never say tool names or ids
 # Sent last in every chat turn, where the model weighs it most: without it a reminder that was promised earlier gets set again whenever
 # the user writes anything afterwards ("are you working now?"), because the stored history shows the promise but not the tool call.
 TOOL_GUARD = (
-    "Tools this turn: call set_reminder ONLY if the user's latest message asks for a reminder or timer. Anything else (greetings, "
+    "Tools this turn: call set_reminder ONLY if the user's latest message asks for a reminder or timer, and only with a time they gave "
+    "(a day alone is not a time: ask for the time first; never copy the time of an earlier or canceled appointment). Anything else (greetings, "
     "'are you there?', checking on you, small talk) gets a plain text reply and NO set_reminder call. If an earlier message in the chat "
     "says a reminder was set, it IS set (or has already been delivered): never set it again.\n"
     "Before you answer, look at your recent replies. Never repeat an offer or a question you have already made. If they just said no, "
@@ -239,7 +242,7 @@ Tools the bot has: {tools}
 State right now (after those tools):
 {state}
 
-Find problems of two kinds, judging by meaning, in any language:
+Find problems of these kinds, judging by meaning, in any language:
 1. "unbacked": something the draft says or promises (set, saved, cancelled, removed, changed, "I will remind you") that no tool above did,
    or that contradicts the state (for example a reminder is said to be cancelled but it is still listed, or "time's up" is said while
    the state shows the timer still has minutes left).
@@ -252,9 +255,12 @@ Find problems of two kinds, judging by meaning, in any language:
    message or reminder they just received (see the reminders delivered recently in the state) and the draft ignores it, or the draft
    assumes progress or an outcome the user never reported, or states a fact about their life that is in neither the chat nor the state
    (a number of days, "your week", what a tool is doing for them).
-{checkin}Do not flag style, tone or the quality of coaching otherwise. When in doubt, the draft is fine.
+{checkin}4. "invented_time": a reminder set this turn (it is in the state) for a time of day, or about an event time, that the user never gave
+   in the chat: for example the time of an earlier or canceled appointment reused for a new one, or a day with a made-up hour.
+   Name it and the tool that fixes it (cancel_reminder), then the draft must ask them for the real time.
+Do not flag style, tone or the quality of coaching otherwise. When in doubt, the draft is fine.
 
-Answer with JSON only: {{"unbacked": [short strings], "unhandled": [short strings], "off_target": [short strings]}}. Use empty lists when
+Answer with JSON only: {{"unbacked": [short strings], "unhandled": [short strings], "off_target": [short strings], "invented_time": [short strings]}}. Use empty lists when
 there is nothing."""
 
 SUMMARIZE = """Update the coaching notes about this user. Keep durable facts learned in conversation only: recurring struggles,
@@ -271,7 +277,7 @@ Recent conversation:
 
 VERIFIER_CHECKIN = """This draft is an automatic check-in the bot started itself: the user wrote nothing new and the bot has no tools this turn.
 Judge only "off_target" (leave the other lists empty): the draft states or assumes something about the user that they never
-said in the recent chat above, such as that they rested, finished, went somewhere, felt a certain way or did what they planned, or a number, duration or
+said in the recent chat above, such as that they rested, finished, went somewhere, felt a certain way, did what they planned, or that an event changed (an appointment "rescheduled") or a number, duration or
 fact about their life that is in neither the chat nor the state. A step they ignored or moved away from must not be proposed again.
 An appointment or plan they named for a later clock time than the "Now" line has not happened yet. Asking is fine; asserting is not.
 """

@@ -512,3 +512,19 @@ async def test_the_verifier_feedback_removes_a_promise_the_user_never_asked_for(
     feedback = model.calls[2]["messages"][-1]["content"]
     assert "delete it" in feedback and "did not ask for" in feedback
     assert db.pending_reminders(1001) == []
+
+
+async def test_the_verifier_cancels_a_reminder_set_for_a_time_the_user_never_gave(model, user, recorder, verifier):
+    db.add_message(1001, "user", "my appointment is at 11:20")
+    model.queue += [
+        message(calls=[("set_reminder", {"at": "2026-10-21 09:20", "message": "Get ready for the appointment."})]),
+        message("Set for Wed at 09:20, two hours before."),
+        message(
+            '{"unbacked": [], "unhandled": [], "off_target": [], "invented_time": ["09:20 is built on the canceled 11:20; they said only Wednesday"]}'
+        ),
+        message(calls=[("cancel_reminder", {"reminder_id": 1})]),
+        message("What time is the new appointment on Wednesday?"),
+        message('{"unbacked": [], "unhandled": [], "off_target": [], "invented_time": []}'),
+    ]
+    assert await llm.reply(1001, "wednesday, set a reminder") == "What time is the new appointment on Wednesday?"
+    assert db.pending_reminders(1001) == []

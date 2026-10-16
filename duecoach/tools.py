@@ -29,7 +29,8 @@ TOOLS = [
         "set_reminder",
         "Send the user a message later: a timer, a nudge, or a reminder. Call it once per reminder (one call per time of day). "
         "Give EITHER `at` (a clock time in the user's local time, best for anything tied to the time of day) OR `minutes` "
-        "(a short timer). Set daily=true for something that repeats every day, like medication.",
+        "(a short timer). Set daily=true for something that repeats every day, like medication. The time must be one the user gave: if they "
+        "named only a day, ask for the time first, and never reuse the time of another appointment.",
         {
             "at": {
                 "type": "string",

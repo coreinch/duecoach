@@ -329,7 +329,7 @@ async def _verify(user_id: int, user_text: str, draft: str, done: list[str]) -> 
             if out:
                 break
         found = json.loads(re.search(r"\{.*\}", out, re.DOTALL).group(0))  # type: ignore[union-attr]
-        problems = [str(x) for k in ("unbacked", "unhandled", "off_target") for x in found.get(k, []) if str(x).strip()]
+        problems = [str(x) for k in ("unbacked", "unhandled", "off_target", "invented_time") for x in found.get(k, []) if str(x).strip()]
     except Exception as error:  # the answer itself is not logged: it quotes the user
         log.warning("could not use the verifier answer (%s, %d chars), sending the reply unchecked", type(error).__name__, len(out))
         return None
