@@ -25,6 +25,7 @@ STRINGS = {
             "/interval <15-240|on|off> - κάθε πόσα λεπτά (προεπιλογή 30, αρχικά κλειστό)\n"
             "/timezone <Περιοχή/Πόλη> - ζώνη ώρας για τα check-in (π.χ. Europe/Athens)\n"
             "/goals - οι στόχοι και τα βήματα της εβδομάδας\n"
+            "/wrong - το τελευταίο μήνυμά μου ήταν λάθος\n"
             "/progress - σημείωση προόδου της εβδομάδας\n"
             "/toolbox - τι έχει δουλέψει για σένα\n"
             "/language <el|en> - γλώσσα\n"
@@ -79,6 +80,9 @@ STRINGS = {
         "DELETED": "Έγινε. Όλα όσα είχα για σένα σβήστηκαν (τα αντίγραφα ασφαλείας αντικαθίστανται μέσα σε περίπου μία εβδομάδα). Μπορείς να ξεκινήσεις από την αρχή όποτε θέλεις.",
         "RATE_LIMITED": "Είναι πολλά μαζί. Θα κάνω μια παύση λίγων λεπτών για να προλάβω.",
         "EMPTY_REPLY": "Δεν κατάφερα να σκεφτώ σωστή απάντηση αυτή τη στιγμή. Μπορείς να το ξαναγράψεις σε λίγο;",
+        "UNSURE": "Μάλλον δεν το κατάλαβα σωστά. Μπορείς να μου το ξαναπείς πιο συγκεκριμένα;",
+        "WRONG_OK": "Ευχαριστώ, το σημείωσα ότι το τελευταίο μήνυμά μου ήταν λάθος. Πες μου τι έπρεπε να πω ή τι να διορθώσω.",
+        "WRONG_NONE": "Δεν έχω κάποιο μήνυμά μου να σημειώσω ακόμα.",
         "CHECKIN_ORDER": "Η ώρα έναρξης πρέπει να είναι πριν την ώρα λήξης (π.χ. /morning 9 και /evening 21).",
         "NEED_TZ": "Πρώτα πες μου τη ζώνη ώρας σου για να έρχονται τα check-in σε λογικές ώρες: /timezone Europe/Athens (ή πες μου απλώς την πόλη σου).",
         "CRISIS": (
@@ -110,6 +114,7 @@ STRINGS = {
             "/interval <15-240|on|off> - minutes between check-ins (default 30, off at first)\n"
             "/timezone <Area/City> - set your timezone for check-ins (e.g. Europe/Athens)\n"
             "/goals - your goals and this week's steps\n"
+            "/wrong - my last message was wrong\n"
             "/progress - this week's progress note\n"
             "/toolbox - what has worked for you\n"
             "/language <el|en> - language\n"
@@ -163,6 +168,9 @@ STRINGS = {
         "DELETED": "Done. Everything I had about you has been erased (backup copies are overwritten within about a week). You're welcome to start fresh any time.",
         "RATE_LIMITED": "That's a lot at once. I'll pause for a few minutes to catch up.",
         "EMPTY_REPLY": "I couldn't put a proper answer together just now. Could you send that again in a moment?",
+        "UNSURE": "I probably didn't get that right. Could you say it again, a bit more precisely?",
+        "WRONG_OK": "Thanks, I've marked my last message as wrong. Tell me what I should have said or what to fix.",
+        "WRONG_NONE": "I don't have a message of mine to mark yet.",
         "CHECKIN_ORDER": "The start hour must be earlier than the end hour (for example /morning 9 and /evening 21).",
         "NEED_TZ": "First tell me your timezone so check-ins arrive at sensible times: /timezone Europe/Athens (or just tell me your city).",
         "CRISIS": (

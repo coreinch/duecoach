@@ -40,6 +40,18 @@ def test_maintenance_runs_at_most_once_an_hour(user, monkeypatch):
     assert calls == [1, 1]
 
 
+def test_maintenance_logs_the_turn_counts_of_the_last_hour_without_any_text(user, monkeypatch, caplog):
+    db.add_turn_stat(1001, "reply", "sent", ["off_target"], ["add_event"], 2, 1.0)
+    db.add_turn_stat(1001, "checkin", "dropped", [], [], 1, 1.0)
+    db.add_event(1001, "Long ago", time.time() + 1)
+    db._conn.execute("UPDATE events SET start=?", (time.time() - 30 * 86400,))
+    monkeypatch.setattr(bot, "_last_maintenance", 0.0)
+    with caplog.at_level("INFO", logger="duecoach"):
+        bot.maintain()
+    assert "turns in the last hour: checkin:dropped=1, flag:off_target=1, reply:sent=1" in caplog.text
+    assert db._conn.execute("SELECT COUNT(*) FROM events").fetchone()[0] == 0
+
+
 def test_a_second_instance_on_the_same_database_refuses_to_start(tmp_path, monkeypatch):
     monkeypatch.setattr(bot, "DB_PATH", str(tmp_path / "duecoach.db"))
     first = bot.acquire_instance_lock()

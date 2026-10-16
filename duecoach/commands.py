@@ -40,6 +40,10 @@ async def _remind(uid, args):
     return say(uid, "REMIND_OK", minutes=minutes)
 
 
+async def _wrong(uid, args):
+    return say(uid, "WRONG_OK" if db.flag_last_reply(uid) else "WRONG_NONE")
+
+
 async def _goals(uid, args):
     goals, objectives = db.active_goals(uid), db.open_objectives(uid)
     parts = [
@@ -178,6 +182,7 @@ COMMANDS = {
     "notes": _notes,
     "forget": _forget,
     "goals": _goals,
+    "wrong": _wrong,
     "toolbox": _toolbox,
     "progress": _progress,
     "timezone": _timezone,

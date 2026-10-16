@@ -5,13 +5,13 @@ import logging
 import re
 import time
 from collections.abc import Callable
-from typing import Any
+from typing import Any, NamedTuple
 
 import openai
 from openai import AsyncOpenAI
 
 from . import db, playbook, prompts, strings, tools
-from .config import HISTORY_TURNS, LLM_API_KEY, LLM_BASE_URL, LLM_CONCURRENCY, LLM_MODEL, LLM_TIMEOUT
+from .config import HISTORY_TURNS, LLM_API_KEY, LLM_BASE_URL, LLM_CONCURRENCY, LLM_MODEL, LLM_TIMEOUT, LLM_VERIFIER_MODEL
 
 log = logging.getLogger("duecoach.llm")
 
@@ -224,13 +224,14 @@ def status() -> dict:
     return {"model": LLM_MODEL}
 
 
-async def _chat(messages: Any, tool_defs: list[dict] | None = None, max_tokens: int = 1500):
+async def _chat(messages: Any, tool_defs: list[dict] | None = None, max_tokens: int = 1500, model: str | None = None):
+    model = model or LLM_MODEL
     kwargs: dict[str, Any] = {"tools": tool_defs} if tool_defs else {}
     problem = "no completion"
     for attempt in range(MODEL_ATTEMPTS):
         try:
             async with _slots:
-                resp = await _client.chat.completions.create(model=LLM_MODEL, messages=messages, max_tokens=max_tokens, **kwargs, **_EXTRA)
+                resp = await _client.chat.completions.create(model=model, messages=messages, max_tokens=max_tokens, **kwargs, **_EXTRA)
         except openai.OpenAIError as error:  # connection, timeout, rate limit, server error, or a request the model rejects
             problem = f"{type(error).__name__}: {error}"[:200]
         else:
@@ -243,13 +244,15 @@ async def _chat(messages: Any, tool_defs: list[dict] | None = None, max_tokens: 
             # some providers answer HTTP 200 with {"error": {...}} when the service behind them is down
             error_body = getattr(resp, "error", None) or (getattr(resp, "model_extra", None) or {}).get("error")
             problem = str(error_body or "empty response")[:200]
-        log.warning("model %s failed (%s)%s", LLM_MODEL, problem, ", retrying" if attempt + 1 < MODEL_ATTEMPTS else "")
+        log.warning("model %s failed (%s)%s", model, problem, ", retrying" if attempt + 1 < MODEL_ATTEMPTS else "")
         if attempt + 1 < MODEL_ATTEMPTS:
             await asyncio.sleep(1)
-    raise ModelError(f"{LLM_MODEL}: {problem}")
+    raise ModelError(f"{model}: {problem}")
 
 
-async def _complete(messages: list[dict], max_tokens: int = 1500) -> str:
+async def _complete(messages: list[dict], max_tokens: int = 1500, model: str | None = None) -> str:
+    if model and model != LLM_MODEL:  # only a different model is passed on
+        return ((await _chat(messages, max_tokens=max_tokens, model=model)).content or "").strip()
     return ((await _chat(messages, max_tokens=max_tokens)).content or "").strip()
 
 
@@ -306,7 +309,14 @@ async def record_agreements(user_id: int, user_text: str) -> list[str]:
     return notes
 
 
-async def _verify(user_id: int, user_text: str, draft: str, done: list[str]) -> str | None:
+class Verdict(NamedTuple):
+    """What the verifier found: the note that goes back to the coach, and which kinds of problem it was."""
+
+    feedback: str
+    kinds: tuple[str, ...]
+
+
+async def _verify(user_id: int, user_text: str, draft: str, done: list[str]) -> Verdict | None:
     """Ask a separate model call whether the draft claims something no tool did, or leaves something the user said unhandled.
 
     Returns feedback for the coach, or None when the draft stands. A verifier that fails or answers badly never blocks a reply.
@@ -325,19 +335,21 @@ async def _verify(user_id: int, user_text: str, draft: str, done: list[str]) -> 
     out = ""
     try:
         for _ in range(2):  # a reasoning model sometimes spends the whole budget thinking and answers with nothing: ask once more
-            out = await _complete([{"role": "user", "content": prompt}], max_tokens=VERIFY_TOKENS)
+            out = await _complete([{"role": "user", "content": prompt}], max_tokens=VERIFY_TOKENS, model=LLM_VERIFIER_MODEL)
             if out:
                 break
         found = json.loads(re.search(r"\{.*\}", out, re.DOTALL).group(0))  # type: ignore[union-attr]
-        problems = [str(x) for k in ("unbacked", "unhandled", "off_target", "invented_time") for x in found.get(k, []) if str(x).strip()]
+        kinds = ("unbacked", "unhandled", "off_target", "invented_time")
+        problems = [str(x) for k in kinds for x in found.get(k, []) if str(x).strip()]
+        flagged = tuple(k for k in kinds if any(str(x).strip() for x in found.get(k, [])))
     except Exception as error:  # the answer itself is not logged: it quotes the user
         log.warning("could not use the verifier answer (%s, %d chars), sending the reply unchecked", type(error).__name__, len(out))
         return None
     if not problems:
         log.info("verifier ok")
         return None
-    log.warning("verifier sent a draft back: %d problem(s)", len(problems))
-    return (
+    log.warning("verifier flagged a draft: %s (%d problem(s))", ", ".join(flagged), len(problems))
+    feedback = (
         f'Your draft was: "{draft[:600]}"\nA check found: '
         + "; ".join(problems)
         + ". "
@@ -350,6 +362,34 @@ async def _verify(user_id: int, user_text: str, draft: str, done: list[str]) -> 
         )
         + "Do not mention this check."
     )
+    return Verdict(feedback, flagged)
+
+
+_NEW_TIME = re.compile(r"^ok: (reminder|event) #(\d+) (?:set|saved) for")
+
+
+def _undo_new_times(user_id: int, results: list[str]) -> None:
+    """The verifier still objected to a reminder or event set this turn for a time nobody gave: take it back rather than leave it waiting."""
+    for result in results:
+        found = _NEW_TIME.match(result)
+        if found:
+            (db.cancel_reminder if found.group(1) == "reminder" else db.cancel_event)(user_id, int(found.group(2)))
+
+
+def _record_stat(user_id: int, user_text: str, stat: dict, started: float) -> None:
+    """Statistics about the turn without any text of it: what the verifier flagged, which tools ran, how it ended."""
+    try:
+        db.add_turn_stat(
+            user_id,
+            "reply" if user_text else "checkin",
+            stat["outcome"],
+            stat["flags"],
+            stat["tools"],
+            stat["rounds"],
+            round(time.monotonic() - started, 1),
+        )
+    except Exception:
+        log.exception("could not record the turn statistics")
 
 
 async def reply(user_id: int, user_text: str, instruction: str | None = None) -> str:
@@ -357,6 +397,18 @@ async def reply(user_id: int, user_text: str, instruction: str | None = None) ->
 
     `instruction` is a hidden steering note for this turn (e.g. a /stuck command or a check-in's purpose).
     """
+    stat: dict[str, Any] = {"outcome": "sent", "flags": [], "tools": [], "rounds": 0}
+    started = time.monotonic()
+    try:
+        return await _reply(user_id, user_text, instruction, stat)
+    except Exception:
+        stat["outcome"] = "dropped" if not user_text else "error"
+        raise
+    finally:
+        _record_stat(user_id, user_text, stat, started)
+
+
+async def _reply(user_id: int, user_text: str, instruction: str | None, stat: dict[str, Any]) -> str:
     recorded = await record_agreements(user_id, user_text) if user_text and not instruction else []
     if user_text:
         db.add_message(user_id, "user", user_text)
@@ -396,8 +448,10 @@ async def reply(user_id: int, user_text: str, instruction: str | None = None) ->
     id_mention = lecture = meta = False
     timer_hint: str | None = None
     verify_rounds = 0
+    unresolved: tuple[str, ...] = ()  # what the verifier still objected to after the last allowed send-back
     for _ in range(MAX_TOOL_ROUNDS + MAX_EMPTY_RETRIES + MAX_VERIFY_ROUNDS):
         msg = await _chat(messages, tool_defs, max_tokens=REPLY_TOKENS)
+        stat["rounds"] += 1
         text = (msg.content or "").strip()
         truncated = getattr(msg, "finish_reason", None) == "length"
         if not msg.tool_calls:
@@ -418,12 +472,15 @@ async def reply(user_id: int, user_text: str, instruction: str | None = None) ->
                 or _leaked_call(text)
                 or (not user_text and _unfit_checkin(text, instruction))
             )
-            if text and not truncated and not unfit and verify_rounds < MAX_VERIFY_ROUNDS:
-                feedback = await _verify(user_id, user_text, text, sorted(saved))
-                if feedback:
-                    verify_rounds += 1
-                    messages.append({"role": "system", "content": feedback})
-                    continue
+            if text and not truncated and not unfit:
+                verdict = await _verify(user_id, user_text, text, sorted(saved))
+                if verdict:
+                    stat["flags"] += verdict.kinds
+                    if verify_rounds < MAX_VERIFY_ROUNDS:
+                        verify_rounds += 1
+                        messages.append({"role": "system", "content": verdict.feedback})
+                        continue
+                    unresolved = verdict.kinds  # the last draft is still flagged: see below
             if (text and not truncated and not unfit) or empty_retries >= MAX_EMPTY_RETRIES:
                 break
             if wrong_times:
@@ -487,9 +544,18 @@ async def reply(user_id: int, user_text: str, instruction: str | None = None) ->
             # text, so it is logged in full: it is what explains why a call failed.
             log.info("tool %s -> %s", call.function.name, result[:120] if result.startswith("error") else result.split(":", 1)[0])
             results.append(result)
+            stat["tools"].append(call.function.name)
             if not result.startswith("error"):
                 saved.add(call.function.name)
             messages.append({"role": "tool", "tool_call_id": call.id, "content": result})
+    if unresolved:
+        if not user_text:
+            raise ModelError("the check-in was still flagged by the verifier after the retries: " + ", ".join(unresolved))
+        if {"unbacked", "invented_time"} & set(unresolved):  # it claims or sets something nobody asked for: don't send that
+            if "invented_time" in unresolved:
+                _undo_new_times(user_id, results)
+            stat["outcome"] = "fallback"
+            return strings.t(db.get_user(user_id)["lang"], "UNSURE")
     if truncated and text:
         text = _trim_to_sentence(text)
     if text and (_leaked_call(text) or wrong_times or _meta_reasoning(text)):
@@ -508,6 +574,7 @@ async def reply(user_id: int, user_text: str, instruction: str | None = None) ->
         # Say so honestly, and keep it out of the history: stored as the coach's own words it makes the model imitate it.
         if not user_text:
             raise ModelError("the check-in came back empty")  # never send the apology as a check-in
+        stat["outcome"] = "fallback"
         return strings.t(db.get_user(user_id)["lang"], "EMPTY_REPLY")
     db.add_message(user_id, "assistant", text)
     return text

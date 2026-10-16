@@ -198,6 +198,42 @@ def _m9_daily_reminders() -> None:
     _ensure_columns("reminders", {"repeat_daily": "INTEGER DEFAULT 0"})
 
 
+def _m10_events_stats_flags() -> None:
+    """Appointments and plans with a time (so the code, not the model, knows what is still ahead), content-free statistics about each
+    turn, and the messages a user reported as wrong."""
+    _conn.executescript(
+        """
+        CREATE TABLE IF NOT EXISTS events (id INTEGER PRIMARY KEY);
+        CREATE TABLE IF NOT EXISTS turn_stats (id INTEGER PRIMARY KEY);
+        CREATE TABLE IF NOT EXISTS flags (id INTEGER PRIMARY KEY);
+        """
+    )
+    _ensure_columns(
+        "events",
+        {"user_id": "INTEGER", "title": "TEXT", "start": "REAL", "status": "TEXT DEFAULT 'upcoming'", "created": "REAL", "changed": "REAL"},
+    )
+    _ensure_columns(
+        "turn_stats",
+        {
+            "user_id": "INTEGER",
+            "ts": "REAL",
+            "kind": "TEXT",
+            "outcome": "TEXT",
+            "flags": "TEXT DEFAULT ''",
+            "tools": "TEXT DEFAULT ''",
+            "rounds": "INTEGER DEFAULT 0",
+            "seconds": "REAL DEFAULT 0",
+        },
+    )
+    _ensure_columns("flags", {"user_id": "INTEGER", "message_id": "INTEGER", "created": "REAL"})
+    _conn.executescript(
+        """
+        CREATE INDEX IF NOT EXISTS idx_events_user ON events (user_id, start);
+        CREATE INDEX IF NOT EXISTS idx_turn_stats_ts ON turn_stats (ts);
+        """
+    )
+
+
 MIGRATIONS = [
     _m1_baseline,
     _m2_consent_and_resilience,
@@ -208,6 +244,7 @@ MIGRATIONS = [
     _m7_onboarded,
     _m8_timezone_as_flow,
     _m9_daily_reminders,
+    _m10_events_stats_flags,
 ]
 
 
@@ -377,10 +414,98 @@ def delete_inactive_users(days: int) -> int:
 
 def delete_user_data(user_id: int) -> None:
     """Erase everything stored about this user."""
-    for table in ("messages", "reminders", "goals", "objectives", "toolbox"):
+    for table in ("messages", "reminders", "goals", "objectives", "toolbox", "events", "turn_stats", "flags"):
         _conn.execute(f"DELETE FROM {table} WHERE user_id=?", (user_id,))
     _conn.execute("DELETE FROM users WHERE user_id=?", (user_id,))
     _conn.commit()
+
+
+# --- events: appointments and plans with a time ---
+
+MAX_UPCOMING_EVENTS = 20
+
+
+def add_event(user_id: int, title: str, start: float) -> int | None:
+    """Save an appointment or plan; None when the user already has the maximum number waiting."""
+    waiting = _conn.execute(
+        "SELECT COUNT(*) FROM events WHERE user_id=? AND status='upcoming' AND start>?", (user_id, time.time())
+    ).fetchone()[0]
+    if waiting >= MAX_UPCOMING_EVENTS:
+        return None
+    cur = _conn.execute(
+        "INSERT INTO events (user_id, title, start, status, created, changed) VALUES (?,?,?,'upcoming',?,?)",
+        (user_id, title, start, time.time(), time.time()),
+    )
+    _conn.commit()
+    return cur.lastrowid
+
+
+def move_event(user_id: int, event_id: int, start: float) -> bool:
+    cur = _conn.execute(
+        "UPDATE events SET start=?, changed=? WHERE id=? AND user_id=? AND status='upcoming'", (start, time.time(), event_id, user_id)
+    )
+    _conn.commit()
+    return cur.rowcount > 0
+
+
+def cancel_event(user_id: int, event_id: int) -> bool:
+    cur = _conn.execute(
+        "UPDATE events SET status='canceled', changed=? WHERE id=? AND user_id=? AND status='upcoming'", (time.time(), event_id, user_id)
+    )
+    _conn.commit()
+    return cur.rowcount > 0
+
+
+def events_for_state(user_id: int, now: float) -> list[sqlite3.Row]:
+    """Events the coach should know about: those within the last day or still ahead, and ones canceled in the last day."""
+    return _conn.execute(
+        "SELECT id, title, start, status FROM events WHERE user_id=? AND "
+        "((status='upcoming' AND start>?) OR (status='canceled' AND changed>?)) ORDER BY start",
+        (user_id, now - 86400, now - 86400),
+    ).fetchall()
+
+
+def prune_events(days: int = 7) -> int:
+    cur = _conn.execute("DELETE FROM events WHERE start<?", (time.time() - days * 86400,))
+    _conn.commit()
+    return cur.rowcount
+
+
+# --- turn statistics (no message text) and reported messages ---
+
+
+def add_turn_stat(user_id: int, kind: str, outcome: str, flags: list[str], tools: list[str], rounds: int, seconds: float) -> None:
+    _conn.execute(
+        "INSERT INTO turn_stats (user_id, ts, kind, outcome, flags, tools, rounds, seconds) VALUES (?,?,?,?,?,?,?,?)",
+        (user_id, time.time(), kind, outcome, ",".join(flags), ",".join(tools), rounds, seconds),
+    )
+    _conn.commit()
+
+
+def turn_stats_summary(since: float) -> dict[str, int]:
+    """Counts of turns since a time, by kind and outcome and by what the verifier flagged: {'reply:sent': 12, 'flag:off_target': 2}."""
+    out: dict[str, int] = {}
+    for row in _conn.execute("SELECT kind, outcome, flags FROM turn_stats WHERE ts>=?", (since,)):
+        out[f"{row['kind']}:{row['outcome']}"] = out.get(f"{row['kind']}:{row['outcome']}", 0) + 1
+        for flag in filter(None, row["flags"].split(",")):
+            out[f"flag:{flag}"] = out.get(f"flag:{flag}", 0) + 1
+    return out
+
+
+def prune_turn_stats(days: int = 30) -> int:
+    cur = _conn.execute("DELETE FROM turn_stats WHERE ts<?", (time.time() - days * 86400,))
+    _conn.commit()
+    return cur.rowcount
+
+
+def flag_last_reply(user_id: int) -> bool:
+    """The user says the coach's last message was wrong: remember which one (the text stays in the chat, under the retention period)."""
+    row = _conn.execute("SELECT id FROM messages WHERE user_id=? AND role='assistant' ORDER BY id DESC LIMIT 1", (user_id,)).fetchone()
+    if row is None:
+        return False
+    _conn.execute("INSERT INTO flags (user_id, message_id, created) VALUES (?,?,?)", (user_id, row["id"], time.time()))
+    _conn.commit()
+    return True
 
 
 # --- messages ---

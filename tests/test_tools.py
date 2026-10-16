@@ -162,3 +162,44 @@ def test_the_same_toolbox_idea_in_other_words_is_not_saved_twice(user):
     assert run(uid, "save_to_toolbox", text=again).startswith("ok: already in the toolbox as #")
     assert run(uid, "save_to_toolbox", text="Jotting down a distracting idea gets it out of your head").startswith("ok: saved")
     assert len(db.toolbox(uid)) == 2
+
+
+def _event_user():
+    db.get_or_create_user("telegram", "1001", "1001", "en")
+    db.set_fields(1001, consent_at=1.0, tz_set=1, tz="Europe/Athens")
+
+
+def _at(hours):
+    from datetime import datetime
+    from zoneinfo import ZoneInfo
+
+    return datetime.fromtimestamp(time.time() + hours * 3600, ZoneInfo("Europe/Athens")).strftime("%Y-%m-%d %H:%M")
+
+
+def test_an_event_in_the_state_says_whether_it_is_still_ahead():
+    _event_user()
+    assert tools.run_tool(1001, "add_event", json.dumps({"title": "Dentist", "at": _at(2.75)})).startswith("ok: event #1 saved")
+    state = tools.coaching_state(1001)
+    assert "#1 Dentist" in state and "NOT yet" in state and "starts in 2h" in state
+    db._conn.execute("UPDATE events SET start=? WHERE id=1", (time.time() - 1800,))
+    assert "started 30 min ago" in tools.coaching_state(1001)
+
+
+def test_a_moved_or_canceled_event_is_shown_as_such_and_a_past_time_is_refused():
+    _event_user()
+    tools.run_tool(1001, "add_event", json.dumps({"title": "Psychiatrist", "at": _at(3)}))
+    assert tools.run_tool(1001, "reschedule_event", json.dumps({"event_id": 1, "at": _at(100)})).startswith("ok: event #1 moved")
+    assert "Events with a time: none saved" not in tools.coaching_state(1001)
+    assert tools.run_tool(1001, "cancel_event", json.dumps({"event_id": 1})) == "ok: event cancelled"
+    assert "CANCELED" in tools.coaching_state(1001)
+    assert tools.run_tool(1001, "cancel_event", json.dumps({"event_id": 1})).startswith("error")
+    assert tools.run_tool(1001, "add_event", json.dumps({"title": "Past", "at": _at(-2)})).startswith("error: that time has already passed")
+    assert tools.run_tool(1001, "add_event", json.dumps({"title": "Bad", "at": "Wednesday"})).startswith("error: `at` must look like")
+
+
+def test_the_same_event_is_not_saved_twice():
+    _event_user()
+    args = json.dumps({"title": "Dentist", "at": _at(5)})
+    tools.run_tool(1001, "add_event", args)
+    assert "already saved" in tools.run_tool(1001, "add_event", args)
+    assert db._conn.execute("SELECT COUNT(*) FROM events").fetchone()[0] == 1

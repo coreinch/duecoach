@@ -50,6 +50,8 @@ if not LLM_API_KEY:
     raise SystemExit("LLM_API_KEY is not set (see .env.example)")
 LLM_BASE_URL = os.getenv("LLM_BASE_URL") or "https://api.minimax.io/v1"
 LLM_MODEL = os.getenv("LLM_MODEL") or "MiniMax-M3"  # must support tool calling (reminders, goals and the like are tools)
+# Optional separate model for the verifier (a different model catches what the coach's own blind spots miss); default: the coach's model.
+LLM_VERIFIER_MODEL = os.getenv("LLM_VERIFIER_MODEL") or LLM_MODEL
 LLM_TIMEOUT = _number("LLM_TIMEOUT", 60, float, low=1, high=None)  # seconds per model call
 LLM_CONCURRENCY = _number("LLM_CONCURRENCY", 4, low=1, high=None)  # model calls in flight at once, across all users
 TIMEZONE = os.getenv("TIMEZONE", "UTC")  # default for new users; each user can change it with /timezone

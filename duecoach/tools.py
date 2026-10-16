@@ -53,6 +53,33 @@ TOOLS = [
         ["reminder_id"],
     ),
     _fn(
+        "add_event",
+        "Save an appointment, call or plan that has a day AND a time of day, so you always know whether it is still ahead. Call it when the "
+        "user tells you one. The time must be one they gave: if they named only a day, ask for the time first, and never reuse the time of "
+        "another event.",
+        {
+            "title": {"type": "string", "description": "What it is, short, in the user's language (e.g. 'Dentist')."},
+            "at": {"type": "string", "description": "Local date and time as 'YYYY-MM-DD HH:MM' (24h), worked out from the 'Now' line."},
+        },
+        ["title", "at"],
+    ),
+    _fn(
+        "reschedule_event",
+        "Move a saved event to the new day and time the user gave (by the id in the events list). Ask for the time if they gave only a day.",
+        {
+            "event_id": {"type": "integer", "description": "The #id shown in the events list."},
+            "at": {"type": "string", "description": "New local date and time as 'YYYY-MM-DD HH:MM' (24h)."},
+        },
+        ["event_id", "at"],
+    ),
+    _fn(
+        "cancel_event",
+        "Cancel a saved event when the user says it is canceled or off (by the id in the events list). Also use it to undo an event saved "
+        "with a wrong time.",
+        {"event_id": {"type": "integer", "description": "The #id shown in the events list."}},
+        ["event_id"],
+    ),
+    _fn(
         "snooze_checkins",
         "Pause your own proactive check-ins because the user is busy, in a meeting, driving, sleeping, or wants space. 0 resumes.",
         {"minutes": {"type": "number", "description": "How long to stay quiet, 0 to 10080 (7 days)."}},
@@ -216,6 +243,50 @@ def _set_reminder(uid: int, a: dict) -> str:
     return f"ok: reminder #{rid} set for {shown} local time" + (", repeating every day" if daily else "")
 
 
+def _local_time(uid: int, at: object) -> float | str:
+    """The timestamp of a local 'YYYY-MM-DD HH:MM', or an error text for the model."""
+    try:
+        when = datetime.strptime(str(at).strip().replace("T", " ")[:16], "%Y-%m-%d %H:%M").replace(tzinfo=_local_zone(uid))
+    except ValueError:
+        return "error: `at` must look like 'YYYY-MM-DD HH:MM' (24h, the user's local time)"
+    if when.timestamp() <= time.time():
+        return "error: that time has already passed; check the 'Now' line and use a future date and time"
+    if when.timestamp() - time.time() > 365 * 86400:
+        return "error: too far ahead; the limit is one year"
+    return when.timestamp()
+
+
+def _shown(uid: int, ts: float) -> str:
+    return datetime.fromtimestamp(ts, _local_zone(uid)).strftime("%a %Y-%m-%d %H:%M")
+
+
+def _add_event(uid: int, a: dict) -> str:
+    title = _text(a, "title")
+    start = _local_time(uid, a.get("at"))
+    if isinstance(start, str):
+        return start
+    for e in db.events_for_state(uid, time.time()):
+        if e["status"] == "upcoming" and abs(e["start"] - start) < 120 and _norm(e["title"]) == _norm(title):
+            return f"ok: event #{e['id']} was already saved for {_shown(uid, e['start'])} local time; don't save it again"
+    eid = db.add_event(uid, title, start)
+    if eid is None:
+        return f"error: already {db.MAX_UPCOMING_EVENTS} events waiting; cancel one first"
+    return f"ok: event #{eid} saved for {_shown(uid, start)} local time"
+
+
+def _reschedule_event(uid: int, a: dict) -> str:
+    start = _local_time(uid, a.get("at"))
+    if isinstance(start, str):
+        return start
+    if not db.move_event(uid, int(a["event_id"]), start):
+        return "error: no such upcoming event"
+    return f"ok: event #{int(a['event_id'])} moved to {_shown(uid, start)} local time"
+
+
+def _cancel_event(uid: int, a: dict) -> str:
+    return "ok: event cancelled" if db.cancel_event(uid, int(a["event_id"])) else "error: no such upcoming event"
+
+
 def _cancel_reminder(uid: int, a: dict) -> str:
     return "ok: reminder cancelled" if db.cancel_reminder(uid, int(a["reminder_id"])) else "error: no such pending reminder"
 
@@ -327,6 +398,9 @@ _DISPATCH = {
     "snooze_checkins": _snooze_checkins,
     "set_reminder": _set_reminder,
     "cancel_reminder": _cancel_reminder,
+    "add_event": _add_event,
+    "reschedule_event": _reschedule_event,
+    "cancel_event": _cancel_event,
     "add_goal": _add_goal,
     "retire_goal": _retire_goal,
     "add_objective": _add_objective,
@@ -339,6 +413,22 @@ _DISPATCH = {
 def _ago(ts: float, zone: ZoneInfo) -> str:
     days = int((time.time() - ts) // 86400)
     return f"{datetime.fromtimestamp(ts, zone).strftime('%a %Y-%m-%d')}, " + ("today" if days < 1 else f"{days}d ago")
+
+
+def _span(seconds: float) -> str:
+    minutes = max(int(seconds // 60), 0)
+    return f"{minutes} min" if minutes < 90 else f"{minutes // 60}h {minutes % 60:02d}min"
+
+
+def _event_when(event, zone: ZoneInfo) -> str:
+    """'Fri 2026-10-16 11:20 — starts in 2h 15min: NOT yet, so do not ask how it went'."""
+    when = datetime.fromtimestamp(event["start"], zone).strftime("%a %Y-%m-%d %H:%M")
+    if event["status"] == "canceled":
+        return f"{when} — CANCELED (it is not happening; they may reschedule it)"
+    ahead = event["start"] - time.time()
+    if ahead > 0:
+        return f"{when} — starts in {_span(ahead)}: NOT yet, so never say it passed or ask how it went"
+    return f"{when} — started {_span(-ahead)} ago: under way or over, so you may ask how it went"
 
 
 def coaching_state(user_id: int) -> str:
@@ -389,6 +479,14 @@ def coaching_state(user_id: int) -> str:
     if fired:
         lines.append("Reminders already delivered in the last 24h (done: don't set them again):")
         lines += [f"  {datetime.fromtimestamp(r['due'], zone).strftime('%a %H:%M')}: {r['text']}" for r in fired]
+    events = db.events_for_state(user_id, time.time())
+    lines.append(
+        "Events with a time (appointments, calls, plans; this list is the truth about whether something is still ahead or over):"
+        if events
+        else "Events with a time: none saved."
+    )
+    for e in events:
+        lines.append(f"  #{e['id']} {e['title']}: {_event_when(e, zone)}")
     profile = db.get_profile(user_id)
     told = {
         "why they came": profile.get("why"),

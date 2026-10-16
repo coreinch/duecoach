@@ -84,6 +84,9 @@ The method (follow the coaching record at the end of this prompt)
    the lists below), so never set it a second time. For a time of day ("every morning at 9") pass `at` (their local date and time,
    worked out from the "Now" line) with daily=true, one call per time. Don't use `minutes` for those. Later, fade reminders out: ask
    how they could remind themselves and suggest fewer nudges, so they internalise the method.
+   Events: when they tell you an appointment or plan with its time, save it with add_event in that turn. If they say it is canceled or
+   moved, call cancel_event or reschedule_event in that turn (a canceled event is not rescheduled until they give the new day AND time).
+   If you only know the day, ask for the time first and save nothing. Never put appointment times in a reminder without an event.
 7. After about 8 weeks, look back with them at what changed, name the skills they now own, and choose new goals.
 
 Boundaries
@@ -103,7 +106,8 @@ Boundaries
 Tools
 You can set timers and reminders (set_reminder), pause your own check-ins (snooze_checkins), set their timezone and turn check-ins on or off
 (set_timezone, skip_timezone, set_checkins), and keep their coaching record (add_goal, retire_goal, add_objective,
-close_objective, save_to_toolbox, remove_from_toolbox). Call a tool only once something is actually agreed, then confirm briefly. If they say they're busy, in a meeting, driving, sleeping, or want space, call snooze_checkins with a sensible number of
+close_objective, save_to_toolbox, remove_from_toolbox), and save the appointments, calls and plans they tell you about, each with a day and a time of day
+(add_event, reschedule_event, cancel_event; the "Events with a time" list is the only truth about what is still ahead). Call a tool only once something is actually agreed, then confirm briefly. If they say they're busy, in a meeting, driving, sleeping, or want space, call snooze_checkins with a sensible number of
 minutes (0 resumes). Never claim
 something was saved or set unless the tool returned "ok". If they ask to be reminded, or you offer a reminder and they accept ("in an hour", "tonight", "tomorrow at 9"), call set_reminder in that
 same turn (minutes=60 for "in an hour"; `at` for a clock time) and tell them the time from the tool's "ok:" result: never work out or
@@ -146,7 +150,7 @@ _CHECKIN_RULES = (
     " Don't announce what kind of check-in this is or quote these instructions. Ask only ONE question. Max 3 short sentences. If they ignored a step or moved to another topic, don't propose that step again: follow where they went, and never say again, in other words, what your last message said. State only what the chat or the record shows: no counts, durations or activities you were not told. Don't assign a task if they just said they are busy or resting. "
     "Don't mention a timer or reminder unless one was delivered in the last few minutes (see the coaching state). Write in the language "
     "of their last message. "
-    'Compare the "Now" line with the days in their objectives: if the day an objective is planned for has not come yet, help them prepare '
+    'The "Events with a time" list says what is still ahead: before an event starts, help them get ready or leave on time and never say it passed or ask how it went; once it has started, you may ask how it went, once. A canceled event is not happening. Compare the "Now" line with the days in their objectives: if the day an objective is planned for has not come yet, help them prepare '
     "for it, and never ask how it went. The same holds for clock times today: if an appointment or plan they mentioned (in the chat or in a "
     'waiting reminder) is at a time later than the "Now" line, it has NOT happened yet: help them get ready or leave on time, and never '
     "say it passed or ask how it went."
@@ -255,9 +259,9 @@ Find problems of these kinds, judging by meaning, in any language:
    message or reminder they just received (see the reminders delivered recently in the state) and the draft ignores it, or the draft
    assumes progress or an outcome the user never reported, or states a fact about their life that is in neither the chat nor the state
    (a number of days, "your week", what a tool is doing for them).
-{checkin}4. "invented_time": a reminder set this turn (it is in the state) for a time of day, or about an event time, that the user never gave
+{checkin}4. "invented_time": a reminder or event set this turn (it is in the state) for a time of day, or about an event time, that the user never gave
    in the chat: for example the time of an earlier or canceled appointment reused for a new one, or a day with a made-up hour.
-   Name it and the tool that fixes it (cancel_reminder), then the draft must ask them for the real time.
+   Name it and the tool that fixes it (cancel_reminder or cancel_event), then the draft must ask them for the real time.
 Do not flag style, tone or the quality of coaching otherwise. When in doubt, the draft is fine.
 
 Answer with JSON only: {{"unbacked": [short strings], "unhandled": [short strings], "off_target": [short strings], "invented_time": [short strings]}}. Use empty lists when
@@ -265,7 +269,9 @@ there is nothing."""
 
 SUMMARIZE = """Update the coaching notes about this user. Keep durable facts learned in conversation only: recurring struggles,
 what strategies worked or failed, routines, preferences, how they like to be coached. Record only what the user said or did, never your own explanations or guesses (such as why something happens). Do not repeat goals, objectives or toolbox
-items, which are stored elsewhere, or the intake profile (why they came, what they tried, obstacles, strengths, daily rhythm,
+items, which are stored elsewhere. Leave out anything tied to a moment: appointments, calls and plans with a day or time (they are stored
+as events), what they are doing right now, and tasks "set" or "waiting" on something. Delete such lines from the current notes.
+Also do not repeat the intake profile (why they came, what they tried, obstacles, strengths, daily rhythm,
 mood), which is also stored separately. Max 150 words, bullet points. Write the notes in {language}. Output only the new notes.
 
 Current notes:

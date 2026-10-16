@@ -107,9 +107,13 @@ def test_delete_user_data_removes_everything(user):
     db.add_objective(uid, None, "o", "")
     db.add_tool(uid, "t")
     db.add_reminder(uid, 0, "r")
+    db.add_event(uid, "Dentist", time.time() + 3600)
+    db.add_turn_stat(uid, "reply", "sent", [], [], 1, 0.5)
+    db.add_message(uid, "assistant", "wrong")
+    db.flag_last_reply(uid)
     db.delete_user_data(uid)
     assert db.get_user(uid) is None
-    for table in ("messages", "goals", "objectives", "toolbox", "reminders"):
+    for table in ("messages", "goals", "objectives", "toolbox", "reminders", "events", "turn_stats", "flags"):
         assert db._conn.execute(f"SELECT COUNT(*) FROM {table} WHERE user_id=?", (uid,)).fetchone()[0] == 0
 
 
@@ -137,3 +141,57 @@ def test_open_timezone_questions_become_flows_when_the_database_is_upgraded(user
     assert (flow["flow"], flow["step"], flow["attempts"]) == ("timezone", "asked", 1) and db.get_user(asking)["tz_state"] == ""
     flow = json.loads(db.get_user(verifying)["flow_state"])
     assert (flow["step"], flow["candidate"]) == ("verify", "Europe/Athens") and db.get_user(verifying)["tz_state"] == "done"
+
+
+def test_a_database_from_before_events_gets_the_new_tables_and_keeps_its_data(tmp_path):
+    path = str(tmp_path / "v9.db")
+    db.init(path)
+    db._conn.execute("DROP TABLE events")
+    db._conn.execute("DROP TABLE turn_stats")
+    db._conn.execute("DROP TABLE flags")
+    db._conn.execute("PRAGMA user_version=9")
+    db.add_reminder(7, 123.0, "keep me")
+    db.close()
+    db.init(path)
+    assert db._conn.execute("PRAGMA user_version").fetchone()[0] == len(db.MIGRATIONS)
+    assert db._conn.execute("SELECT text FROM reminders").fetchone()[0] == "keep me"
+    assert db.add_event(7, "Dentist", time.time() + 60) == 1
+
+
+def test_events_for_the_state_hide_old_and_long_canceled_ones_and_are_capped(user):
+    now = time.time()
+    ahead = db.add_event(1001, "Ahead", now + 3600)
+    done = db.add_event(1001, "Yesterday", now + 10)
+    db._conn.execute("UPDATE events SET start=? WHERE id=?", (now - 2 * 86400, done))
+    off = db.add_event(1001, "Off", now + 7200)
+    db.cancel_event(1001, off)
+    stale = db.add_event(1001, "Off long ago", now + 7200)
+    db.cancel_event(1001, stale)
+    db._conn.execute("UPDATE events SET changed=? WHERE id=?", (now - 2 * 86400, stale))
+    assert [(e["title"], e["status"]) for e in db.events_for_state(1001, now)] == [("Ahead", "upcoming"), ("Off", "canceled")]
+    assert not db.cancel_event(1001, off) and not db.move_event(1001, off, now + 9000)  # a canceled event cannot be moved or canceled again
+    assert db.move_event(1001, ahead, now + 5000) and not db.move_event(2002, ahead, now + 1)  # only its owner moves it
+    for i in range(db.MAX_UPCOMING_EVENTS):
+        db.add_event(1001, f"e{i}", now + 100 + i)
+    assert db.add_event(1001, "one too many", now + 500) is None
+
+
+def test_old_events_and_statistics_are_pruned(user):
+    db.add_event(1001, "Long ago", time.time() + 1)
+    db._conn.execute("UPDATE events SET start=?", (time.time() - 30 * 86400,))
+    db.add_event(1001, "Recent", time.time() + 3600)
+    db.add_turn_stat(1001, "reply", "sent", [], [], 1, 1.0)
+    db._conn.execute("UPDATE turn_stats SET ts=?", (time.time() - 60 * 86400,))
+    db.add_turn_stat(1001, "checkin", "dropped", ["off_target"], [], 2, 1.0)
+    assert db.prune_events() == 1 and db.prune_turn_stats() == 1
+    assert db._conn.execute("SELECT COUNT(*) FROM events").fetchone()[0] == 1
+    assert db.turn_stats_summary(0) == {"checkin:dropped": 1, "flag:off_target": 1}
+
+
+def test_flagging_needs_a_coach_message_and_points_at_the_latest_one(user):
+    assert not db.flag_last_reply(1001)
+    db.add_message(1001, "assistant", "first")
+    db.add_message(1001, "assistant", "second")
+    db.add_message(1001, "user", "no")
+    assert db.flag_last_reply(1001)
+    assert db._conn.execute("SELECT content FROM messages WHERE id=(SELECT message_id FROM flags)").fetchone()[0] == "second"

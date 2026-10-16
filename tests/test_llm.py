@@ -441,10 +441,62 @@ async def test_a_verifier_that_fails_never_blocks_the_reply(model, user, recorde
     assert await llm.reply(1001, "ok") == "Sounds good."
 
 
-async def test_the_verifier_may_send_a_draft_back_only_twice(model, user, recorder, verifier):
+async def test_a_draft_still_claiming_something_after_two_send_backs_is_replaced_by_a_plain_question(model, user, recorder, verifier):
     flagged = message('{"unbacked": ["claims a save"], "unhandled": []}')
     model.queue += [message("Fine."), flagged, message("Fine, then."), flagged, message("Fine, really."), flagged]
+    assert await llm.reply(1001, "ok") == llm.strings.t("en", "UNSURE")
+    assert db.recent_messages(1001, 5)[-1]["role"] == "user"  # the replacement is not stored as the coach's own words
+
+
+async def test_a_draft_that_only_misses_the_point_is_still_sent_after_two_send_backs(model, user, recorder, verifier):
+    flagged = message('{"unbacked": [], "unhandled": [], "off_target": ["does not answer"]}')
+    model.queue += [message("Fine."), flagged, message("Fine, then."), flagged, message("Fine, really."), flagged]
     assert await llm.reply(1001, "ok") == "Fine, really."
+
+
+async def test_a_check_in_still_flagged_after_the_retries_is_not_sent(model, user, recorder, verifier):
+    db.add_message(1001, "user", "coffee first")
+    flagged = message('{"unbacked": [], "unhandled": [], "off_target": ["says they rested"]}')
+    model.queue += [
+        message("Glad you rested. Ready to start?"),
+        flagged,
+        message("Glad you rested a lot. Ready?"),
+        flagged,
+        message("Rested well, ready to start?"),
+        flagged,
+    ]
+    with pytest.raises(llm.ModelError, match="still flagged"):
+        await llm.reply(1001, "", prompts.PULSE)
+
+
+async def test_a_reminder_set_for_a_time_nobody_gave_is_taken_back_when_the_verifier_stays_unconvinced(model, user, recorder, verifier):
+    flagged = message('{"unbacked": [], "unhandled": [], "off_target": [], "invented_time": ["09:20 was never given"]}')
+    set_it = message(calls=[("set_reminder", {"minutes": 60, "message": "Get ready."})])
+    model.queue += [
+        set_it,
+        message("Set for 09:20."),
+        flagged,
+        message("Set for 09:20, really."),
+        flagged,
+        message("Done, 09:20."),
+        flagged,
+    ]
+    assert await llm.reply(1001, "please remind me about Wednesday") == llm.strings.t("en", "UNSURE")
+    assert db.pending_reminders(1001) == []
+
+
+async def test_every_turn_leaves_statistics_without_any_text(model, user, recorder, verifier):
+    model.queue += [
+        message("Sounds good."),
+        message('{"unbacked": [], "unhandled": [], "off_target": ["x"]}'),
+        message("Sounds great."),
+        message('{"unbacked": [], "unhandled": [], "off_target": []}'),
+    ]
+    await llm.reply(1001, "ok")
+    row = db._conn.execute("SELECT * FROM turn_stats").fetchone()
+    assert (row["kind"], row["outcome"], row["flags"], row["rounds"]) == ("reply", "sent", "off_target", 2)
+    assert "Sounds" not in " ".join(str(v) for v in tuple(row))
+    assert db.turn_stats_summary(0) == {"reply:sent": 1, "flag:off_target": 1}
 
 
 async def test_the_verifier_refuses_saved_without_a_save_tool_and_the_coach_then_saves(model, user, recorder, verifier):
@@ -528,3 +580,56 @@ async def test_the_verifier_cancels_a_reminder_set_for_a_time_the_user_never_gav
     ]
     assert await llm.reply(1001, "wednesday, set a reminder") == "What time is the new appointment on Wednesday?"
     assert db.pending_reminders(1001) == []
+
+
+async def test_the_verifier_model_is_used_only_when_it_differs_from_the_coachs(monkeypatch, user):
+    seen = []
+
+    async def fake_chat(messages, tool_defs=None, max_tokens=1500, model=None):
+        seen.append(model)
+        return message("ok")
+
+    monkeypatch.setattr(llm, "_chat", fake_chat)
+    await REAL_COMPLETE([{"role": "user", "content": "x"}], model=llm.LLM_MODEL)
+    await REAL_COMPLETE([{"role": "user", "content": "x"}], model="another-model")
+    assert seen == [None, "another-model"]
+
+
+async def test_an_event_saved_for_a_time_nobody_gave_is_taken_back_and_greek_users_get_a_greek_question(model, user, recorder, verifier):
+    from datetime import datetime, timedelta
+    from zoneinfo import ZoneInfo
+
+    db.set_fields(1001, tz="Europe/Athens", lang="el")
+    when = (datetime.now(ZoneInfo("Europe/Athens")) + timedelta(days=2)).strftime("%Y-%m-%d 09:20")
+    flagged = message('{"unbacked": [], "unhandled": [], "off_target": [], "invented_time": ["09:20 was never given"]}')
+    model.queue += [
+        message(calls=[("add_event", {"title": "Psychiatrist", "at": when})]),
+        message("Το κράτησα για 09:20."),
+        flagged,
+        message("Εντάξει, 09:20."),
+        flagged,
+        message("Έτοιμο, 09:20."),
+        flagged,
+    ]
+    out = await llm.reply(1001, "την Τετάρτη έχω ψυχίατρο")
+    assert out == llm.strings.t("el", "UNSURE") and "Μάλλον" in out
+    assert db.events_for_state(1001, 0)[0]["status"] == "canceled"
+
+
+async def test_a_dropped_check_in_and_a_fallback_reply_are_counted_with_their_outcome(model, user):
+    model.queue += [message(None), message(None), message(None)]
+    await llm.reply(1001, "hi")
+    with pytest.raises(llm.ModelError):
+        model.queue += [message(None), message(None), message(None)]
+        await llm.reply(1001, "", prompts.PULSE)
+    rows = [(r["kind"], r["outcome"]) for r in db._conn.execute("SELECT kind, outcome FROM turn_stats ORDER BY id")]
+    assert rows == [("reply", "fallback"), ("checkin", "dropped")]
+
+
+async def test_a_failure_to_record_statistics_never_breaks_the_reply(model, user, monkeypatch):
+    def broken(*args, **kwargs):
+        raise RuntimeError("disk full")
+
+    monkeypatch.setattr(db, "add_turn_stat", broken)
+    model.queue += [message("Try a 5-minute timer.")]
+    assert await llm.reply(1001, "I can't start") == "Try a 5-minute timer."

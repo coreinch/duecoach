@@ -82,7 +82,7 @@ them off the box if the data matters.
 ## Commands
 
 `/help` lists them. Highlights: `/stuck`, `/plan`, `/overwhelm`, `/goals`, `/toolbox`, `/progress`, `/remind`, `/timezone`,
-`/interval on|off|<minutes>`, `/morning`, `/evening`, `/language`, `/privacy`, `/deletedata`.
+`/interval on|off|<minutes>`, `/morning`, `/evening`, `/language`, `/wrong` (marks the coach's last message as wrong, for the maintainer), `/privacy`, `/deletedata`.
 
 ## Telegram profile
 
@@ -98,6 +98,12 @@ python -m venv .venv && .venv/bin/pip install -r requirements-dev.txt
 .venv/bin/ruff check . && .venv/bin/ruff format . && .venv/bin/mypy
 .venv/bin/python -m duecoach.bot       # run locally (needs .env)
 ```
+
+Replay evals: `python -m evals [--runs 3] [case]` replays conversations that went wrong in production (`evals/cases.py`) against the **real**
+model and fails if the coach repeats the mistake. It needs `LLM_API_KEY` in `.env` and costs model calls, so it is run by hand before a deploy
+that changes prompts or the verifier, not in CI. Set `LLM_VERIFIER_MODEL` to judge and verify with a different model than the coach's.
+Each turn also leaves a statistics row without any text (`turn_stats`: what the verifier flagged, which tools ran, how it ended; summarised
+hourly in the log), and `/wrong` records which message a user reported (`flags`).
 
 Layout: `duecoach/core.py` (the order a message is handled in: rate limit, consent, crisis, commands, coaching),
 `duecoach/commands.py` (slash commands), `duecoach/chat.py` (the coach's reply and the

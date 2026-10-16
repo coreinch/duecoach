@@ -125,3 +125,13 @@ async def test_writing_resets_the_back_off_counter(ai, user):
     db.set_field(1001, "unanswered", 4)
     await say("I'm back")
     assert db.get_user(1001)["unanswered"] == 0 and db.get_user(1001)["last_inbound"] > time.time() - 5
+
+
+async def test_wrong_marks_the_last_coach_message_and_says_so(user):
+    from duecoach import commands
+
+    assert await commands.COMMANDS["wrong"](1001, []) == commands.strings.t("en", "WRONG_NONE")
+    db.add_message(1001, "assistant", "You said you rested.")
+    assert await commands.COMMANDS["wrong"](1001, []) == commands.strings.t("en", "WRONG_OK")
+    flag = db._conn.execute("SELECT * FROM flags").fetchone()
+    assert flag["user_id"] == 1001 and flag["message_id"] == db._conn.execute("SELECT MAX(id) FROM messages").fetchone()[0]

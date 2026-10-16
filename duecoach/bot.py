@@ -151,6 +151,11 @@ def maintain() -> None:
     pruned = db.prune_messages(RETENTION_DAYS) if RETENTION_DAYS > 0 else 0
     gone = db.delete_inactive_users(INACTIVE_DELETE_DAYS) if INACTIVE_DELETE_DAYS > 0 else 0
     abandoned = db.abandon_stale_reminders(REMINDER_GIVE_UP_HOURS)
+    db.prune_events()
+    db.prune_turn_stats()
+    recent = db.turn_stats_summary(time.time() - MAINTENANCE_SECONDS)
+    if recent:  # what the coach and the verifier did in the last hour, by count only
+        log.info("turns in the last hour: %s", ", ".join(f"{k}={v}" for k, v in sorted(recent.items())))
     if expired or pruned or gone or abandoned:
         log.info(
             "maintenance: %d objectives expired, %d old messages deleted, %d inactive users deleted, %d stale reminders dropped",
