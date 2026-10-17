@@ -40,7 +40,8 @@ TOOLS = [
             "minutes": {"type": "number", "description": "Alternative to `at`: minutes from now (1 to 43200)."},
             "message": {
                 "type": "string",
-                "description": "Short message to send, in the user's language, informal singular, as in the chat.",
+                "description": "Short message to send, in the user's language, informal singular, as in the chat. Only what the user said "
+                "they want to be reminded of: add no details of your own (how, with what, before or after what).",
             },
             "daily": {"type": "boolean", "description": "Repeat every day at the same local time."},
         },

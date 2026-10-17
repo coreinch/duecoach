@@ -203,3 +203,13 @@ def test_the_same_event_is_not_saved_twice():
     tools.run_tool(1001, "add_event", args)
     assert "already saved" in tools.run_tool(1001, "add_event", args)
     assert db._conn.execute("SELECT COUNT(*) FROM events").fetchone()[0] == 1
+
+
+def test_a_cancelled_reminder_does_not_block_setting_it_again(user):
+    uid = user["user_id"]
+    first = run(uid, "set_reminder", minutes=600, message="Take your medication")
+    rid = int(first.split("#")[1].split()[0])
+    assert db.cancel_reminder(uid, rid)
+    again = run(uid, "set_reminder", minutes=600, message="Take your medication")
+    assert again.startswith("ok: reminder #") and "already set" not in again and len(db.pending_reminders(uid)) == 1
+    assert "already delivered" not in tools.coaching_state(uid)

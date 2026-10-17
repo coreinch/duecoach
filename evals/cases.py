@@ -106,6 +106,37 @@ def _after_a_gap() -> None:
     db.set_field(UID, "last_inbound", _in_hours(-0.5))
 
 
+def _medication_user() -> None:
+    db.set_fields(UID, profile='{"rhythm": "i wake up at 8:00. eat breakfast. make coffee. drink coffee very slowly"}')
+    _chat("assistant: What's the next thing on your list?")
+
+
+def _step_reported() -> None:
+    gid = db.add_goal(UID, "not getting side-tracked")
+    db.add_objective(UID, gid, "I will use a 10-minute timer to check the 3 messages and write one next-step sentence for the note.", "")
+    _chat(
+        "user: I messaged 3 people who followed the bot on X to invite them to my weekly note list",
+        "assistant: A 10-minute timer to check the 3 messages and write one next-step sentence for the note, as a first step?",
+        "user: sure",
+        "assistant: Saved. Get some rest.",
+        "assistant: You said energy was ok this morning. Did the 10 minutes on the 3 messages happen, or want to do it now?",
+    )
+
+
+def _step_reported_then_quiet() -> None:
+    _step_reported()
+    _chat("user: no replies", "assistant: That is normal, three days is nothing. You already did the hard part by sending.")
+    db.set_field(UID, "last_inbound", _in_hours(-20))
+
+
+def _no_open_step() -> bool:
+    return not db.open_objectives(UID)
+
+
+def _plain(text: str) -> bool:
+    return not any(w in text.lower() for w in ("coffee", "water", "breakfast", "food", "meal"))
+
+
 def _events() -> list:
     return db._conn.execute("SELECT * FROM events WHERE user_id=?", (UID,)).fetchall()
 
@@ -207,5 +238,28 @@ CASES = [
         user_text="I have a dentist appointment tomorrow at 10:30",
         instruction=None,
         database=[("one upcoming event, tomorrow at 10:30", _event_tomorrow_1030)],
+    ),
+    Case(
+        "a_reminder_says_only_what_the_user_asked",
+        "'take my medication at 8' became the reminder 'Take your medication with water, before coffee.' at 8 pm",
+        _medication_user,
+        user_text="Remind me to take my medication every day at 8 pm",
+        instruction=None,
+        database=[("every reminder is just the medication", lambda: all(_plain(r["text"]) for r in db.pending_reminders(UID)))],
+    ),
+    Case(
+        "a_reported_step_is_closed",
+        "'no replies' (they had checked the 3 messages) left the step open, and two days later a check-in planned it again",
+        _step_reported,
+        user_text="no replies",
+        instruction=None,
+        database=[("the step is closed", _no_open_step)],
+    ),
+    Case(
+        "checkin_does_not_replan_a_step_already_reported",
+        "the 09:01 check-in proposed 'checking the 3 messages' again although the user had answered 'no replies' days before",
+        _step_reported_then_quiet,
+        instruction=prompts.MORNING,
+        judge=["Does the message propose checking the 3 messages (or the people messaged) again, or ask whether that happened?"],
     ),
 ]

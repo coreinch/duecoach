@@ -574,10 +574,13 @@ def pending_reminders(user_id: int) -> list[sqlite3.Row]:
 
 
 def recent_reminders(user_id: int, hours: int = 24) -> list[sqlite3.Row]:
-    """One-off reminders that were delivered lately, so the model knows a promised reminder has already fired."""
+    """One-off reminders that were delivered lately, so the model knows a promised reminder has already fired.
+
+    A cancelled reminder is stored the same way but its time is still ahead, so it is left out.
+    """
     return _conn.execute(
-        "SELECT id, due, text FROM reminders WHERE user_id=? AND sent=1 AND repeat_daily=0 AND due>? ORDER BY due",
-        (user_id, time.time() - hours * 3600),
+        "SELECT id, due, text FROM reminders WHERE user_id=? AND sent=1 AND repeat_daily=0 AND due>? AND due<=? ORDER BY due",
+        (user_id, time.time() - hours * 3600, time.time()),
     ).fetchall()
 
 
