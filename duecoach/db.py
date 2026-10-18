@@ -585,7 +585,8 @@ def recent_reminders(user_id: int, hours: int = 24) -> list[sqlite3.Row]:
 
 
 def cancel_reminder(user_id: int, reminder_id: int) -> bool:
-    cur = _conn.execute("UPDATE reminders SET sent=1, repeat_daily=0 WHERE id=? AND user_id=? AND sent=0", (reminder_id, user_id))
+    # Deleted, not marked sent: a sent row means "delivered", and a cancelled one must never be listed or matched as delivered
+    cur = _conn.execute("DELETE FROM reminders WHERE id=? AND user_id=? AND sent=0", (reminder_id, user_id))
     _conn.commit()
     return cur.rowcount > 0
 

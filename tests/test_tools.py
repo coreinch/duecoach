@@ -213,3 +213,11 @@ def test_a_cancelled_reminder_does_not_block_setting_it_again(user):
     again = run(uid, "set_reminder", minutes=600, message="Take your medication")
     assert again.startswith("ok: reminder #") and "already set" not in again and len(db.pending_reminders(uid)) == 1
     assert "already delivered" not in tools.coaching_state(uid)
+
+
+def test_a_reminder_cancelled_after_its_time_would_have_passed_is_not_listed_as_delivered(user):
+    uid = user["user_id"]
+    rid = int(run(uid, "set_reminder", minutes=30, message="Call back").split("#")[1].split()[0])
+    db._conn.execute("UPDATE reminders SET due=?", (time.time() - 600,))  # its time came and went while it was still waiting
+    assert db.cancel_reminder(uid, rid)
+    assert "already delivered" not in tools.coaching_state(uid) and db.recent_reminders(uid, 1) == []
