@@ -63,7 +63,7 @@ Runs on the same branch are queued, never cancelled, so the newest commit is alw
 | `TELEGRAM_BOT_TOKEN`, `LLM_API_KEY` | the bot's credentials (`LLM_API_KEY` is your MiniMax key) |
 | `ALLOWED_USERS` | who may use the bot, e.g. `telegram:123`. **Required** unless the `OPEN_ACCESS` variable is `true`: the deploy refuses to run with it empty |
 | `OPEN_ACCESS` (repository *variable*, not secret) | set to `true` to let everyone use the bot in production; it overrides `ALLOWED_USERS`. Everyone then shares your model quota and their chats are stored |
-| `LLM_MODEL` | optional, defaults to `MiniMax-M3`. The bot uses this one model; it must support tool calling. Another OpenAI-compatible provider works via the `LLM_BASE_URL` repository variable (default `https://api.minimax.io/v1`) and its key in `LLM_API_KEY` |
+| `LLM_MODEL` | optional, defaults to `MiniMax-M3.1-Flash`. The bot uses this one model; it must support tool calling. Another OpenAI-compatible provider works via the `LLM_BASE_URL` repository variable (default `https://api.minimax.io/v1`) and its key in `LLM_API_KEY` |
 
 Set them with `gh secret set NAME -R coreinch/duecoach`.
 

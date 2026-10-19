@@ -44,12 +44,12 @@ def is_allowed(channel: str, ext_id: str) -> bool:
     return not ALLOWED or (channel, str(ext_id).strip()) in ALLOWED
 
 
-# One model, through any OpenAI-compatible API. The default is MiniMax-M3 (api.minimax.io); LLM_API_KEY is that provider's key.
+# One model, through any OpenAI-compatible API. The default is MiniMax-M3.1-Flash (api.minimax.io); LLM_API_KEY is that provider's key.
 LLM_API_KEY = os.getenv("LLM_API_KEY", "")
 if not LLM_API_KEY:
     raise SystemExit("LLM_API_KEY is not set (see .env.example)")
 LLM_BASE_URL = os.getenv("LLM_BASE_URL") or "https://api.minimax.io/v1"
-LLM_MODEL = os.getenv("LLM_MODEL") or "MiniMax-M3"  # must support tool calling (reminders, goals and the like are tools)
+LLM_MODEL = os.getenv("LLM_MODEL") or "MiniMax-M3.1-Flash"  # must support tool calling (reminders, goals and the like are tools)
 # Optional separate model for the verifier (a different model catches what the coach's own blind spots miss); default: the coach's model.
 LLM_VERIFIER_MODEL = os.getenv("LLM_VERIFIER_MODEL") or LLM_MODEL
 # ...optionally at another provider: its OpenAI-compatible URL and key (default: the coach's).
