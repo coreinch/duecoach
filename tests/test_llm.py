@@ -23,7 +23,7 @@ def model(monkeypatch):
     """Script the model: each queued item is the message returned by one call; every call is recorded."""
     queue, calls = [], []
 
-    async def fake_chat(messages, tool_defs=None, max_tokens=1500):
+    async def fake_chat(messages, tool_defs=None, max_tokens=1500, model=None, effort=None):
         calls.append({"messages": list(messages), "tools": tool_defs})
         return queue.pop(0)
 
@@ -157,7 +157,7 @@ async def test_the_configured_model_is_the_only_one_used_and_minimax_is_asked_to
 
     monkeypatch.setattr(llm._client, "chat", NS(completions=NS(create=create)))
     await llm._chat([{"role": "user", "content": "hi"}])
-    assert seen[0]["model"] == llm.LLM_MODEL and seen[0]["extra_body"] == {"reasoning_split": True}
+    assert seen[0]["model"] == llm.LLM_MODEL and seen[0]["extra_body"] == llm._extra(llm.LLM_MODEL)["extra_body"]
     assert llm.status() == {"model": llm.LLM_MODEL}
 
 
@@ -584,7 +584,7 @@ async def test_the_verifier_cancels_a_reminder_set_for_a_time_the_user_never_gav
 async def test_the_verifier_model_is_used_only_when_it_differs_from_the_coachs(monkeypatch, user):
     seen = []
 
-    async def fake_chat(messages, tool_defs=None, max_tokens=1500, model=None):
+    async def fake_chat(messages, tool_defs=None, max_tokens=1500, model=None, effort=None):
         seen.append(model)
         return message("ok")
 
@@ -743,3 +743,10 @@ def test_the_check_in_rules_ask_for_context_and_saved_steps_carry_no_relative_da
             "description"
         ]
     )
+
+
+def test_flash_is_told_how_hard_to_think_and_other_models_are_not():
+    assert llm._extra("MiniMax-M3.1-Flash") == {"extra_body": {"reasoning_split": True, "reasoning_effort": llm.LLM_REASONING_EFFORT}}
+    assert llm._extra("MiniMax-M3.1-Flash", "low")["extra_body"]["reasoning_effort"] == "low"
+    assert llm._extra("MiniMax-M3") == {"extra_body": {"reasoning_split": True}}
+    assert llm._extra("gpt-4o") == {}

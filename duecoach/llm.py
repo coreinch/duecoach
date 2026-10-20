@@ -16,7 +16,9 @@ from .config import (
     LLM_API_KEY,
     LLM_BASE_URL,
     LLM_CONCURRENCY,
+    LLM_HELPER_EFFORT,
     LLM_MODEL,
+    LLM_REASONING_EFFORT,
     LLM_TIMEOUT,
     LLM_VERIFIER_API_KEY,
     LLM_VERIFIER_BASE_URL,
@@ -47,8 +49,13 @@ _verifier_client = (
 
 
 # MiniMax puts its reasoning inside the reply as <think>...</think> unless asked to split it off; the regex is a second safety net.
-def _extra(model: str) -> dict[str, Any]:
-    return {"extra_body": {"reasoning_split": True}} if model.startswith("MiniMax-") else {}
+def _extra(model: str, effort: str | None = None) -> dict[str, Any]:
+    if not model.startswith("MiniMax-"):
+        return {}
+    body: dict[str, Any] = {"reasoning_split": True}
+    if model.startswith("MiniMax-M3.1-Flash"):
+        body["reasoning_effort"] = effort or LLM_REASONING_EFFORT
+    return {"extra_body": body}
 
 
 _THINK = re.compile(r"<think>.*?</think>\s*", re.DOTALL)
@@ -249,7 +256,9 @@ def status() -> dict:
     return {"model": LLM_MODEL}
 
 
-async def _chat(messages: Any, tool_defs: list[dict] | None = None, max_tokens: int = 1500, model: str | None = None):
+async def _chat(
+    messages: Any, tool_defs: list[dict] | None = None, max_tokens: int = 1500, model: str | None = None, effort: str | None = None
+):
     model = model or LLM_MODEL
     client = _verifier_client if model == LLM_VERIFIER_MODEL and model != LLM_MODEL else _client
     kwargs: dict[str, Any] = {"tools": tool_defs} if tool_defs else {}
@@ -258,7 +267,7 @@ async def _chat(messages: Any, tool_defs: list[dict] | None = None, max_tokens: 
         try:
             async with _slots:
                 resp = await client.chat.completions.create(
-                    model=model, messages=messages, max_tokens=max_tokens, **kwargs, **_extra(model)
+                    model=model, messages=messages, max_tokens=max_tokens, **kwargs, **_extra(model, effort)
                 )
         except openai.OpenAIError as error:  # connection, timeout, rate limit, server error, or a request the model rejects
             problem = f"{type(error).__name__}: {error}"[:200]
@@ -280,8 +289,8 @@ async def _chat(messages: Any, tool_defs: list[dict] | None = None, max_tokens: 
 
 async def _complete(messages: list[dict], max_tokens: int = 1500, model: str | None = None) -> str:
     if model and model != LLM_MODEL:  # only a different model is passed on
-        return ((await _chat(messages, max_tokens=max_tokens, model=model)).content or "").strip()
-    return ((await _chat(messages, max_tokens=max_tokens)).content or "").strip()
+        return ((await _chat(messages, max_tokens=max_tokens, model=model, effort=LLM_HELPER_EFFORT)).content or "").strip()
+    return ((await _chat(messages, max_tokens=max_tokens, effort=LLM_HELPER_EFFORT)).content or "").strip()
 
 
 def _since(last_inbound: float | None) -> str:

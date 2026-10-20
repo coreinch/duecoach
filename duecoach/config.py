@@ -51,6 +51,10 @@ if not LLM_API_KEY:
 LLM_BASE_URL = os.getenv("LLM_BASE_URL") or "https://api.minimax.io/v1"
 LLM_MODEL = os.getenv("LLM_MODEL") or "MiniMax-M3.1-Flash"  # must support tool calling (reminders, goals and the like are tools)
 # Optional separate model for the verifier (a different model catches what the coach's own blind spots miss); default: the coach's model.
+# MiniMax-M3.1-Flash thinks at "max" effort unless told otherwise, which made every call slow, and the verifier and the recorder add
+# calls to each turn. Replies think at medium, those short side jobs at low. Values: low, medium, high, xhigh, max; sent to Flash only.
+LLM_REASONING_EFFORT = os.getenv("LLM_REASONING_EFFORT") or "medium"
+LLM_HELPER_EFFORT = os.getenv("LLM_HELPER_EFFORT") or "low"
 LLM_VERIFIER_MODEL = os.getenv("LLM_VERIFIER_MODEL") or LLM_MODEL
 # ...optionally at another provider: its OpenAI-compatible URL and key (default: the coach's).
 LLM_VERIFIER_BASE_URL = os.getenv("LLM_VERIFIER_BASE_URL") or LLM_BASE_URL

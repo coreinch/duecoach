@@ -22,7 +22,7 @@ NO_AGREEMENT = message('{"goal": null, "step": null}')  # the first call of ever
 def scripted(monkeypatch):
     queue = []
 
-    async def fake_chat(messages, tool_defs=None, max_tokens=1500, model=None):
+    async def fake_chat(messages, tool_defs=None, max_tokens=1500, model=None, effort=None):
         return queue.pop(0)
 
     async def fake_complete(messages, max_tokens=1500, model=None):
