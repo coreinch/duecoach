@@ -1,0 +1,38 @@
+name: Evals
+
+# Replays the conversations that went wrong in production against the real model, and scores the verifier on labelled drafts.
+# Run by hand (Actions > Evals > Run workflow) before deploying a change to prompts or the verifier. It costs model calls, so it is
+# not part of CI/CD and never deploys anything.
+on:
+  workflow_dispatch:
+    inputs:
+      runs:
+        description: "Runs per case (the model is not deterministic; a case that fails once in three is a real weakness)"
+        default: "3"
+
+permissions:
+  contents: read
+
+jobs:
+  evals:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      LLM_API_KEY: ${{ secrets.LLM_API_KEY }}
+      LLM_MODEL: ${{ secrets.LLM_MODEL }}
+      LLM_BASE_URL: ${{ vars.LLM_BASE_URL }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
+        with:
+          python-version: "3.13"
+          cache: pip
+          cache-dependency-path: requirements-dev.txt
+
+      - run: pip install -r requirements-dev.txt
+      - name: Replay evals
+        run: python -m evals --runs "${{ inputs.runs }}"
+      - name: Verifier accuracy
+        if: always()
+        run: python -m evals.verifier --runs "${{ inputs.runs }}"

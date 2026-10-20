@@ -630,6 +630,13 @@ async def _reply(user_id: int, user_text: str, instruction: str | None, stat: di
             if "invented_time" in unresolved:
                 _undo_new_times(user_id, results)
             stat["outcome"] = "fallback"
+            # what was just taken back no longer exists: the last reply must not be written from it
+            text = await _last_resort(
+                messages, [r for r in results if not _NEW_TIME.match(r)] if "invented_time" in unresolved else results, unresolved
+            )
+            if text:
+                db.add_message(user_id, "assistant", text)
+                return text
             return strings.t(db.get_user(user_id)["lang"], "UNSURE")
     if truncated and text:
         text = _trim_to_sentence(text)
@@ -653,6 +660,27 @@ async def _reply(user_id: int, user_text: str, instruction: str | None, stat: di
         return strings.t(db.get_user(user_id)["lang"], "EMPTY_REPLY")
     db.add_message(user_id, "assistant", text)
     return text
+
+
+async def _last_resort(messages: list[dict], results: list[str], unresolved: tuple[str, ...]) -> str:
+    """One more model call when the verifier would not pass any draft: a short, true reply instead of a canned "say that again".
+
+    It sees the same chat and the tool results, with no tools and no verifier (another round would not end). A call that fails, or
+    an answer that is empty or a tool call written as text, returns "" and the caller falls back to the fixed sentence.
+    """
+    note = (
+        f"Your drafts for this message kept being flagged ({', '.join(unresolved)}). Write one short reply now. Say only what is true: "
+        "nothing was set, saved, cancelled or changed except what these tool results show: "
+        + ("; ".join(results) if results else "none")
+        + ". Give a clock time only as it appears there. If you are unsure what they meant, ask ONE short question. Do not mention this check."
+    )
+    try:
+        msg = await _chat([*messages, {"role": "system", "content": note}], None, max_tokens=REPLY_TOKENS)
+    except Exception:
+        log.exception("the last-resort reply failed")
+        return ""
+    text = _without_ids(_plain((msg.content or "").strip()))
+    return "" if not text or _leaked_call(text) or getattr(msg, "finish_reason", None) == "length" else text
 
 
 def _trim_to_sentence(text: str) -> str:

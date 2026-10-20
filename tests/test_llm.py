@@ -766,3 +766,40 @@ async def test_a_flagged_draft_is_kept_for_review_and_not_when_the_setting_is_ze
     model.queue += [message("Sounds great."), flagged, message("Tell me more."), ok]
     await llm.reply(1001, "ok again")
     assert db._conn.execute("SELECT COUNT(*) FROM flagged_drafts").fetchone()[0] == 0
+
+
+async def test_when_no_draft_passes_the_verifier_one_last_reply_is_written_from_the_tool_results(model, user, recorder, verifier):
+    flagged = message('{"unbacked": ["claims a save"], "unhandled": []}')
+    model.queue += [
+        message("Fine."),
+        flagged,
+        message("Fine, then."),
+        flagged,
+        message("Fine, really."),
+        flagged,
+        message("Nothing is saved yet. What did you mean by that?"),  # the last-resort call
+    ]
+    out = await llm.reply(1001, "ok")
+    assert out == "Nothing is saved yet. What did you mean by that?"
+    assert db.recent_messages(1001, 5)[-1]["content"] == out
+    note = [m for m in model.calls[-1]["messages"] if m["role"] == "system"][-1]["content"]
+    assert model.calls[-1]["tools"] is None
+    assert "unbacked" in note and "tool results" in note
+
+
+async def test_the_last_reply_is_not_written_from_a_reminder_that_was_just_taken_back(model, user, recorder, verifier):
+    invented = message('{"unbacked": [], "unhandled": [], "off_target": [], "invented_time": ["09:20 was never given"]}')
+    model.queue += [
+        message(calls=[("set_reminder", {"minutes": 60, "message": "Get ready."})]),
+        message("Set for 09:20."),
+        invented,
+        message("Set for 09:20, really."),
+        invented,
+        message("Still 09:20."),
+        invented,
+        message("Which time do you mean?"),  # the last-resort call
+    ]
+    assert await llm.reply(1001, "please remind me about Wednesday") == "Which time do you mean?"
+    assert db.pending_reminders(1001) == []
+    note = [m for m in model.calls[-1]["messages"] if m["role"] == "system"][-1]["content"]
+    assert "ok: reminder" not in note and "tool results show: none" in note
