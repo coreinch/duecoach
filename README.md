@@ -66,6 +66,7 @@ Runs on the same branch are queued, never cancelled, so the newest commit is alw
 | `ALLOWED_USERS` | who may use the bot, e.g. `telegram:123`. **Required** unless the `OPEN_ACCESS` variable is `true`: the deploy refuses to run with it empty |
 | `OPEN_ACCESS` (repository *variable*, not secret) | set to `true` to let everyone use the bot in production; it overrides `ALLOWED_USERS`. Everyone then shares your model quota and their chats are stored |
 | `LLM_MODEL` | optional, defaults to `MiniMax-M3.1-Flash`. The bot uses this one model; it must support tool calling. Another OpenAI-compatible provider works via the `LLM_BASE_URL` repository variable (default `https://api.minimax.io/v1`) and its key in `LLM_API_KEY` |
+| `ADMIN_CHAT_ID` | optional: the Telegram chat id that gets a daily digest (replies, median and slowest reply time, fallbacks, verifier flags) and an alert when replies keep falling back to "say it again". Without it both are only written to the log. `LLM_REASONING_EFFORT` (replies, default `medium`) and `LLM_HELPER_EFFORT` (verifier and other short calls, default `low`) tune how long MiniMax-M3.1-Flash thinks |
 
 Set them with `gh secret set NAME -R coreinch/duecoach`.
 
@@ -114,7 +115,7 @@ Layout: `duecoach/core.py` (the order a message is handled in: rate limit, conse
 crisis answer), `duecoach/crisis.py` (the word list for crisis wording; the model's check is `signals_crisis` in `llm.py`), `duecoach/llm.py` (model calls,
 tool loop), `duecoach/tools.py` and `duecoach/playbook.py` (what the coach can do and the strategy cards),
 `duecoach/prompts.py` and `duecoach/strings.py` (model prompts, fixed texts in both languages), `duecoach/bot.py` (reminders, check-ins,
-housekeeping, startup), `duecoach/channels/` (Telegram), `duecoach/db.py` (SQLite, numbered migrations). The Docker base image is pinned by digest; Dependabot proposes updates.
+housekeeping, startup), `duecoach/watch.py` (the daily digest and alerts, and a single nudge for people who stopped during setup), `duecoach/channels/` (Telegram), `duecoach/db.py` (SQLite, numbered migrations). The Docker base image is pinned by digest; Dependabot proposes updates.
 
 ## Licence
 

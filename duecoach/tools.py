@@ -240,7 +240,7 @@ def _set_reminder(uid: int, a: dict) -> str:
         if abs(r["due"] - due) < 120 and _norm(r["text"]) == _norm(message):
             shown = datetime.fromtimestamp(r["due"], _local_zone(uid)).strftime("%a %H:%M")
             return f"ok: reminder #{r['id']} for that time was already set (for {shown} local time); don't set it again"
-    rid = db.add_reminder(uid, due, message, daily)
+    rid = db.add_reminder(uid, due, message, daily, clock=bool(a.get("at")))
     if rid is None:
         return f"error: already {db.MAX_PENDING_REMINDERS} reminders waiting; cancel one first"
     shown = datetime.fromtimestamp(due, _local_zone(uid)).strftime("%a %H:%M")

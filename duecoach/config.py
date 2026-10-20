@@ -62,6 +62,8 @@ LLM_VERIFIER_API_KEY = os.getenv("LLM_VERIFIER_API_KEY") or LLM_API_KEY
 # Drafts the verifier flagged, with the user's message and the verifier's reasons, kept this many days so they can be read and labelled
 # (0: keep nothing). They hold chat text, unlike turn_stats; they go with the user's data when it is deleted.
 FLAGGED_DRAFT_DAYS = _number("FLAGGED_DRAFT_DAYS", 7, low=0, high=90)
+# Telegram chat id that gets the daily digest and the alerts about the bot itself. Empty: they are only written to the log.
+ADMIN_CHAT_ID = os.getenv("ADMIN_CHAT_ID") or ""
 LLM_TIMEOUT = _number("LLM_TIMEOUT", 60, float, low=1, high=None)  # seconds per model call
 LLM_CONCURRENCY = _number("LLM_CONCURRENCY", 4, low=1, high=None)  # model calls in flight at once, across all users
 TIMEZONE = os.getenv("TIMEZONE", "UTC")  # default for new users; each user can change it with /timezone

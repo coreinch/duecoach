@@ -133,6 +133,7 @@ jobs:
           LLM_API_KEY: ${{ secrets.LLM_API_KEY }}
           LLM_BASE_URL: ${{ vars.LLM_BASE_URL }}
           LLM_MODEL: ${{ secrets.LLM_MODEL }}
+          ADMIN_CHAT_ID: ${{ secrets.ADMIN_CHAT_ID }}
         run: |
           # Built via jq rather than interpolated into the ansible-playbook
           # command line: tokens can contain shell metacharacters, and
@@ -152,6 +153,7 @@ jobs:
             --arg llm_api_key "$LLM_API_KEY" \
             --arg llm_base_url "$LLM_BASE_URL" \
             --arg llm_model "$LLM_MODEL" \
+            --arg admin_chat_id "$ADMIN_CHAT_ID" \
             '$ARGS.named' > /tmp/extra-vars.json
 
           ansible-playbook -i ansible/inventory/hosts.ini ansible/playbooks/deploy.yml \

@@ -244,6 +244,15 @@ def _m11_flagged_drafts() -> None:
     _conn.execute("CREATE INDEX IF NOT EXISTS idx_flagged_drafts_ts ON flagged_drafts (ts)")
 
 
+def _m12_clock_reminders_and_nudge() -> None:
+    """Which reminders are tied to a clock time (they move with a corrected timezone; a "in 20 minutes" timer does not), and when a
+    person who stopped during setup was last nudged."""
+    _ensure_columns("reminders", {"clock": "INTEGER DEFAULT 0"})
+    _ensure_columns("users", {"nudged_at": "REAL DEFAULT 0"})
+    _conn.execute("UPDATE reminders SET clock=1 WHERE repeat_daily=1")  # a daily reminder is always tied to a time of day
+    _conn.execute("CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT)")  # small facts about the bot itself
+
+
 MIGRATIONS = [
     _m1_baseline,
     _m2_consent_and_resilience,
@@ -256,6 +265,7 @@ MIGRATIONS = [
     _m9_daily_reminders,
     _m10_events_stats_flags,
     _m11_flagged_drafts,
+    _m12_clock_reminders_and_nudge,
 ]
 
 
@@ -288,6 +298,7 @@ def close() -> None:
 
 USER_FIELDS = {
     "chat_id",
+    "nudged_at",
     "tz",
     "notes",
     "last_morning",
@@ -354,6 +365,47 @@ def users_for_checkins(now_ts: float) -> list[sqlite3.Row]:
     ).fetchall()
 
 
+def users_to_nudge(now_ts: float) -> list[sqlite3.Row]:
+    """People who agreed to the privacy notice, wrote at least once, then stopped before finishing setup, and get no check-ins that
+    would bring them back: they are asked once, ever, whether they want to continue."""
+    return _conn.execute(
+        "SELECT * FROM users WHERE consent_at > 0 AND COALESCE(onboarded, 0) = 0 AND COALESCE(interval_min, 0) = 0"
+        " AND COALESCE(nudged_at, 0) = 0 AND last_inbound IS NOT NULL AND last_inbound BETWEEN ? AND ?"
+        " AND COALESCE(snooze_until, 0) <= ?",
+        (now_ts - 30 * 86400, now_ts - 86400, now_ts),
+    ).fetchall()
+
+
+def get_meta(key: str) -> str:
+    row = _conn.execute("SELECT value FROM meta WHERE key=?", (key,)).fetchone()
+    return row["value"] if row else ""
+
+
+def set_meta(key: str, value: str) -> None:
+    _conn.execute("INSERT INTO meta (key, value) VALUES (?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value", (key, value))
+    _conn.commit()
+
+
+def turn_digest(since: float) -> dict:
+    """What the coach did since a time, for the owner: turns by kind and outcome, how long replies took, what the verifier flagged."""
+    rows = _conn.execute("SELECT kind, outcome, flags, seconds FROM turn_stats WHERE ts>=?", (since,)).fetchall()
+    replies = sorted(r["seconds"] for r in rows if r["kind"] == "reply")
+    out: dict = {
+        "turns": len(rows),
+        "replies": len(replies),
+        "checkins": sum(1 for r in rows if r["kind"] == "checkin"),
+        "fallbacks": sum(1 for r in rows if r["kind"] == "reply" and r["outcome"] == "fallback"),
+        "withheld": sum(1 for r in rows if r["kind"] == "checkin" and r["outcome"] == "dropped"),
+        "reply_p50": replies[len(replies) // 2] if replies else 0,
+        "reply_p95": replies[min(len(replies) - 1, int(len(replies) * 0.95))] if replies else 0,
+        "flags": {},
+    }
+    for r in rows:
+        for flag in filter(None, r["flags"].split(",")):
+            out["flags"][flag] = out["flags"].get(flag, 0) + 1
+    return out
+
+
 def set_fields(user_id: int, **fields: str | int | float) -> None:
     """Update several user columns in one statement and one commit."""
     assert fields and fields.keys() <= USER_FIELDS, fields.keys()
@@ -366,17 +418,23 @@ def set_field(user_id: int, field: str, value: str | int | float) -> None:
     set_fields(user_id, **{field: value})
 
 
-def _keep_events_at_their_local_time(user_id: int, old: str, new: str) -> None:
-    """The user said "10:30" in the zone we had; when the zone is corrected, their events stay at 10:30 on the clock, now in the new zone."""
+def _keep_times_at_their_local_clock(user_id: int, old: str, new: str) -> None:
+    """The user said "10:30" in the zone we had; when the zone is corrected, their events and clock-time reminders stay at 10:30 on the
+    clock, now in the new zone. Timers ("in 20 minutes") are durations and do not move."""
     try:
         before, after = ZoneInfo(old), ZoneInfo(new)
     except Exception:
         return
+
+    def moved(ts: float) -> float:
+        return datetime.fromtimestamp(ts, before).replace(tzinfo=None).replace(tzinfo=after).timestamp()
+
     for e in _conn.execute(
         "SELECT id, start FROM events WHERE user_id=? AND status='upcoming' AND start>?", (user_id, time.time())
     ).fetchall():
-        wall = datetime.fromtimestamp(e["start"], before).replace(tzinfo=None)
-        _conn.execute("UPDATE events SET start=? WHERE id=?", (wall.replace(tzinfo=after).timestamp(), e["id"]))
+        _conn.execute("UPDATE events SET start=? WHERE id=?", (moved(e["start"]), e["id"]))
+    for r in _conn.execute("SELECT id, due FROM reminders WHERE user_id=? AND sent=0 AND clock=1", (user_id,)).fetchall():
+        _conn.execute("UPDATE reminders SET due=? WHERE id=?", (moved(r["due"]), r["id"]))
 
 
 def confirm_timezone(user_id: int, zone: str) -> bool:
@@ -387,7 +445,7 @@ def confirm_timezone(user_id: int, zone: str) -> bool:
     """
     user = get_user(user_id)
     if user["tz"] and user["tz"] != zone:
-        _keep_events_at_their_local_time(user_id, user["tz"], zone)
+        _keep_times_at_their_local_clock(user_id, user["tz"], zone)
     switched_on = not user["tz_set"] and not (user["interval_min"] or 0)
     fields: dict[str, Any] = {"tz": zone, "tz_set": 1}
     if switched_on:
@@ -583,12 +641,16 @@ def prune_messages(retention_days: int, keep_last: int = 40) -> int:
 MAX_PENDING_REMINDERS = 12
 
 
-def add_reminder(user_id: int, due: float, text: str, repeat_daily: bool = False) -> int | None:
-    """Schedule a reminder; None if the user already has MAX_PENDING_REMINDERS waiting."""
+def add_reminder(user_id: int, due: float, text: str, repeat_daily: bool = False, clock: bool = False) -> int | None:
+    """Schedule a reminder; None if the user already has MAX_PENDING_REMINDERS waiting.
+
+    `clock`: it was set for a time of day the user named, so it stays at that time on the clock if their timezone is corrected.
+    """
     if len(pending_reminders(user_id)) >= MAX_PENDING_REMINDERS:
         return None
     cur = _conn.execute(
-        "INSERT INTO reminders (user_id, due, text, repeat_daily) VALUES (?,?,?,?)", (user_id, due, text, int(repeat_daily))
+        "INSERT INTO reminders (user_id, due, text, repeat_daily, clock) VALUES (?,?,?,?,?)",
+        (user_id, due, text, int(repeat_daily), int(clock or repeat_daily)),
     )
     _conn.commit()
     return cur.lastrowid

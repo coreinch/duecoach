@@ -9,7 +9,7 @@ from zoneinfo import ZoneInfo
 
 from aiohttp import web
 
-from . import backoff, channels, chat, core, db, llm, prompts, strings
+from . import backoff, channels, chat, core, db, llm, prompts, strings, watch
 from .channels.telegram import TelegramChannel
 from .config import (
     DB_PATH,
@@ -186,6 +186,7 @@ async def forever(name: str, job) -> None:
 
 async def maintenance_job() -> None:
     maintain()
+    await watch.run()
 
 
 async def healthz(request: web.Request) -> web.Response:

@@ -212,6 +212,24 @@ def test_correcting_the_timezone_keeps_events_at_the_clock_time_the_user_said(us
     assert db.events_for_state(1001, 0)[0]["start"] == moved.timestamp()
 
 
+def test_correcting_the_timezone_moves_clock_time_reminders_but_not_timers(user):
+    from datetime import datetime, timedelta
+    from zoneinfo import ZoneInfo
+
+    db.set_fields(1001, tz="UTC", tz_set=1)
+    said = (datetime.now(ZoneInfo("UTC")) + timedelta(days=2)).replace(hour=9, minute=0, second=0, microsecond=0)
+    at_nine = db.add_reminder(1001, said.timestamp(), "Call the bank", clock=True)
+    daily = db.add_reminder(1001, said.timestamp(), "Medication", repeat_daily=True)  # a daily one is always tied to the clock
+    timer_due = time.time() + 1200
+    timer = db.add_reminder(1001, timer_due, "Stretch")  # "in 20 minutes"
+    db.confirm_timezone(1001, "Europe/Athens")
+    due = {r["id"]: r["due"] for r in db.pending_reminders(1001)}
+    for rid in (at_nine, daily):
+        local = datetime.fromtimestamp(due[rid], ZoneInfo("Europe/Athens"))
+        assert (local.date(), local.hour, local.minute) == (said.date(), 9, 0)
+    assert due[timer] == timer_due
+
+
 def test_a_message_a_user_reported_is_not_deleted_by_retention(user):
     old = time.time() - 400 * 86400
     db.add_message(1001, "assistant", "the wrong one")
