@@ -234,6 +234,16 @@ def _m10_events_stats_flags() -> None:
     )
 
 
+def _m11_flagged_drafts() -> None:
+    """Drafts the verifier flagged (with the user's message and its reasons), kept for a few days to measure how often it is right."""
+    _conn.execute("CREATE TABLE IF NOT EXISTS flagged_drafts (id INTEGER PRIMARY KEY)")
+    _ensure_columns(
+        "flagged_drafts",
+        {"user_id": "INTEGER", "ts": "REAL", "kinds": "TEXT", "user_text": "TEXT", "draft": "TEXT", "problems": "TEXT"},
+    )
+    _conn.execute("CREATE INDEX IF NOT EXISTS idx_flagged_drafts_ts ON flagged_drafts (ts)")
+
+
 MIGRATIONS = [
     _m1_baseline,
     _m2_consent_and_resilience,
@@ -245,6 +255,7 @@ MIGRATIONS = [
     _m8_timezone_as_flow,
     _m9_daily_reminders,
     _m10_events_stats_flags,
+    _m11_flagged_drafts,
 ]
 
 
@@ -429,7 +440,7 @@ def delete_inactive_users(days: int) -> int:
 
 def delete_user_data(user_id: int) -> None:
     """Erase everything stored about this user."""
-    for table in ("messages", "reminders", "goals", "objectives", "toolbox", "events", "turn_stats", "flags"):
+    for table in ("messages", "reminders", "goals", "objectives", "toolbox", "events", "turn_stats", "flags", "flagged_drafts"):
         _conn.execute(f"DELETE FROM {table} WHERE user_id=?", (user_id,))
     _conn.execute("DELETE FROM users WHERE user_id=?", (user_id,))
     _conn.commit()
@@ -505,6 +516,20 @@ def turn_stats_summary(since: float) -> dict[str, int]:
         for flag in filter(None, row["flags"].split(",")):
             out[f"flag:{flag}"] = out.get(f"flag:{flag}", 0) + 1
     return out
+
+
+def add_flagged_draft(user_id: int, kinds: list[str], user_text: str, draft: str, problems: str) -> None:
+    _conn.execute(
+        "INSERT INTO flagged_drafts (user_id, ts, kinds, user_text, draft, problems) VALUES (?,?,?,?,?,?)",
+        (user_id, time.time(), ",".join(kinds), user_text[:600], draft[:1200], problems[:1500]),
+    )
+    _conn.commit()
+
+
+def prune_flagged_drafts(days: int) -> int:
+    cur = _conn.execute("DELETE FROM flagged_drafts WHERE ts<?", (time.time() - days * 86400,))
+    _conn.commit()
+    return cur.rowcount
 
 
 def prune_turn_stats(days: int = 30) -> int:

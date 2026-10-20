@@ -103,7 +103,9 @@ Replay evals: `python -m evals [--runs 3] [case]` replays conversations that wen
 model and fails if the coach repeats the mistake. It needs `LLM_API_KEY` in `.env` and costs model calls, so it is run by hand before a deploy
 that changes prompts or the verifier, not in CI. Set `LLM_VERIFIER_MODEL` (and, for another provider, `LLM_VERIFIER_BASE_URL` and `LLM_VERIFIER_API_KEY`) to judge and verify with a different model than the coach's.
 Each turn also leaves a statistics row without any text (`turn_stats`: what the verifier flagged, which tools ran, how it ended; summarised
-hourly in the log), and `/wrong` records which message a user reported (`flags`).
+hourly in the log), and `/wrong` records which message a user reported (`flags`). Unlike those, `flagged_drafts` keeps the text of a draft
+the verifier flagged (never sent), the user's message and the verifier's reasons for `FLAGGED_DRAFT_DAYS` (7; 0 keeps nothing), so the flags
+can be read and labelled to measure how often the verifier is right (`python -m evals.verifier`); it is deleted with the user's data.
 
 Layout: `duecoach/core.py` (the order a message is handled in: rate limit, consent, crisis, commands, coaching),
 `duecoach/commands.py` (slash commands), `duecoach/chat.py` (the coach's reply and the

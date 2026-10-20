@@ -750,3 +750,19 @@ def test_flash_is_told_how_hard_to_think_and_other_models_are_not():
     assert llm._extra("MiniMax-M3.1-Flash", "low")["extra_body"]["reasoning_effort"] == "low"
     assert llm._extra("MiniMax-M3") == {"extra_body": {"reasoning_split": True}}
     assert llm._extra("gpt-4o") == {}
+
+
+async def test_a_flagged_draft_is_kept_for_review_and_not_when_the_setting_is_zero(model, user, recorder, verifier, monkeypatch):
+    flagged = message('{"unbacked": [], "unhandled": [], "off_target": ["answers a different question"]}')
+    ok = message('{"unbacked": [], "unhandled": [], "off_target": []}')
+    model.queue += [message("Sounds great."), flagged, message("Tell me more."), ok]
+    await llm.reply(1001, "ok")
+    row = db._conn.execute("SELECT * FROM flagged_drafts").fetchone()
+    assert (row["kinds"], row["user_text"], row["draft"]) == ("off_target", "ok", "Sounds great.") and "different question" in row[
+        "problems"
+    ]
+    monkeypatch.setattr(llm, "FLAGGED_DRAFT_DAYS", 0)
+    db._conn.execute("DELETE FROM flagged_drafts")
+    model.queue += [message("Sounds great."), flagged, message("Tell me more."), ok]
+    await llm.reply(1001, "ok again")
+    assert db._conn.execute("SELECT COUNT(*) FROM flagged_drafts").fetchone()[0] == 0

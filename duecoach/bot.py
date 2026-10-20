@@ -13,6 +13,7 @@ from . import backoff, channels, chat, core, db, llm, prompts, strings
 from .channels.telegram import TelegramChannel
 from .config import (
     DB_PATH,
+    FLAGGED_DRAFT_DAYS,
     INACTIVE_DELETE_DAYS,
     REMINDER_GIVE_UP_HOURS,
     RETENTION_DAYS,
@@ -157,6 +158,7 @@ def maintain() -> None:
     abandoned = db.abandon_stale_reminders(REMINDER_GIVE_UP_HOURS)
     db.prune_events()
     db.prune_turn_stats()
+    db.prune_flagged_drafts(FLAGGED_DRAFT_DAYS)
     recent = db.turn_stats_summary(time.time() - MAINTENANCE_SECONDS)
     if recent:  # what the coach and the verifier did in the last hour, by count only
         log.info("turns in the last hour: %s", ", ".join(f"{k}={v}" for k, v in sorted(recent.items())))

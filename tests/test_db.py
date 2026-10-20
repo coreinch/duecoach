@@ -111,9 +111,10 @@ def test_delete_user_data_removes_everything(user):
     db.add_turn_stat(uid, "reply", "sent", [], [], 1, 0.5)
     db.add_message(uid, "assistant", "wrong")
     db.flag_last_reply(uid)
+    db.add_flagged_draft(uid, ["off_target"], "hi", "a draft", "why")
     db.delete_user_data(uid)
     assert db.get_user(uid) is None
-    for table in ("messages", "goals", "objectives", "toolbox", "reminders", "events", "turn_stats", "flags"):
+    for table in ("messages", "goals", "objectives", "toolbox", "reminders", "events", "turn_stats", "flags", "flagged_drafts"):
         assert db._conn.execute(f"SELECT COUNT(*) FROM {table} WHERE user_id=?", (uid,)).fetchone()[0] == 0
 
 
@@ -221,3 +222,13 @@ def test_a_message_a_user_reported_is_not_deleted_by_retention(user):
     db.prune_messages(90)
     assert db._conn.execute("SELECT COUNT(*) FROM messages WHERE content='the wrong one'").fetchone()[0] == 1
     assert db.message_count(1001) == 41
+
+
+def test_flagged_drafts_are_kept_for_a_few_days_only(user):
+    uid = user["user_id"]
+    db.add_flagged_draft(uid, ["unbacked", "off_target"], "u" * 900, "d" * 2000, "p" * 3000)
+    row = db._conn.execute("SELECT * FROM flagged_drafts").fetchone()
+    assert row["kinds"] == "unbacked,off_target" and (len(row["user_text"]), len(row["draft"]), len(row["problems"])) == (600, 1200, 1500)
+    assert db.prune_flagged_drafts(7) == 0
+    db._conn.execute("UPDATE flagged_drafts SET ts=?", (time.time() - 8 * 86400,))
+    assert db.prune_flagged_drafts(7) == 1

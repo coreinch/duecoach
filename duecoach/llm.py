@@ -12,6 +12,7 @@ from openai import AsyncOpenAI
 
 from . import db, playbook, prompts, strings, tools
 from .config import (
+    FLAGGED_DRAFT_DAYS,
     HISTORY_TURNS,
     LLM_API_KEY,
     LLM_BASE_URL,
@@ -392,6 +393,11 @@ async def _verify(user_id: int, user_text: str, draft: str, done: list[str]) -> 
         log.info("verifier ok")
         return None
     log.warning("verifier flagged a draft: %s (%d problem(s))", ", ".join(flagged), len(problems))
+    if FLAGGED_DRAFT_DAYS > 0:
+        try:
+            db.add_flagged_draft(user_id, list(flagged), user_text, draft, "; ".join(problems))
+        except Exception:
+            log.exception("could not keep the flagged draft")
     feedback = (
         f'Your draft was: "{draft[:600]}"\nA check found: '
         + "; ".join(problems)
