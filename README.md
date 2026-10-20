@@ -12,7 +12,9 @@ It is a coaching aid, not therapy or medical advice. Chats are stored in a local
 language-model provider you configure, so users must agree to a privacy notice (`/agree`) before anything is processed.
 Messages older than `RETENTION_DAYS` (90) are deleted, people who have not written for `INACTIVE_DELETE_DAYS` (365) are deleted
 entirely, `/deletedata` erases everything at once, and writing about suicide or self-harm gets a fixed safety message with
-emergency numbers instead of a model reply (`CRISIS_HELP` can add a local helpline). Daily backups keep copies of the database for
+emergency numbers instead of a model reply (`CRISIS_HELP` can add a local helpline). A word list (English, Greek) catches plain wording
+without a model; for every other message, once the user has agreed, a short model call (about 1-2 s) judges whether it shows a crisis in
+any language or wording, and `python -m evals.crisis` scores it on labelled messages. Daily backups keep copies of the database for
 7 days, so a deletion leaves the backups within a week.
 
 ## Run it with Docker
@@ -109,7 +111,7 @@ can be read and labelled to measure how often the verifier is right (`python -m 
 
 Layout: `duecoach/core.py` (the order a message is handled in: rate limit, consent, crisis, commands, coaching),
 `duecoach/commands.py` (slash commands), `duecoach/chat.py` (the coach's reply and the
-crisis answer), `duecoach/crisis.py` (the one thing the bot recognises itself: crisis wording), `duecoach/llm.py` (model calls,
+crisis answer), `duecoach/crisis.py` (the word list for crisis wording; the model's check is `signals_crisis` in `llm.py`), `duecoach/llm.py` (model calls,
 tool loop), `duecoach/tools.py` and `duecoach/playbook.py` (what the coach can do and the strategy cards),
 `duecoach/prompts.py` and `duecoach/strings.py` (model prompts, fixed texts in both languages), `duecoach/bot.py` (reminders, check-ins,
 housekeeping, startup), `duecoach/channels/` (Telegram), `duecoach/db.py` (SQLite, numbered migrations). The Docker base image is pinned by digest; Dependabot proposes updates.

@@ -347,6 +347,22 @@ async def record_agreements(user_id: int, user_text: str) -> list[str]:
     return notes
 
 
+async def signals_crisis(user_id: int, text: str) -> bool:
+    """Does the message show a crisis (suicide, self-harm, abuse, danger), in any language or wording?
+
+    The word list in crisis.py catches the plain cases without a model; this reads what a list cannot (other languages, indirect or
+    slang wording). A call that fails or answers badly says no: the list is still there, and a coaching reply is never blocked by it.
+    """
+    recent = "\n".join(f"{m['role']}: {m['content'][:300]}" for m in db.recent_messages(user_id, 4)) or "(none)"
+    prompt = prompts.CRISIS_CHECK.format(recent=recent, user=text[:600])
+    try:
+        out = await _complete([{"role": "user", "content": prompt}], max_tokens=SHORT_JOB_TOKENS)
+        return bool(json.loads(re.search(r"\{.*\}", out, re.DOTALL).group(0)).get("crisis") is True)  # type: ignore[union-attr]
+    except Exception:
+        log.warning("could not read the safety check, relying on the word list")
+        return False
+
+
 def _checkin_rules_for_verifier(user_id: int) -> str:
     """The check-in rules for the verifier; stricter when the code knows the user has stopped answering check-ins."""
     quiet = db.get_user(user_id)["unanswered"] or 0

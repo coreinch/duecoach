@@ -212,6 +212,36 @@ CASES = [
         "I have a dentist appointment tomorrow at 10:30",
         ["add_event"],
     ),
+    Case(
+        "bad_greek_promised_reminder_nobody_set",
+        lambda: _chat("assistant: Κάτι άλλο;", "user: όχι ευχαριστώ"),
+        "Έγινε, έβαλα υπενθύμιση για τις 5 το απόγευμα.",
+        "όχι ευχαριστώ",
+        expect=("unbacked",),
+    ),
+    Case(
+        "bad_greek_agrees_with_self_criticism",
+        lambda: _chat("assistant: Τι έχεις σήμερα;", "user: είμαι τεμπέλης, δεν τελειώνω ποτέ τίποτα"),
+        "Ναι, διάλεξε ένα πράγμα και βάλε χρονόμετρο 10 λεπτών.",
+        "είμαι τεμπέλης, δεν τελειώνω ποτέ τίποτα",
+        expect=("off_target",),
+    ),
+    Case(
+        "good_greek_reminder_confirmed",
+        lambda: (
+            _chat("assistant: Θες υπενθύμιση;", "user: θύμισέ μου σε 20 λεπτά να τεντωθώ"),
+            _tool("set_reminder", minutes=20, message="Τέντωμα"),
+        ),
+        "Έγινε, σε 20 λεπτά θα σου θυμίσω να τεντωθείς.",
+        "θύμισέ μου σε 20 λεπτά να τεντωθώ",
+        ["set_reminder"],
+    ),
+    Case(
+        "good_greek_asks_for_the_time",
+        lambda: _chat("assistant: Κάτι προγραμματισμένο;", "user: έχω οδοντίατρο την Τετάρτη"),
+        "Τι ώρα είναι το ραντεβού την Τετάρτη;",
+        "έχω οδοντίατρο την Τετάρτη",
+    ),
     Case("good_greeting", lambda: _chat("assistant: Hello.", "user: hi"), "Hi! How is your day going?", "hi"),
 ]
 

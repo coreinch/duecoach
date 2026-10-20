@@ -1,4 +1,8 @@
-"""Crisis wording: the one thing the bot recognises itself, because the safety reply must not depend on the model."""
+"""Crisis wording the bot recognises itself, because the safety reply must not depend on the model.
+
+This word list is the floor: it catches plain English and Greek wording with no model call. Anything else is judged by the model
+(llm.signals_crisis); either way the reply is the same fixed safety message.
+"""
 
 import re
 import unicodedata

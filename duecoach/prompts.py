@@ -296,6 +296,20 @@ Answer with JSON only: {{"unbacked": [short strings], "unhandled": [short string
 "unclear_reference": [short strings]}}. Use empty lists when
 there is nothing."""
 
+CRISIS_CHECK = """You are the safety check of a coaching chat for people with ADHD. Decide whether the user's LAST message shows they may be
+in crisis: thinking about suicide or ending their life, wanting to die or to disappear, self-harm, feeling there is no way to go on,
+being abused or in danger now, or wanting to hurt someone. Judge by meaning, in any language, including indirect wording and slang.
+Everyday stress, frustration, tiredness, sadness without hopelessness, and figures of speech ("this deadline is killing me", "I'm dying
+of boredom", "I could murder a coffee") are NOT a crisis. When you are truly unsure whether it is serious, answer true.
+
+Recent chat (oldest first):
+{recent}
+
+Last message:
+{user}
+
+Answer with JSON only: {{"crisis": true}} or {{"crisis": false}}."""
+
 SUMMARIZE = """Update the coaching notes about this user. Keep durable facts learned in conversation only: recurring struggles,
 what strategies worked or failed, routines, preferences, how they like to be coached. Record only what the user said or did, never your own explanations or guesses (such as why something happens). Do not repeat goals, objectives or toolbox
 items, which are stored elsewhere. Leave out anything tied to a moment: appointments, calls and plans with a day or time (they are stored

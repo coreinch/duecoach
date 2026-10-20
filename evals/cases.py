@@ -151,6 +151,49 @@ def _events() -> list:
     return db._conn.execute("SELECT * FROM events WHERE user_id=?", (UID,)).fetchall()
 
 
+def _greek() -> None:
+    db.set_field(UID, "lang", "el")
+
+
+def _greek_stale_step() -> None:
+    _greek()
+    gid = db.add_goal(UID, "Να προλαβαίνω τις υποχρεώσεις μου")
+    db.add_objective(UID, gid, "Θα λάβω υπενθύμιση στις 12:00 για να φύγω εγκαίρως.", "")
+    _chat("assistant: Εδώ είμαι, χωρίς πίεση.")
+
+
+def _greek_small_talk() -> None:
+    _greek()
+    _chat("assistant: Καλημέρα. Πώς πάει η μέρα;", "user: Καλημέρα, πίνω καφέ")
+
+
+def _greek_leave_reminder() -> None:
+    from datetime import datetime, timedelta
+    from zoneinfo import ZoneInfo
+
+    _greek()
+    tomorrow = (datetime.now(ZoneInfo("Europe/Athens")) + timedelta(days=1)).replace(hour=12, minute=45, second=0, microsecond=0)
+    db.add_event(UID, "Οδοντίατρος", tomorrow.timestamp())
+    _chat("assistant: Αύριο στις 12:45 έχεις οδοντίατρο. Θες υπενθύμιση να φύγεις;", "user: ναι")
+
+
+def _reminder_tomorrow_1200() -> bool:
+    from datetime import datetime, timedelta
+    from zoneinfo import ZoneInfo
+
+    rows = db.pending_reminders(UID)
+    tomorrow = (datetime.now(ZoneInfo("Europe/Athens")) + timedelta(days=1)).date()
+    return len(rows) == 1 and (lambda w: w.date() == tomorrow and (w.hour, w.minute) == (12, 0))(
+        datetime.fromtimestamp(rows[0]["due"], ZoneInfo("Europe/Athens"))
+    )
+
+
+def _greek_energy() -> None:
+    _greek()
+    _chat("assistant: Πώς είναι η ενέργειά σου σήμερα;", "user: Ενέργεια οκ")
+    db.set_field(UID, "last_inbound", _in_hours(-1.5))
+
+
 def _event_tomorrow_1030() -> bool:
     from datetime import datetime, timedelta
     from zoneinfo import ZoneInfo
@@ -281,6 +324,44 @@ CASES = [
         database=[("no reminder was set", _no_reminders)],
         judge=[
             "Does the reply fail to ask what time the appointment is (for example it says it did not understand, or says nothing about the time)?"
+        ],
+    ),
+    Case(
+        "greek_appointment_without_a_time_gets_a_question",
+        "the Greek user said 'I have a dentist appointment...': a stale '12:00' step became a reminder four times and they got 'say it again'",
+        _greek_stale_step,
+        user_text="Έχω ραντεβού με τον οδοντίατρο σήμερα...",
+        instruction=None,
+        database=[("no reminder was set", _no_reminders)],
+        judge=[
+            "Does the reply fail to ask what time the appointment is (for example it says it did not understand, or says nothing about the time)?"
+        ],
+    ),
+    Case(
+        "greek_small_talk_is_natural",
+        "'Τι κάνεις' was answered with 'I have no personal life like you, I am here for your work and your arrows'",
+        _greek_small_talk,
+        user_text="Τι κάνεις",
+        instruction=None,
+        judge=[
+            "Does the reply contain a made-up or nonexistent Greek word, a clear grammar error, text in another language, or an odd statement about the assistant's own life?"
+        ],
+    ),
+    Case(
+        "greek_leave_reminder_is_set_at_the_asked_time",
+        "the leave reminder time was mixed up with the appointment time, ending in a fallback reply",
+        _greek_leave_reminder,
+        user_text="Θύμισέ μου αύριο στις 12:00 να φύγω",
+        instruction=None,
+        database=[("one reminder, tomorrow at 12:00", _reminder_tomorrow_1200)],
+        judge=["Does the reply say the reminder is at any time other than 12:00, or call the 12:00 reminder the appointment time?"],
+    ),
+    Case(
+        "greek_checkin_does_not_invent_rest",
+        "Greek check-in said 'glad you rested and had your coffee' when the user had only said 'Energy ok'",
+        _greek_energy,
+        judge=[
+            "Does the message say or assume that the user rested, had coffee, slept well or did any activity that they never mentioned?"
         ],
     ),
 ]

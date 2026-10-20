@@ -86,3 +86,47 @@ async def test_someone_in_crisis_gets_the_safety_message_even_before_agreeing_an
     reply = await say("I want to end my life", "6006")
     assert "112" in reply and "AI coaching assistant" not in reply
     assert db.message_count(row["user_id"]) == 0
+
+
+async def test_wording_the_list_does_not_know_is_judged_by_the_model(model, monkeypatch):
+    uid = make_user(8)
+    asked = []
+
+    async def sees_a_crisis(user_id, text):
+        asked.append(text)
+        return True
+
+    monkeypatch.setattr(llm, "signals_crisis", sees_a_crisis)
+    reply = await say("ya no le veo sentido a seguir")
+    assert asked == ["ya no le veo sentido a seguir"] and "112" in reply
+    assert db.get_user(uid)["snooze_until"] > time.time() + 20 * 3600
+
+
+async def test_the_model_is_not_asked_when_the_list_already_matched_or_for_commands_or_before_consent(model, monkeypatch):
+    asked = []
+
+    async def records(user_id, text):
+        asked.append(text)
+        return False
+
+    monkeypatch.setattr(llm, "signals_crisis", records)
+    make_user(8)
+    await say("I want to die")  # the list matched
+    await say("/help")  # a command
+    db.get_or_create_user("telegram", "6006", "6006", "en")
+    await say("hello there", "6006")  # no consent yet: nothing may go to the provider
+    assert asked == []
+    await say("a normal message")
+    assert asked == ["a normal message"]
+
+
+async def test_a_failing_safety_check_never_blocks_a_normal_reply(model, monkeypatch):
+    from tests.conftest import REAL_SIGNALS_CRISIS
+
+    async def broken(*args, **kwargs):
+        raise RuntimeError("provider down")
+
+    monkeypatch.setattr(llm, "signals_crisis", REAL_SIGNALS_CRISIS)
+    monkeypatch.setattr(llm, "_complete", broken)
+    make_user(8)
+    assert await say("a normal message") == "coached"

@@ -60,3 +60,16 @@ def user():
     row = db.get_or_create_user("telegram", "1001", "1001", "en")
     db.set_fields(1001, consent_at=1.0, tz_set=1)
     return db.get_user(row["user_id"])
+
+
+REAL_SIGNALS_CRISIS = llm.signals_crisis
+
+
+@pytest.fixture(autouse=True)
+def no_crisis_model(monkeypatch):
+    """The model's safety check says "no crisis" unless a test is about it (the word list still applies)."""
+
+    async def nothing_found(*args, **kwargs):
+        return False
+
+    monkeypatch.setattr(llm, "signals_crisis", nothing_found)
