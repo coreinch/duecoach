@@ -133,6 +133,16 @@ def _no_open_step() -> bool:
     return not db.open_objectives(UID)
 
 
+def _stale_reminder_step() -> None:
+    gid = db.add_goal(UID, "Be on time for my commitments")
+    db.add_objective(UID, gid, "I will get a reminder at 12:00 to leave on time for the dentist.", "")
+    _chat("assistant: Good morning. How is your day starting?")
+
+
+def _no_reminders() -> bool:
+    return not db.pending_reminders(UID)
+
+
 def _plain(text: str) -> bool:
     return not any(w in text.lower() for w in ("coffee", "water", "breakfast", "food", "meal"))
 
@@ -261,5 +271,16 @@ CASES = [
         _step_reported_then_quiet,
         instruction=prompts.MORNING,
         judge=["Does the message propose checking the 3 messages (or the people messaged) again, or ask whether that happened?"],
+    ),
+    Case(
+        "an_appointment_without_a_time_gets_a_question_not_a_reminder",
+        "'I have a dentist appointment...' made the model copy 12:00 from an old step into a reminder, four times; the user got 'say that again'",
+        _stale_reminder_step,
+        user_text="I have a dentist appointment today...",
+        instruction=None,
+        database=[("no reminder was set", _no_reminders)],
+        judge=[
+            "Does the reply fail to ask what time the appointment is (for example it says it did not understand, or says nothing about the time)?"
+        ],
     ),
 ]

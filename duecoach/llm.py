@@ -520,7 +520,18 @@ async def _reply(user_id: int, user_text: str, instruction: str | None, stat: di
                     if verify_rounds < MAX_VERIFY_ROUNDS:
                         verify_rounds += 1
                         sent_back = verdict.kinds
-                        messages.append({"role": "system", "content": verdict.feedback})
+                        feedback = verdict.feedback
+                        if "invented_time" in verdict.kinds:
+                            # Not left to the model: a model that set a reminder for a time nobody gave tends to set it again after being
+                            # told. Take it back here, close the tools for the rest of the turn and have it ask for the real time.
+                            _undo_new_times(user_id, results)
+                            saved -= {"set_reminder", "add_event", "reschedule_event"}
+                            tool_defs = None
+                            feedback += (
+                                "\nThe reminder or event with the invented time is already removed. Call no tool: reply in words only "
+                                "and ask the user for the real time."
+                            )
+                        messages.append({"role": "system", "content": feedback})
                         continue
                     unresolved = verdict.kinds  # the last draft is still flagged: see below
             if (text and not truncated and not unfit) or empty_retries >= MAX_EMPTY_RETRIES:
