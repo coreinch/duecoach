@@ -537,8 +537,8 @@ async def _reply(user_id: int, user_text: str, instruction: str | None, stat: di
                             saved -= {"set_reminder", "add_event", "reschedule_event"}
                             tool_defs = None
                             feedback += (
-                                "\nThe reminder or event with the invented time is already removed. Call no tool: reply in words only "
-                                "and ask the user for the real time."
+                                "\nThe reminder or event with the invented time is already removed, so nothing is set or saved for it now: do not say "
+                                "that it is saved, set or already there. Call no tool: reply in words only and ask the user for the real time."
                             )
                         messages.append({"role": "system", "content": feedback})
                         continue
