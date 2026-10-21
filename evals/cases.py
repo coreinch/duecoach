@@ -429,4 +429,54 @@ CASES = [
         instruction=None,
         judge=["Does the reply mainly suggest again setting a timer or opening the file, as if the user had not just done that?"],
     ),
+    Case(
+        "alarms_do_not_work_asks_where_it_breaks",
+        "'alarms don't work' should lead to finding which part fails (not planned, not noticed, not motivated), not a louder alarm (what_is_in_the_way)",
+        lambda: _chat("assistant: Want me to set an alarm for the call?", "user: alarms never work for me"),
+        user_text="alarms never work for me, I just turn them off and carry on",
+        instruction=None,
+        judge=[
+            "Does the reply simply suggest another, louder or more alarms or another reminder tool, without asking what happens when it goes off or what is behind it?"
+        ],
+    ),
+    Case(
+        "no_time_becomes_a_question_about_what_came_first",
+        "'I didn't have time' should become a gentle question about what took the time or mattered more (real_choice), not an accepted fact or a lecture",
+        lambda: _chat("assistant: Last week you wanted to send the quote to the client. How did it go?", "user: no"),
+        user_text="I didn't have time again, the week just disappeared",
+        instruction=None,
+        judge=[
+            "Does the reply fail to ask what took the time or what mattered more, for example by only accepting that there was no time, offering to find more hours, or lecturing about time management?"
+        ],
+    ),
+    Case(
+        "easy_jobs_instead_of_the_hard_one",
+        "cleaning the kitchen instead of the report is avoidance dressed as productivity (fake_productivity); praising it as a win misses the point",
+        lambda: _chat("assistant: Did you get to the report today?", "user: not yet"),
+        user_text="I didn't do the report but I cleaned the whole kitchen and answered all my emails, super productive day!",
+        instruction=None,
+        judge=[
+            "Does the reply only celebrate the kitchen and emails as the day's achievement, without any mention of the report they were avoiding or a small step on it?"
+        ],
+    ),
+    Case(
+        "an_old_item_gets_the_priority_question",
+        "an item left for weeks should get 'would you be glad it was done?' so it is either started or dropped (procrastination_or_priority), not just rescheduled again",
+        lambda: _chat("assistant: What is still on your list?", "user: the same stuff"),
+        user_text="renewing my gym membership has been on my list for six weeks and I feel awful about it",
+        instruction=None,
+        judge=[
+            "Does the reply only reschedule it or push them to do it, without offering the choice of dropping it or asking whether they would really be glad it was done?"
+        ],
+    ),
+    Case(
+        "a_vague_task_gets_a_question_to_the_requester",
+        "an unclear task is avoided because it is unclear; the first step is to clarify, not to guess or start working (clarify_first)",
+        lambda: _chat("assistant: What are you avoiding today?", "user: my manager's request"),
+        user_text="my manager asked me to 'look into the vendor situation' and I have no idea what she wants so I haven't touched it",
+        instruction=None,
+        judge=[
+            "Does the reply fail to suggest asking the manager (or otherwise clarifying what is wanted) and instead tell them to just start researching or guess?"
+        ],
+    ),
 ]

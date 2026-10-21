@@ -1,7 +1,8 @@
 """Coaching playbook: short strategy cards that are put, whole, into the coach's prompt (see full_text).
 
 The ideas come from ADHD coaching practice as described in Prevatt & Levrini, "ADHD Coaching: A Guide for Mental Health
-Professionals" (APA, 2015); the wording here is our own. Each card says when to use it and how to coach it in chat.
+Professionals" (APA, 2015), Ratey, "The Disorganized Mind" (2008) and Tuckman, "The ADHD Productivity Manual" (2025); the wording
+here is our own. Each card says when to use it and how to coach it in chat.
 """
 
 CARDS = [
@@ -558,6 +559,322 @@ CARDS = [
             "13, suggest involving a parent. If they share something serious, encourage talking to a trusted adult."
         ),
         "source": "ch.12 (adolescents)",
+    },
+    {
+        "id": "strengths_first",
+        "when": "nothing has worked before, they don't know what would suit them, a new strategy is needed",
+        "how": (
+            "Start from what already works for them, not from a technique. Ask what comes naturally, what they enjoy, what kind of "
+            "cue gets them moving (something they see, hear, or someone expecting them), and where they already cope well in "
+            "another part of life that could be borrowed here. Build the plan out of that, so it fits how they work. A strategy "
+            "they invented is one they will defend."
+        ),
+        "source": "Ratey ch.3-4 (strength-based structures, borrowing what works)",
+    },
+    {
+        "id": "day_anchors",
+        "when": "days feel shapeless, sleep, meals and exercise happen at random times, they lose the sense of where the day is",
+        "how": (
+            "Give the day landmarks: a fixed time to get up and go to bed (the bookends), then a set time for lunch and for a walk "
+            "or workout. Start with just those few, since three fixed points already show them what fits in between and stop them "
+            "starting tasks that won't fit. Let them pick the times and add one anchor at a time."
+        ),
+        "source": "Ratey ch.5 (bookends and anchors)",
+    },
+    {
+        "id": "plan_a_fraction",
+        "when": "their plans are always too big, a to-do list is never finished, they say 'I'll get it all done today'",
+        "how": (
+            "Time plans are usually wishful. Ask them to cut what they plan for the stretch in half, and then in half again, so "
+            "they only plan a fraction of what feels possible. Finishing a small plan builds trust in the plan; whatever time is "
+            "left is a bonus for the next item. Count it as a good day when the small list is done."
+        ),
+        "source": "Ratey ch.5 (half in half in half)",
+    },
+    {
+        "id": "flex_zones",
+        "when": "no weekly structure, or a strict schedule that keeps collapsing, tasks float with no time of their own",
+        "how": (
+            "Fix only what truly repeats (work hours, appointments, school runs) on a weekly grid. Then mark the remaining "
+            "stretches as flexible time and drop each weekly goal into one of them, as an appointment with themselves ('Tuesday at "
+            "ten: meal plan'). The flex zone lets a day shift without losing the task. Keep it to what they would really look at."
+        ),
+        "source": "Ratey ch.5 (structured flexibility, appointments with yourself)",
+    },
+    {
+        "id": "stop_times",
+        "when": "loses hours to one thing, hyperfocus eats the rest of the day, can't leave a task to start the next, perfecting",
+        "how": (
+            "Give each activity a stop time as well as a start time, because open-ended time bleeds into the next job. Add a break "
+            "so they come back fresher. When they can't let go, allow fifteen more minutes and no more, and remind them they can "
+            "return to it later. A one-line note about where they stopped makes leaving easier."
+        ),
+        "source": "Ratey ch.5, ch.9 (start and stop times, breaks, letting go)",
+    },
+    {
+        "id": "setup_apart",
+        "when": "'I don't know where to start', the task is dreaded, the empty page is the problem",
+        "how": (
+            "Split the setup from the task. Do the setup now (create the empty document with its title, address the envelopes, lay "
+            "out the papers or tools) and leave the real work for a time they choose. Setup is easy to finish, removes the 'where "
+            "do I start' feeling, and makes the actual task look like the next step instead of a mountain."
+        ),
+        "source": "Ratey ch.6 (separate the setup from the task)",
+    },
+    {
+        "id": "minimal_goal",
+        "when": "avoiding something for days or weeks, a long timer didn't stick",
+        "how": (
+            "Agree the smallest thing that still counts (open the file and read it for ten minutes) and pick a time for it. At that "
+            "time do only the minimal goal, even if they feel like more; stopping on time keeps it safe to start again tomorrow. If "
+            "they do carry on, great, but the commitment is the minimum. Ask afterwards how it felt."
+        ),
+        "source": "Ratey ch.6 (minimal goal, baby steps)",
+    },
+    {
+        "id": "witness_or_model",
+        "when": "a dreaded old job (taxes, clearing clutter, a form), or they can't picture what finished looks like",
+        "how": (
+            "Ask someone to simply be in the room: they don't have to help, their presence is enough to start. For a blank page, "
+            "find a sample or model of the finished thing so the target is visible. You can be the witness for the first ten "
+            "minutes if they want. Choose someone they trust and not someone who will criticise."
+        ),
+        "source": "Ratey ch.6 (witness, model)",
+    },
+    {
+        "id": "circling_airport",
+        "when": "they know what to do and why it matters but never 'land', the dread grows each day they put it off",
+        "how": (
+            "Name the circling kindly and ask what keeps them from landing. Usually it is one of two: not knowing where to start "
+            "(go to the first step) or dreading the hours it will take now that they have put it off (agree a small amount today "
+            "and don't try to make up for lost time). Seeing the pattern lets them stop the panic cycle early."
+        ),
+        "source": "Ratey ch.6 (circling the airport)",
+    },
+    {
+        "id": "first_thing_first",
+        "when": "the important task always loses to the rest of the day, they do the easy things first",
+        "how": (
+            "Put the one task that matters most at the start of the day, before email and errands, and make it a habit (you become "
+            "the first thing you do). Match it to when their focus is best. Prepare the night before so it is waiting for them, and "
+            "ask them to tell you at the end of the morning how it went."
+        ),
+        "source": "Ratey ch.6 (first thing in the morning, peak performance)",
+    },
+    {
+        "id": "hour_plan",
+        "when": "loses the hour, drifts from task to task, can't tell where the time went",
+        "how": (
+            "On a note or scrap of paper, they write the three concrete things they will do in the next hour ('call Charlie', 'mail "
+            "the letter'), and at the end of the hour bin it and write the next three. A distraction they love can be the reward "
+            "when the list is done (ten minutes of a game after an hour of work). Keep the items small enough to finish."
+        ),
+        "source": "Ratey ch.8 (accountable every hour, distractions as rewards)",
+    },
+    {
+        "id": "see_do_trap",
+        "when": "goes to do one thing and ends up doing another, errands take hours, they notice something and just start on it",
+        "how": (
+            "Many people with ADHD do whatever they see. Help them put the priority in front of their eyes (a note on the door, a "
+            "phone reminder or a screensaver that says what comes first), prepare the night before so they can grab and go, and "
+            "decide not to make stops on the way. Ask which single cue they would not be able to ignore."
+        ),
+        "source": "Ratey ch.8 (beware 'see-do', prepare ahead)",
+    },
+    {
+        "id": "transitions",
+        "when": "trouble switching between activities, a bad mood when they come home from work, a meeting sneaks up on them",
+        "how": (
+            "Treat the switch as its own step. Before a meeting, count back from a fixed time: start wrapping up two hours before, "
+            "prepare the files at an hour and a half, and finish at an hour. After work, ask the people at home for twenty minutes "
+            "to decompress before talking. Picturing the whole switch, with the times, helps too."
+        ),
+        "source": "Ratey ch.9 (wind-down routine, wait twenty, visualisation)",
+    },
+    {
+        "id": "scheduled_talk",
+        "when": "arguments with a partner or housemate over chores, forgetting or blurting out in conversations, hard topics keep exploding",
+        "how": (
+            "Park the issue: write it down and agree a regular time to talk (not in the heat of the moment), with the phone and TV "
+            "off. Each person says what they need without blame, and they treat the relationship as the third thing they are both "
+            "working on. A walk side by side makes it easier. Ask what time of week would suit them both."
+        ),
+        "source": "Ratey ch.9 (park it, thinking in terms of three)",
+    },
+    {
+        "id": "interrupt_permission",
+        "when": "interrupts, goes on too long, loses the point, takes feedback as an attack",
+        "how": (
+            "Pick one person they trust and give them permission to cut in with a quick question ('what's the point?') or a neutral "
+            "note in the moment, worded as what happened and not as what they are. Rehearsing a conversation beforehand helps. Ask "
+            "who that person could be and what words they would accept."
+        ),
+        "source": "Ratey ch.7 (giving others permission, accepting feedback, rehearsing)",
+    },
+    {
+        "id": "half_hour_log",
+        "when": "they say they follow the plan but the day went elsewhere, no idea where the time or money went",
+        "how": (
+            "For one weekend or one day, write the plan on a small pad and every half hour jot down where they are and what they "
+            "are doing next to it. Don't judge it; it is a mirror and it usually surprises them. Look together for the one or two "
+            "places where the day slipped and choose a single change."
+        ),
+        "source": "Ratey ch.7 (schedule monitoring)",
+    },
+    {
+        "id": "what_is_in_the_way",
+        "when": "a strategy 'doesn't work' (alarms, lists, apps), they keep failing at the same thing and don't know why",
+        "how": (
+            "Don't add another tool yet; find out where it breaks. Ask whether they didn't plan it (it was never on a list or "
+            "calendar), didn't notice it was time (lost track, hyperfocused, dismissed the alarm) or didn't feel like doing it "
+            "(boring, scary, someone else's agenda, tired). An alarm only fixes noticing; it doesn't make anyone want to start. "
+            "Then fix that one part."
+        ),
+        "source": "Tuckman ch.6 (planning, awareness, motivation)",
+    },
+    {
+        "id": "feel_the_future",
+        "when": "'I'll do it tomorrow', the deadline doesn't feel real, they know what's best and still don't do it",
+        "how": (
+            "Help them feel the later moment now. Ask them to picture tomorrow night (or the meeting) in detail: how they'll feel "
+            "if they did a bit now and if they didn't, and what that person would say to them today. Ask what they'd thank "
+            "themselves for. Don't ask if they want to do it now; the answer will always be no."
+        ),
+        "source": "Tuckman ch.3 (temporal discounting, future self)",
+    },
+    {
+        "id": "closer_consequences",
+        "when": "the real payoff or cost is too far away to matter today, natural consequences arrive too late or fall on someone else",
+        "how": (
+            "Bring the consequence closer by choosing one or more of: sooner (a treat right after), more often (a mid-week check- "
+            "in), outside them (they owe a friend lunch if they miss it), more important to them, or the same every time. Let them "
+            "design it and keep it light. A small consequence that happens beats a big one that doesn't."
+        ),
+        "source": "Tuckman ch.3 (artificial consequences)",
+    },
+    {
+        "id": "sticky_slippery",
+        "when": "'I just went on my phone for a minute' and lost an hour, a quick errand or email turned into an afternoon",
+        "how": (
+            "Some things are sticky (it's hard to stop once started) and some are slippery (they pull you into something else). The "
+            "point of action is before the first step, not in the middle. Ask which one catches them and when, then make the first "
+            "step harder (log out, leave the phone in another room, close the tab) or schedule it for after the task."
+        ),
+        "source": "Tuckman ch.15 (sticky and slippery activities)",
+    },
+    {
+        "id": "slippery_just",
+        "when": "they talk themselves into something with 'just', 'it'll only take a minute', 'I'll remember', 'I'll do it later'",
+        "how": (
+            "Name it lightly and without scolding, then ask for a fair bet: if they had to put real money on this working out, "
+            "which way would they bet? If the honest answer is 'against', ask what they would do differently. It is fine to choose "
+            "the fun thing knowingly. The aim is honest odds, not a ban."
+        ),
+        "source": "Tuckman ch.23 (the lies we tell ourselves)",
+    },
+    {
+        "id": "procrastination_or_priority",
+        "when": "the same item has been on the list for weeks, they feel guilty about it but never do it",
+        "how": (
+            "Ask one question: if it was done, would future-you be glad? If yes, it's procrastination, so work on starting it. If "
+            "no, it isn't a priority, so help them drop it, delegate it or say no, and cross it off, since a dead item costs energy "
+            "every time they see it. Check whether it was really someone else's goal."
+        ),
+        "source": "Tuckman ch.11 (dump the duds), ch.25",
+    },
+    {
+        "id": "real_choice",
+        "when": "'I didn't have time', always overbooked, says yes to everything",
+        "how": (
+            "Gently turn 'no time' into a choice: they chose other things, so the question is what mattered more. For a new "
+            "request, ask what it would replace, and ask the requester how urgent it really is and what the true deadline is. Link "
+            "the choice to a goal they named. They can say no, or 'not this week', and pay the price knowingly."
+        ),
+        "source": "Tuckman ch.13 (time is zero sum, managing others' requests)",
+    },
+    {
+        "id": "fake_productivity",
+        "when": "busy all day but the important thing is still untouched, cleaning or answering messages instead of the hard task, thinking about it instead of doing it",
+        "how": (
+            "Ask: am I doing this, or avoiding something else? Doing the easy jobs is fine if that's all the energy there is, but "
+            "don't count it as the hard task. Use the small jobs as the reward after the hard one. Or ask for just five minutes on "
+            "the dreaded task (gather what's needed). Talking and thinking about it isn't doing it. Give credit for trying."
+        ),
+        "source": "Tuckman ch.26 (procrastivity); Ratey ch.6 (productive procrastination)",
+    },
+    {
+        "id": "bite_the_bullet",
+        "when": "something they hate and keep avoiding (a call, paperwork, an awkward message)",
+        "how": (
+            "Be honest that they will still dislike it; the aim is to hate it less. Schedule it for early in the day or when they "
+            "are rested and fed, make it easier to start, tell someone what they will do and when they'll report back, and keep any "
+            "reward small so it doesn't replace the task. Afterwards give themselves proper credit, since it was the hardest kind "
+            "of task."
+        ),
+        "source": "Tuckman ch.24 (bite the bullet)",
+    },
+    {
+        "id": "pick_a_side",
+        "when": "torn about whether to do something, it sits on the list making them feel bad, they keep going back and forth",
+        "how": (
+            "Write the case for and against. Then try tipping it: make the job smaller or less awful, or pump up what they gain, or "
+            "decide it isn't worth it and accept the cost. Often they only feel they 'should' because someone else wants it, so ask "
+            "whose goal it is. A decision can feel only 51/49 and still be right; the point is to choose and move on."
+        ),
+        "source": "Tuckman ch.25 (ambivalence)",
+    },
+    {
+        "id": "good_enough",
+        "when": "overdoing it, can't finish or send because it isn't perfect, 'it has to be just right before I can start'",
+        "how": (
+            "Ask what this task really needs and who set the bar (them or someone else; asking someone what they expect isn't "
+            "weaseling). Perfectionism is also a way of coping with worry, so normalise the worry. Every extra minute here is a "
+            "minute not spent on something else. If the conditions aren't ideal, do a rough first pass anyway, as any progress "
+            "beats none."
+        ),
+        "source": "Tuckman ch.28 (perfectionism, overdoing)",
+    },
+    {
+        "id": "clarify_first",
+        "when": "they don't know what is expected, vague instructions, they've been putting off asking",
+        "how": (
+            "Unclear tasks get avoided. First get clear: what exactly needs doing, how, why, by when, and what would 'done' look "
+            "like? Write down what they do know. It is almost always better to ask than to guess, and a short specific question to "
+            "the person who set the task shows care. Help them word it in one or two lines and send it."
+        ),
+        "source": "Tuckman ch.30 (ambiguity)",
+    },
+    {
+        "id": "real_deadlines",
+        "when": "vague deadlines, last-minute rushes, 'I work better under pressure', a big thing due far off",
+        "how": (
+            "Make the deadline real: a specific day and time, and the real one, not a soft 'sometime'. Add interim deadlines and "
+            "book actual time blocks for each, earlier in the day. If they'll leave it to the end anyway, plan for it: put a "
+            "protected block just before the due date so it isn't double-booked. For a long project, ask someone they respect for a "
+            "draft by a date."
+        ),
+        "source": "Tuckman ch.27 (honour the real deadline, plan to procrastinate); Ratey ch.6 (false deadlines)",
+    },
+    {
+        "id": "inconsistent_days",
+        "when": "'it worked last week, why not now?', a good streak broke, they judge themselves by the bad days",
+        "how": (
+            "Variable performance is part of ADHD, not proof they didn't try. Don't let a good day become evidence of a choice on a "
+            "bad one. Offer a calm reset: take a breath, do the next good thing, and give themselves some slack so they don't "
+            "spiral. They might want a short line to explain it to others ('sometimes I get stuck and need to start with something "
+            "else')."
+        ),
+        "source": "Tuckman ch.5 (accept the variability)",
+    },
+    {
+        "id": "enough_is_enough",
+        "when": "pushes for perfection in every area, feels they should be far more productive, afraid of disappointing people",
+        "how": (
+            "Ask what 'enough' would look like, such as less late, less often, instead of never late. Aim for what makes life "
+            "better, not what looks impressive. Everyone has a vote on their own life; people affected by it have some say too, but "
+            "pleasing everyone isn't a goal. Separate a choice not to do something from dropping the ball."
+        ),
+        "source": "Tuckman ch.32 (how productive do you need to be, people-pleasing)",
     },
 ]
 

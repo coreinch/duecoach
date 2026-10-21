@@ -114,9 +114,9 @@ def test_coaching_state_shows_time_and_record(user):
 
 def test_every_playbook_card_is_complete_and_the_whole_text_is_bounded():
     ids = [c["id"] for c in playbook.CARDS]
-    assert len(ids) == len(set(ids)) >= 50
+    assert len(ids) == len(set(ids)) >= 80
     assert all(set(c) == {"id", "when", "how", "source"} and all(c.values()) for c in playbook.CARDS)
-    assert len(playbook.full_text().split()) < 6000
+    assert len(playbook.full_text().split()) < 9000
 
 
 def test_a_reminder_that_already_fired_is_listed_and_a_near_duplicate_is_refused(user):
