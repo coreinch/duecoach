@@ -110,6 +110,26 @@ def outage():
     return NS(choices=None, error={"message": "provider_unavailable", "code": 502})
 
 
+async def test_each_call_logs_the_prompt_size_and_the_cached_part(monkeypatch, caplog):
+    def reply(usage):
+        return NS(choices=[NS(message=message("fine"))], usage=usage)
+
+    openai_style = NS(prompt_tokens=12000, prompt_tokens_details=NS(cached_tokens=11500))
+    other_style = NS(prompt_tokens=900, model_extra={"prompt_cache_hit_tokens": 800})
+    no_cache_info = NS(prompt_tokens=300)
+    fake = FakeCompletions([reply(openai_style), reply(other_style), reply(no_cache_info), NS(choices=[NS(message=message("x"))])])
+    monkeypatch.setattr(llm._client, "chat", NS(completions=fake))
+    with caplog.at_level("INFO", logger="duecoach.llm"):
+        for _ in range(4):
+            await llm._chat([{"role": "user", "content": "hi"}])
+    lines = [r.getMessage() for r in caplog.records if r.getMessage().startswith("usage")]
+    assert [line.split(": ", 1)[1] for line in lines] == [
+        "prompt 12000 tokens, cached 11500",
+        "prompt 900 tokens, cached 800",
+        "prompt 300 tokens, cached None",
+    ]
+
+
 async def test_a_provider_outage_is_retried_once_then_reported_clearly(monkeypatch):
     ok = NS(choices=[NS(message=message("fine"))])
     fake = FakeCompletions([outage(), ok])

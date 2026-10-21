@@ -258,6 +258,30 @@ def status() -> dict:
     return {"model": LLM_MODEL}
 
 
+def _cached_tokens(usage: Any) -> int | None:
+    """Tokens of the prompt that the provider served from its cache, or None when the response does not say (names differ by provider)."""
+    details = getattr(usage, "prompt_tokens_details", None)
+    extra = getattr(usage, "model_extra", None) or {}
+    for found in (
+        getattr(details, "cached_tokens", None),
+        getattr(usage, "prompt_cache_hit_tokens", None),
+        extra.get("prompt_cache_hit_tokens"),
+        extra.get("cache_read_input_tokens"),
+        extra.get("cached_tokens"),
+    ):
+        if isinstance(found, int):
+            return found
+    return None
+
+
+def _log_usage(model: str, resp: Any) -> None:
+    """One line per model call with the prompt size and how much of it came from the provider's cache (to check that caching works)."""
+    usage = getattr(resp, "usage", None)
+    prompt = getattr(usage, "prompt_tokens", None)
+    if isinstance(prompt, int):
+        log.info("usage %s: prompt %d tokens, cached %s", model, prompt, _cached_tokens(usage))
+
+
 async def _chat(
     messages: Any, tool_defs: list[dict] | None = None, max_tokens: int = 1500, model: str | None = None, effort: str | None = None
 ):
@@ -274,6 +298,7 @@ async def _chat(
         except openai.OpenAIError as error:  # connection, timeout, rate limit, server error, or a request the model rejects
             problem = f"{type(error).__name__}: {error}"[:200]
         else:
+            _log_usage(model, resp)
             if resp.choices:
                 choice = resp.choices[0]
                 choice.message.finish_reason = getattr(choice, "finish_reason", None)  # "length": the answer was cut off
