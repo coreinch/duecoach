@@ -479,4 +479,24 @@ CASES = [
             "Does the reply fail to suggest asking the manager (or otherwise clarifying what is wanted) and instead tell them to just start researching or guess?"
         ],
     ),
+    Case(
+        "unanswered_messages_get_a_holding_reply_and_a_reminder",
+        "a pile of unanswered texts should lead to a one-line holding reply plus a reminder or an evening sweep (reply_later), not a lecture on discipline",
+        lambda: _chat("assistant: How are you doing with the people stuff?", "user: badly"),
+        user_text="I have like nine messages I never answered and now it feels too awkward to reply to any of them",
+        instruction=None,
+        judge=[
+            "Does the reply fail to offer a small practical way out (for example a short holding reply, answering one, or a set time for it), by only reassuring or telling them to just reply?"
+        ],
+    ),
+    Case(
+        "a_repeated_failure_gets_a_look_at_the_friction_not_the_person",
+        "when the same thing fails every time the coach should look for the sticking point and remove it (remove_friction), not push harder",
+        lambda: _chat("assistant: How is the laundry plan going?", "user: still bad"),
+        user_text="the dirty clothes are on the floor again. I'm so bad at this, the basket is right there!",
+        instruction=None,
+        judge=[
+            "Does the reply tell them to try harder or build discipline, or fail to ask where it gets hard or suggest changing the setup (for example where the basket is)?"
+        ],
+    ),
 ]

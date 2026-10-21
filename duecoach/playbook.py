@@ -21,9 +21,10 @@ CARDS = [
         "when": "needs company or accountability to work, drifting off task",
         "how": (
             "Offer to stay present: they say what they're starting, you check back at a short interval (10-15 min) with one "
-            "line, nothing more. Keep your check-ins tiny so you don't become the distraction. Close with what got done."
+            "line, nothing more. Keep your check-ins tiny so you don't become the distraction. Close with what got done. A 25-minute "
+            "work block with a 5-minute break pairs well with it; a friend or an online 'work with me' session counts too."
         ),
-        "source": "ch.4 (external motivation early on)",
+        "source": "ch.4 (external motivation early on); Gendron hack #4, #9 (Pomodoro, body doubling)",
     },
     {
         "id": "time_blindness",
@@ -116,9 +117,10 @@ CARDS = [
             "Use the juggling picture: the more balls, the more you drop. Rubber balls bounce back if dropped (they can wait or be "
             "dropped without real harm); glass balls shatter for good if dropped (real consequences). Have them name only the "
             "glass ones; park the rest. Then pick one glass ball for today and "
-            "its first step. Get the list out of their head and onto one place."
+            "its first step. Get the list out of their head and onto one place: a quick brain dump of everything on their mind on "
+            "paper or the phone, in any order, usually looks shorter than it felt."
         ),
-        "source": "ch.6 (juggling exercise)",
+        "source": "ch.6 (juggling exercise); Gendron hack #11 (brain dumping)",
     },
     {
         "id": "urgent_important",
@@ -146,7 +148,8 @@ CARDS = [
         "how": (
             "Attach the new habit to something they already do (pills in a visible box next to the toothbrush), keep the same "
             "time or day (laundry every Tuesday), break it into small steps, and add a cue (alarm, phone pop-up, note where they "
-            "will see it). Make the routine easier than skipping it."
+            "will see it). Make the routine easier than skipping it. Stacking works well: tie the new habit to one that already "
+            "happens daily (wipe the sink after brushing teeth), and let one settle before adding another."
         ),
         "source": "ch.6 (healthy living and life skills)",
     },
@@ -155,9 +158,10 @@ CARDS = [
         "when": "keeps losing keys, phone, wallet, glasses, or papers",
         "how": (
             "Give each item one fixed home right where they come in (a bowl or hook by the door) and make using it a tiny "
-            "objective for two weeks. A tracker on keys and wallet helps. Pair it with a cue at the door: 'keys, phone, wallet'."
+            "objective for two weeks. A tracker on keys and wallet helps. Pair it with a cue at the door: 'keys, phone, wallet'. "
+            "Labels on shelves and boxes save deciding where things go. When something is missing, search one room at a time."
         ),
-        "source": "ch.6 (organising, trackers)",
+        "source": "ch.6 (organising, trackers); Gendron hack #10 (labels), part 2 (misplacing things)",
     },
     {
         "id": "sleep_routine",
@@ -875,6 +879,98 @@ CARDS = [
             "pleasing everyone isn't a goal. Separate a choice not to do something from dropping the ball."
         ),
         "source": "Tuckman ch.32 (how productive do you need to be, people-pleasing)",
+    },
+    {
+        "id": "gamify",
+        "when": "everything feels like a chore, a boring repeating task, motivation needs a payoff they can see",
+        "how": (
+            "Borrow from games: points for each time they do the chore, a streak on a calendar, levels, or a prize once they've "
+            "done it three days running. Let them design the scoring and pick a reward they actually want. Ask a friend to see the "
+            "tally so they can't quietly skip the hard part and claim the prize. If it fades after a few weeks, change the game."
+        ),
+        "source": "Gendron hack #3 (gamify your life)",
+    },
+    {
+        "id": "batch_work",
+        "when": "keeps jumping between small tasks, a pile of admin, starting each task is the hard part",
+        "how": (
+            "Do one kind of task in one block: all the admin on one afternoon, all the calls together, one window-cleaning session, "
+            "cooking for several days at once. You only have to start once, so there are fewer places to stall, and it feels like "
+            "momentum. Pick a day for the recurring job and keep other appointments out of that block."
+        ),
+        "source": "Gendron hack #6 (work in batches)",
+    },
+    {
+        "id": "checklists",
+        "when": "forgets steps of something they do again and again (leaving the house, shopping, a morning or night routine, a weekly job)",
+        "how": (
+            "Make a checklist once and reuse it instead of remembering or writing a fresh list each time: for leaving the house "
+            "(keys, phone, wallet), the usual groceries, the morning routine. Put it where they'll use it: on the door, in a phone "
+            "note, or laminated with a dry-erase pen. Improve it each time something is missing."
+        ),
+        "source": "Gendron hack #14 (checklists), p.120-123",
+    },
+    {
+        "id": "remove_friction",
+        "when": "the same thing is always annoying or fails (laundry on the floor, no vegetables cooked, bills not opened), they blame themselves",
+        "how": (
+            "Look at the situation and not at themselves: where exactly does it get hard? Then remove that point instead of trying "
+            "harder: put the basket where the clothes already land, buy chopped frozen vegetables, order the groceries online. "
+            "Choosing convenience is fine and doesn't have to look like anyone else's routine. Ask what the smallest friction is to "
+            "take out this week."
+        ),
+        "source": "Gendron hack #12 (identify friction)",
+    },
+    {
+        "id": "reply_later",
+        "when": "forgets to answer messages, a pile of unread texts, feels guilty about ignoring people",
+        "how": (
+            "If they can't reply now, send a one-line holding message ('got your text, I'll answer properly tonight') and set a "
+            "reminder. Or do a short message sweep once each evening and set a reminder for whatever they can't answer. If they "
+            "have gone quiet for a while, a short honest reply works better than silence or a long apology."
+        ),
+        "source": "Gendron part 2 (texting), hack #13",
+    },
+    {
+        "id": "eat_reminders",
+        "when": "skips meals, gets tired and foggy, only eats late in the day or when starving",
+        "how": (
+            "Treat eating as a task with a cue: a simple phone reminder that says 'eat something', meals at fixed times tied to the "
+            "day's anchors, and food that needs almost no effort (a sandwich counts). Hunger makes focus worse, so a quick bite "
+            "beats a perfect meal. If eating is very chaotic or tied to stress, suggest a doctor or dietitian."
+        ),
+        "source": "Gendron part 2 (forgetting to eat)",
+    },
+    {
+        "id": "hobby_hopping",
+        "when": "a new hobby every few weeks, guilty about unused gear, drops things after the first rush",
+        "how": (
+            "Treat it as normal and not as a character flaw: the first weeks are the fun part. If they want it to last, join a "
+            "class or club so someone expects them. If they've lost interest, sell or donate the supplies so the pile doesn't "
+            "become guilt. Ask what drew them to it, since that might point to a lasting interest."
+        ),
+        "source": "Gendron part 2 (hobbies)",
+    },
+    {
+        "id": "music_start",
+        "when": "can't get going on a boring or physical task, needs energy or a mood change, the house feels too big to tidy",
+        "how": (
+            "Put on music they like to get moving, such as a favourite song they use to challenge themselves to clear as much as "
+            "possible before it ends. Upbeat tracks help with starting; for deep focus, try something without words or low- "
+            "frequency noise. Ask them to choose a go-to start playlist and save it to the toolbox if it works. Keep the volume "
+            "safe for their ears."
+        ),
+        "source": "Gendron hack #16 (music), Boost your concentration (music)",
+    },
+    {
+        "id": "tally_drifts",
+        "when": "they lose focus again and again and feel they can't concentrate, want to see progress",
+        "how": (
+            "Keep a tally on a dated sheet: each time they notice their mind has wandered, add a line and then go back to the task. "
+            "Don't judge the number; compare days. Counting makes the drift visible and they usually notice it sooner, and the "
+            "lines fall over a week or two. Reward a short block of full focus with a break that they pick."
+        ),
+        "source": "Boost your concentration (release form, cycle of positive feelings)",
     },
 ]
 
