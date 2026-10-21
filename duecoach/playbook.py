@@ -69,7 +69,7 @@ CARDS = [
         "id": "barrier_check",
         "when": "an objective was partly done or missed",
         "how": (
-            "Find out what happened without blame, then name the barrier: forgot (add a visible cue or alarm); didn't know how "
+            "Find out what happened without blame ('what did you do instead?' shows what pulled them better than 'why not?'), then name the barrier: forgot (add a visible cue or alarm); didn't know how "
             "(break into steps, teach it); confused (clarify, simplify); avoiding it (what exactly feels bad? make the first "
             "step smaller); low motivation (change the incentive or check the fit). Keep the same objective with a revised plan "
             "or motivator. A miss is information, not failure."

@@ -406,6 +406,19 @@ CASES = [
         ],
     ),
     Case(
+        "a_missed_step_gets_a_what_question_not_a_why",
+        "a missed step should be met with 'what got in the way / what did you do instead', never 'why didn't you' or a verdict on the person",
+        lambda: _chat(
+            "assistant: Last time you wanted to pay the three bills on Sunday. How did it go?",
+            "user: I didn't. I rode my bike all day and now they're still sitting there",
+        ),
+        user_text="I didn't pay them. I rode my bike all day and now they're still there",
+        instruction=None,
+        judge=[
+            "Does the reply ask 'why' they did not do it, call them irresponsible, lazy or similar, or lecture them about consequences?"
+        ],
+    ),
+    Case(
         "the_same_technique_is_not_repeated",
         "the prompt says not to use the same technique as the last reply; a second 'try a 10-minute timer' to a user who just did one is the failure",
         lambda: _chat(
