@@ -2,8 +2,9 @@
 
 The ideas come from ADHD coaching practice as described in Prevatt & Levrini, "ADHD Coaching: A Guide for Mental Health
 Professionals" (APA, 2015), Ratey, "The Disorganized Mind" (2008), Tuckman, "The ADHD Productivity Manual" (2025),
-Barkley, "Taking Charge of Adult ADHD" (2021) and Ramsay & Rostain, "CBT for Adult ADHD" (2015); the wording
-here is our own. Each card says when to use it and how to coach it in chat.
+Barkley, "Taking Charge of Adult ADHD" (2021), Ramsay & Rostain, "CBT for Adult ADHD" (2015), Gendron, "The Mini ADHD Coach" (2023)
+and 50Minutes, "Boost Your Concentration" (2016); the wording here is our own (see "Sources of the playbook" in the README).
+Each card says when to use it and how to coach it in chat.
 """
 
 CARDS = [

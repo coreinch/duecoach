@@ -117,6 +117,24 @@ tool loop), `duecoach/tools.py` and `duecoach/playbook.py` (what the coach can d
 `duecoach/prompts.py` and `duecoach/strings.py` (model prompts, fixed texts in both languages), `duecoach/bot.py` (reminders, check-ins,
 housekeeping, startup), `duecoach/watch.py` (the daily digest and alerts, and a single nudge for people who stopped during setup), `duecoach/channels/` (Telegram), `duecoach/db.py` (SQLite, numbered migrations). The Docker base image is pinned by digest; Dependabot proposes updates.
 
+## Sources of the playbook
+
+The strategy cards in `duecoach/playbook.py` draw on the following books. The wording of every card is our own, and each card's `source`
+field says which book and chapter its idea comes from. The books themselves are not in this repository.
+
+| Book | What it gave the playbook |
+| --- | --- |
+| Prevatt & Levrini, *ADHD Coaching: A Guide for Mental Health Professionals* (APA, 2015) | The coaching method: goals, weekly objectives, barriers, incentives, the weekly review and wrapping up, and the first 54 cards |
+| Ratey, *The Disorganized Mind* (St. Martin's Griffin, 2008) | The non-judging "what, not why" voice, the A-N-S-W-E-R self-coaching loop, and cards on time, procrastination, distractibility and transitions |
+| Tuckman, *The ADHD Productivity Manual* (Working Memory Press, 2025) | Planning, awareness and motivation as the places a plan breaks, feeling the future, sticky and slippery activities, fake productivity, perfectionism and real deadlines |
+| Barkley & Benton, *Taking Charge of Adult ADHD*, 2nd ed. (Guilford, 2021) | Stopping the action, external memory (a pocket journal), talking aloud, solving problems on paper, and owning mistakes with humour |
+| Ramsay & Rostain, *Cognitive-Behavioral Therapy for Adult ADHD*, 2nd ed. (Routledge, 2015) | If-then plans, the 10-minute rule, working with automatic thoughts, readiness for change, and problem management |
+| Gendron, *The Mini ADHD Coach* (Chronicle Books, 2023) | Everyday hacks: habit stacking, gamifying, batching, checklists, removing friction, body doubling and music |
+| 50Minutes, *Boost Your Concentration* (2016) | A distraction tally and a few small concentration tips |
+
+The medication chapters of these books, and their advice on supplements, diet and self-diagnosis, were left out on purpose: the coach
+sends medication questions to the prescriber.
+
 ## Licence
 
 MIT, see [LICENSE](LICENSE).
