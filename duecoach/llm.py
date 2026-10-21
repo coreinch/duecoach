@@ -70,7 +70,7 @@ def _system(user_id: int) -> str:
         prompts.SYSTEM
         + "\n"
         + prompts.LANGUAGE.get(lang, prompts.LANGUAGE["en"])
-        # the playbook comes before everything that differs per user, so the long static start of the prompt can be cached by the provider
+        # the playbook comes before everything that differs per user, so the static start of the prompt is identical for all users (MiniMax does not cache it today: cached_tokens stays near 128)
         + "\n\nCoaching playbook (techniques to apply in your own words; use the one that fits what they need right now. The cards are in "
         "no order of priority: don't default to the first one, and don't use the same technique as in your last reply):\n\n"
         + playbook.full_text()
