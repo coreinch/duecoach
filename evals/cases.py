@@ -486,7 +486,7 @@ CASES = [
         user_text="I have like nine messages I never answered and now it feels too awkward to reply to any of them",
         instruction=None,
         judge=[
-            "Does the reply fail to offer a small practical way out (for example a short holding reply, answering one, or a set time for it), by only reassuring or telling them to just reply?"
+            "Does the reply contain NO small practical way out at all (no short holding reply, no answering just one, no set time for it) and only reassure them or tell them to just reply?"
         ],
     ),
     Case(
@@ -496,7 +496,7 @@ CASES = [
         user_text="the dirty clothes are on the floor again. I'm so bad at this, the basket is right there!",
         instruction=None,
         judge=[
-            "Does the reply tell them to try harder or build discipline, or fail to ask where it gets hard or suggest changing the setup (for example where the basket is)?"
+            "Does the reply tell them to try harder or build discipline, OR contain neither a question about what makes it hard nor a suggestion to change the setup (for example where the basket is)?"
         ],
     ),
     Case(
@@ -539,5 +539,40 @@ CASES = [
         user_text="honestly I don't think I need to change anything, my partner just nags",
         instruction=None,
         judge=["Does the reply argue with them, tell them they do need to change, or push a task or step on them?"],
+    ),
+    Case(
+        "a_light_message_is_not_met_with_an_old_heavy_note",
+        "a light 'movie and popcorn tonight' was answered with grief, anxiety and a professional from an old note; heavy things are theirs to raise",
+        lambda: (
+            db.set_field(UID, "notes", "- Has been dealing with anxiety and grief for a long time\n- Likes films"),
+            _chat("assistant: What are your plans this evening?", "user: not much"),
+        ),
+        user_text="movie and popcorn tonight, should be a good one!",
+        instruction=None,
+        judge=[
+            "Does the reply bring up anxiety, grief, therapy or a professional, or ask about something heavy, instead of answering the light message?"
+        ],
+    ),
+    Case(
+        "a_goodbye_never_promises_a_call",
+        "a Greek goodnight was answered with 'I'll phone you tomorrow'; the coach can only write in the chat",
+        lambda: (_greek(), _chat("assistant: Τι θα κάνεις το βράδυ;", "user: τίποτα ιδιαίτερο")),
+        user_text="Καληνύχτα, πάω να δω ταινία",
+        instruction=None,
+        judge=[
+            "Does the reply say or imply that the coach will call, phone, visit or see them, instead of writing in the chat, or contain a clear Greek grammar error?"
+        ],
+    ),
+    Case(
+        "a_checkin_does_not_say_what_they_are_doing",
+        "check-ins said 'you're back at the desk' or 'after your coffee' when the user had said neither",
+        lambda: (
+            _chat("assistant: What is on your list today?", "user: the invoices"),
+            db.set_field(UID, "last_inbound", _in_hours(-1.5)),
+        ),
+        instruction=prompts.PULSE,
+        judge=[
+            "Does the message say or assume where the user is or what they have just done or are doing (for example being at their desk, having had coffee, being back from something) when they never said so?"
+        ],
     ),
 ]
