@@ -1,20 +1,23 @@
 """Coaching playbook: short strategy cards that are put, whole, into the coach's prompt (see full_text).
 
 The ideas come from ADHD coaching practice as described in Prevatt & Levrini, "ADHD Coaching: A Guide for Mental Health
-Professionals" (APA, 2015), Ratey, "The Disorganized Mind" (2008) and Tuckman, "The ADHD Productivity Manual" (2025); the wording
+Professionals" (APA, 2015), Ratey, "The Disorganized Mind" (2008), Tuckman, "The ADHD Productivity Manual" (2025),
+Barkley, "Taking Charge of Adult ADHD" (2021) and Ramsay & Rostain, "CBT for Adult ADHD" (2015); the wording
 here is our own. Each card says when to use it and how to coach it in chat.
 """
 
 CARDS = [
     {
         "id": "start_sprint",
-        "when": "can't start a task, procrastinating, staring at it",
+        "when": "can't start a task, procrastinating, staring at it, avoiding something for days",
         "how": (
-            "Shrink the task until the first step is almost silly (open the file and type the title). Offer a 5-10 minute "
-            "timer and ask if they want you to stay while they start. Afterwards, ask how it felt and whether to continue "
-            "for another sprint or stop. Starting is the win; don't demand finishing."
+            "Shrink the task until the first step is almost silly (open the file and type the title). Offer a 5-10 minute timer and "
+            "ask if they want you to stay while they start. Ten minutes of real engagement is the deal: after that they may stop "
+            "without guilt, because stopping is an informed decision, not procrastination; most people carry on once they are in. "
+            "If the task has been avoided for days, pick the smallest thing that still counts and a set time for it. Afterwards ask "
+            "how it felt. Starting is the win; don't demand finishing."
         ),
-        "source": "ch.5-6 (task initiation, timers)",
+        "source": "ch.5-6 (task initiation, timers); Ramsay & Rostain ch.2 (the 10-minute rule); Ratey ch.6 (minimal goal)",
     },
     {
         "id": "body_double",
@@ -71,33 +74,37 @@ CARDS = [
         "id": "barrier_check",
         "when": "an objective was partly done or missed",
         "how": (
-            "Find out what happened without blame ('what did you do instead?' shows what pulled them better than 'why not?'), then name the barrier: forgot (add a visible cue or alarm); didn't know how "
-            "(break into steps, teach it); confused (clarify, simplify); avoiding it (what exactly feels bad? make the first "
-            "step smaller); low motivation (change the incentive or check the fit). Keep the same objective with a revised plan "
-            "or motivator. A miss is information, not failure."
+            "Find out what happened without blame ('what did you do instead?' shows what pulled them better than 'why not?'). If a "
+            "vague question gets nothing, ask in small pieces, one per message: how easy was it (0-4), how much did they get done, "
+            "how good was the part they did? Often quality is good and quantity low, and that is worth saying out loud. Then name "
+            "the barrier: forgot (add a visible cue or alarm); didn't know how (break into steps, teach it); confused (clarify, "
+            "simplify); avoiding it (what exactly feels bad? make the first step smaller); low motivation (change the incentive or "
+            "check the fit). Keep the same objective with a revised plan or motivator. A miss is information, not failure."
         ),
-        "source": "ch.5 (barriers)",
+        "source": "ch.5, ch.9 (barriers, follow-up ratings)",
     },
     {
         "id": "incentives",
-        "when": "choosing a reward or consequence, motivation depends on the immediate payoff",
+        "when": "choosing a reward or consequence, motivation depends on the immediate payoff, 'rewards are for kids', can't think of one",
         "how": (
-            "With ADHD, the future payoff is weak and the immediate one wins, so add a nearby one. Types: inner reward ('I'll "
-            "feel on top of things'), outer reward (a good coffee, a walk, a show after), or a consequence (a coin in a jar). "
-            "Rewards are usually chosen and kept more than penalties. It must be their choice and something they can actually "
-            "get quickly after doing it."
+            "With ADHD the future payoff is weak and the immediate one wins, so add a nearby one. Types: inner reward ('I'll feel "
+            "on top of things'), outer reward (a good coffee, a walk, a show after), or a consequence (a coin in a jar, a chore "
+            "they dislike). Rewards are usually kept more than penalties. If they can't think of one, ask what gets them out of bed "
+            "and what they reach for when avoiding work, and dig past 'TV' to something personal. It must be their choice, quick "
+            "and small, and it can wait for the first weeks and come in when tasks get tedious."
         ),
-        "source": "ch.5 (incentives and consequences)",
+        "source": "ch.5 (incentives and consequences), ch.8-10 (brainstorming rewards)",
     },
     {
         "id": "setback_reframe",
-        "when": "they feel they failed, 'it didn't work', wants to start over or give up after a slip",
+        "when": "they feel they failed, 'it didn't work', a good streak broke, wants to start over or give up after a slip",
         "how": (
             "Use the mountain picture: slipping off the trail near the top doesn't send you back to the bottom; you get your "
-            "footing and rejoin the path. Point to what they had already built. Ask what they'd do differently, then restart "
-            "from the last good step rather than from zero."
+            "footing and rejoin the path. Point to what they had already built. Performance varies with ADHD, so a good day before "
+            "is not proof that a bad day is a choice. Offer a calm reset (a breath, then the next good thing), ask what they'd do "
+            "differently, and restart from the last good step rather than from zero."
         ),
-        "source": "ch.6 (metaphors), ch.5",
+        "source": "ch.6 (metaphors), ch.5; Tuckman ch.5 (accept the variability)",
     },
     {
         "id": "self_talk",
@@ -137,10 +144,10 @@ CARDS = [
         "when": "stuck on a decision, going back and forth, can't commit",
         "how": (
             "Write the options, then for each: what would motivate you, what would stop you, what you gain, what you lose (and what "
-            "the people close to you gain or lose). Keep it to two or three options. Ask which one they feel relief about. "
-            "Then choose the smallest next step that tests it."
+            "the people close to you gain or lose). Keep it to two or three options. Ask which one they feel relief about, or which "
+            "way they'd be rooting for a coin to land while it's in the air. Then choose the smallest next step that tests it."
         ),
-        "source": "ch.6 (decision-making form)",
+        "source": "ch.6 (decision-making form); Ramsay & Rostain ch.2 (decision making)",
     },
     {
         "id": "routines_cues",
@@ -189,28 +196,34 @@ CARDS = [
         "how": (
             "Ask how they learn best (seeing, hearing, doing, talking it through) and build the study method from that. Make "
             "material more active and interesting: draw it as a map, say it aloud, use cards, switch tasks on a timer. Use short "
-            "sessions with a defined goal and a reward after."
+            "sessions with a defined goal and a reward after. For heavy reading, don't start at word one: skim the headings and "
+            "summary, turn each heading into a question, read one section to answer it, jot the answer, say it back, and review at "
+            "the end."
         ),
-        "source": "ch.6 (learning style, study strategies)",
+        "source": "ch.6 (learning style, study strategies); Ramsay & Rostain ch.2 (SQ4R)",
     },
     {
         "id": "big_project",
-        "when": "long project or deadline far away, leaves it until the last minute",
+        "when": "long project or deadline far away, vague deadlines, last-minute rushes, 'I work better under pressure'",
         "how": (
-            "Cut it into steps and put a date on each, starting with a tiny first one (an outline, a list of questions). Work "
-            "backwards from the deadline and start earlier than feels necessary, because the distant deadline doesn't feel "
-            "real. Add an incentive for each step finished, not only the end."
+            "Make the deadline real: a specific day and time, not a soft 'sometime'. Cut the project into steps with a date on "
+            "each, starting with a tiny first one (an outline, a list of questions), and book real time blocks for them earlier in "
+            "the day. Work backwards and start earlier than feels necessary, because a distant deadline doesn't feel real. Add an "
+            "incentive for each step, and ask someone they respect for a draft by a date. If they will leave it to the end anyway, "
+            "protect a block just before the due date."
         ),
-        "source": "ch.5-6 (long-term assignments)",
+        "source": "ch.5-6 (long-term assignments); Tuckman ch.27 (real deadlines, plan to procrastinate); Ratey ch.6 (false deadlines)",
     },
     {
         "id": "impulse_pause",
         "when": "acts or answers too fast, careless mistakes, rushes through",
         "how": (
-            "Teach a deliberate pause: one breath, reread the question or message, then act. Some trick questions show how easily "
-            "a fast answer goes wrong; use it playfully, not as a test. Pick one situation where they'll practise the pause this week."
+            "Teach a deliberate pause: one breath, reread the question or message, then act. Some trick questions show how easily a "
+            "fast answer goes wrong; use it playfully, not as a test. Buy a few seconds with a small public action that gives the "
+            "thinking time to start: a slow breath and 'let me think about that', a hand on the chin, or repeating back what was "
+            "asked. Pick one situation where they'll practise the pause this week."
         ),
-        "source": "ch.6 (cognitive impulsivity exercise)",
+        "source": "ch.6 (cognitive impulsivity exercise); Barkley ch.16 (stop the action)",
     },
     {
         "id": "anxiety_approach",
@@ -362,28 +375,6 @@ CARDS = [
             "of a win is the process they can reuse when you're not there."
         ),
         "source": "ch.9 (learning from successes)",
-    },
-    {
-        "id": "follow_up_questions",
-        "when": "reviewing how an objective went and a vague 'what went wrong?' gets nothing",
-        "how": (
-            "Ask in small pieces, one per message: how easy was it (0-4), how much did you get done, how good was the part you did? "
-            "Then which barrier: forgot, didn't know how, confused, avoiding, or not motivated. Different answers need different fixes "
-            "(reminders, a skill, clearer steps, a smaller first step, a new reward). Often quality is good while quantity is low, and "
-            "that is worth saying out loud."
-        ),
-        "source": "ch.5, ch.9 (follow-up ratings)",
-    },
-    {
-        "id": "reward_brainstorm",
-        "when": "choosing incentives, 'rewards are for kids', can't think of one",
-        "how": (
-            "Ask what actually pulls them: what gets you out of bed, what would you rather be doing than this, what do you reach for "
-            "when avoiding work, what small thing would make someone you love smile? Dig past 'TV' to something personal. A consequence "
-            "should be specific and mildly annoying (a chore they dislike, a small donation to a cause they dislike), a reward quick "
-            "and small. For a first few weeks it's fine to use none; add one when the tasks get tedious."
-        ),
-        "source": "ch.8-10 (brainstorming rewards and consequences)",
     },
     {
         "id": "gentle_motivation",
@@ -601,9 +592,12 @@ CARDS = [
         "how": (
             "Fix only what truly repeats (work hours, appointments, school runs) on a weekly grid. Then mark the remaining "
             "stretches as flexible time and drop each weekly goal into one of them, as an appointment with themselves ('Tuesday at "
-            "ten: meal plan'). The flex zone lets a day shift without losing the task. Keep it to what they would really look at."
+            "ten: meal plan'). The flex zone lets a day shift without losing the task. Keep it to what they would really look at. "
+            "Ten minutes each morning to set the day (or the night before) is enough; plan weekends and other loose days too, leave "
+            "buffers between things, and err on the side of under-scheduling. Looking back at what actually happened tells them "
+            "what to change."
         ),
-        "source": "Ratey ch.5 (structured flexibility, appointments with yourself)",
+        "source": "Ratey ch.5 (structured flexibility, appointments with yourself); Ramsay & Rostain ch.2 (daily planner)",
     },
     {
         "id": "stop_times",
@@ -626,16 +620,6 @@ CARDS = [
         "source": "Ratey ch.6 (separate the setup from the task)",
     },
     {
-        "id": "minimal_goal",
-        "when": "avoiding something for days or weeks, a long timer didn't stick",
-        "how": (
-            "Agree the smallest thing that still counts (open the file and read it for ten minutes) and pick a time for it. At that "
-            "time do only the minimal goal, even if they feel like more; stopping on time keeps it safe to start again tomorrow. If "
-            "they do carry on, great, but the commitment is the minimum. Ask afterwards how it felt."
-        ),
-        "source": "Ratey ch.6 (minimal goal, baby steps)",
-    },
-    {
         "id": "witness_or_model",
         "when": "a dreaded old job (taxes, clearing clutter, a form), or they can't picture what finished looks like",
         "how": (
@@ -644,16 +628,6 @@ CARDS = [
             "minutes if they want. Choose someone they trust and not someone who will criticise."
         ),
         "source": "Ratey ch.6 (witness, model)",
-    },
-    {
-        "id": "circling_airport",
-        "when": "they know what to do and why it matters but never 'land', the dread grows each day they put it off",
-        "how": (
-            "Name the circling kindly and ask what keeps them from landing. Usually it is one of two: not knowing where to start "
-            "(go to the first step) or dreading the hours it will take now that they have put it off (agree a small amount today "
-            "and don't try to make up for lost time). Seeing the pattern lets them stop the panic cycle early."
-        ),
-        "source": "Ratey ch.6 (circling the airport)",
     },
     {
         "id": "first_thing_first",
@@ -750,7 +724,7 @@ CARDS = [
         "id": "closer_consequences",
         "when": "the real payoff or cost is too far away to matter today, natural consequences arrive too late or fall on someone else",
         "how": (
-            "Bring the consequence closer by choosing one or more of: sooner (a treat right after), more often (a mid-week check- "
+            "Bring the consequence closer by choosing one or more of: sooner (a treat right after), more often (a mid-week check-"
             "in), outside them (they owe a friend lunch if they miss it), more important to them, or the same every time. Let them "
             "design it and keep it light. A small consequence that happens beats a big one that doesn't."
         ),
@@ -758,23 +732,15 @@ CARDS = [
     },
     {
         "id": "sticky_slippery",
-        "when": "'I just went on my phone for a minute' and lost an hour, a quick errand or email turned into an afternoon",
+        "when": "'I just went on my phone for a minute' and lost an hour, a quick errand or email turned into an afternoon, 'it'll only take a minute'",
         "how": (
-            "Some things are sticky (it's hard to stop once started) and some are slippery (they pull you into something else). The "
-            "point of action is before the first step, not in the middle. Ask which one catches them and when, then make the first "
-            "step harder (log out, leave the phone in another room, close the tab) or schedule it for after the task."
+            "Some things are sticky (hard to stop once started) and some are slippery (they pull you onto something else). The "
+            "moment to act is before the first step, so make it harder (log out, phone in another room, close the tab) or schedule "
+            "it for after the task. When they talk themselves into it with 'just', ask lightly for a fair bet: if real money were "
+            "on this working out, which way would they bet? It is fine to choose the fun thing knowingly; the aim is honest odds, "
+            "not a ban."
         ),
-        "source": "Tuckman ch.15 (sticky and slippery activities)",
-    },
-    {
-        "id": "slippery_just",
-        "when": "they talk themselves into something with 'just', 'it'll only take a minute', 'I'll remember', 'I'll do it later'",
-        "how": (
-            "Name it lightly and without scolding, then ask for a fair bet: if they had to put real money on this working out, "
-            "which way would they bet? If the honest answer is 'against', ask what they would do differently. It is fine to choose "
-            "the fun thing knowingly. The aim is honest odds, not a ban."
-        ),
-        "source": "Tuckman ch.23 (the lies we tell ourselves)",
+        "source": "Tuckman ch.15, ch.23 (sticky and slippery activities, the lies we tell ourselves)",
     },
     {
         "id": "procrastination_or_priority",
@@ -808,14 +774,15 @@ CARDS = [
     },
     {
         "id": "bite_the_bullet",
-        "when": "something they hate and keep avoiding (a call, paperwork, an awkward message)",
+        "when": "something they hate and keep avoiding (a call, paperwork, an awkward message), they know why it matters but never 'land' on it",
         "how": (
-            "Be honest that they will still dislike it; the aim is to hate it less. Schedule it for early in the day or when they "
-            "are rested and fed, make it easier to start, tell someone what they will do and when they'll report back, and keep any "
-            "reward small so it doesn't replace the task. Afterwards give themselves proper credit, since it was the hardest kind "
-            "of task."
+            "Be honest that they will still dislike it; the aim is to hate it less. Name the circling kindly and ask what holds "
+            "them back: not knowing where to start (go to the first step), or dreading the hours it will take now that it has piled "
+            "up (agree a small amount today, don't try to make up for lost time). Schedule it early in the day or when they are "
+            "rested and fed, tell someone what they'll do and when they'll report back, keep any reward small, and afterwards give "
+            "themselves proper credit."
         ),
-        "source": "Tuckman ch.24 (bite the bullet)",
+        "source": "Tuckman ch.24 (bite the bullet); Ratey ch.6 (circling the airport)",
     },
     {
         "id": "pick_a_side",
@@ -829,14 +796,15 @@ CARDS = [
     },
     {
         "id": "good_enough",
-        "when": "overdoing it, can't finish or send because it isn't perfect, 'it has to be just right before I can start'",
+        "when": "overdoing it, can't finish or send because it isn't perfect, 'it has to be just right', feels they should be far more productive",
         "how": (
-            "Ask what this task really needs and who set the bar (them or someone else; asking someone what they expect isn't "
-            "weaseling). Perfectionism is also a way of coping with worry, so normalise the worry. Every extra minute here is a "
-            "minute not spent on something else. If the conditions aren't ideal, do a rough first pass anyway, as any progress "
-            "beats none."
+            "Ask what this task really needs and who set the bar (them or someone else; asking what's expected isn't weaseling). "
+            "Perfectionism is also a way of coping with worry, so normalise the worry. Every extra minute here is a minute not "
+            "spent elsewhere. If conditions aren't ideal, do a rough first pass, as any progress beats none. Ask what 'enough' "
+            "would look like overall (less late, less often, instead of never late) and remember that pleasing everyone isn't a "
+            "goal."
         ),
-        "source": "Tuckman ch.28 (perfectionism, overdoing)",
+        "source": "Tuckman ch.28, ch.32 (perfectionism, how productive do you need to be)",
     },
     {
         "id": "clarify_first",
@@ -847,38 +815,6 @@ CARDS = [
             "the person who set the task shows care. Help them word it in one or two lines and send it."
         ),
         "source": "Tuckman ch.30 (ambiguity)",
-    },
-    {
-        "id": "real_deadlines",
-        "when": "vague deadlines, last-minute rushes, 'I work better under pressure', a big thing due far off",
-        "how": (
-            "Make the deadline real: a specific day and time, and the real one, not a soft 'sometime'. Add interim deadlines and "
-            "book actual time blocks for each, earlier in the day. If they'll leave it to the end anyway, plan for it: put a "
-            "protected block just before the due date so it isn't double-booked. For a long project, ask someone they respect for a "
-            "draft by a date."
-        ),
-        "source": "Tuckman ch.27 (honour the real deadline, plan to procrastinate); Ratey ch.6 (false deadlines)",
-    },
-    {
-        "id": "inconsistent_days",
-        "when": "'it worked last week, why not now?', a good streak broke, they judge themselves by the bad days",
-        "how": (
-            "Variable performance is part of ADHD, not proof they didn't try. Don't let a good day become evidence of a choice on a "
-            "bad one. Offer a calm reset: take a breath, do the next good thing, and give themselves some slack so they don't "
-            "spiral. They might want a short line to explain it to others ('sometimes I get stuck and need to start with something "
-            "else')."
-        ),
-        "source": "Tuckman ch.5 (accept the variability)",
-    },
-    {
-        "id": "enough_is_enough",
-        "when": "pushes for perfection in every area, feels they should be far more productive, afraid of disappointing people",
-        "how": (
-            "Ask what 'enough' would look like, such as less late, less often, instead of never late. Aim for what makes life "
-            "better, not what looks impressive. Everyone has a vote on their own life; people affected by it have some say too, but "
-            "pleasing everyone isn't a goal. Separate a choice not to do something from dropping the ball."
-        ),
-        "source": "Tuckman ch.32 (how productive do you need to be, people-pleasing)",
     },
     {
         "id": "gamify",
@@ -956,7 +892,7 @@ CARDS = [
         "when": "can't get going on a boring or physical task, needs energy or a mood change, the house feels too big to tidy",
         "how": (
             "Put on music they like to get moving, such as a favourite song they use to challenge themselves to clear as much as "
-            "possible before it ends. Upbeat tracks help with starting; for deep focus, try something without words or low- "
+            "possible before it ends. Upbeat tracks help with starting; for deep focus, try something without words or low-"
             "frequency noise. Ask them to choose a go-to start playlist and save it to the toolbox if it works. Keep the volume "
             "safe for their ears."
         ),
@@ -971,6 +907,187 @@ CARDS = [
             "lines fall over a week or two. Reward a short block of full focus with a break that they pick."
         ),
         "source": "Boost your concentration (release form, cycle of positive feelings)",
+    },
+    {
+        "id": "if_then_plan",
+        "when": "they have a plan but it keeps falling apart at the same moment, 'I always get sidetracked right when I'm supposed to start'",
+        "how": (
+            "Find the tipping point: what will they be thinking and doing at the exact moment it usually goes wrong? Turn it into "
+            "an if-then line: 'if it's ten on Saturday and I tell myself I'll do email first, then I sit at the desk and open the "
+            "file.' Name where and when, and one or two things that could interfere with a ready answer for each. The risk becomes "
+            "the cue. Let them word it and save it as the step."
+        ),
+        "source": "Ramsay & Rostain ch.2 (implementation intentions, if-then plans)",
+    },
+    {
+        "id": "arrival_script",
+        "when": "plans made on the way home evaporate on the couch, the evening goes to the TV or phone, 'I'm too tired to'",
+        "how": (
+            "Describe the usual script when they walk in (shoes off, sofa, screen) and notice that relaxing isn't the problem; "
+            "there's just no competing plan. Have them enter the room with a plan: the first three physical steps (put the bag "
+            "down, change into running clothes, walk out), plus the answer to 'I'll do it later' ('I know I won't, and I always "
+            "feel better once started'). Try it for a week and keep what works."
+        ),
+        "source": "Ramsay & Rostain ch.2 (behavioural scripts, entering the room with a plan)",
+    },
+    {
+        "id": "defense_attorney",
+        "when": "a verdict on themselves after one event ('I'm a failure', 'substandard', 'back to square one'), a conclusion that feels like fact",
+        "how": (
+            "Ask who is speaking: the prosecutor presents only the bad evidence, so what would the defence attorney say? List the "
+            "facts on both sides, then ask what they'd tell a friend in the same spot, how it will look in a week or a year, and "
+            "what a fairer thought would be. The aim is an accurate thought, not a positive one. Offer to save the fairer version "
+            "as a short line."
+        ),
+        "source": "Ramsay & Rostain ch.2 (automatic thoughts, defence attorney)",
+    },
+    {
+        "id": "invisible_fences",
+        "when": "'I tried that before and it didn't work', gives up a tool after the first hiccup, 'planners don't work for me'",
+        "how": (
+            "Treat past attempts as experiments, not verdicts. Ask what exactly happened (how long it was tried, what broke) and "
+            "whether it was set up for how they work or borrowed from someone else's life. One stumble, such as losing the planner, "
+            "is information for a tweak, not proof. Pick one thing to try again properly for two weeks, and agree what would count "
+            "as a fair test first."
+        ),
+        "source": "Ramsay & Rostain ch.2 (invisible fences, coping skills as experiments)",
+    },
+    {
+        "id": "swing_votes",
+        "when": "the task looks awful and they can't muster any motivation, they only think about how hard and boring it will be",
+        "how": (
+            "Notice the lopsided count: the difficulty is magnified and the benefit shrunk. They don't need a unanimous vote, only "
+            "enough swing votes to take the first step. Ask for two honest reasons in favour (what they'll feel after, what it "
+            "frees up, how it ends the dread) and one that makes the start easier, then start with the first physical step. Ask "
+            "what's the worst that could really happen in the next ten minutes."
+        ),
+        "source": "Ramsay & Rostain ch.2 (magnification and minimisation, swing votes)",
+    },
+    {
+        "id": "compare_less",
+        "when": "'other people just do this without trying', 'I shouldn't need a planner', shame about needing tools",
+        "how": (
+            "Point out that comparisons rarely see the effort behind other people's results: the coworker who starts without "
+            "planning probably has a system they don't show. Using a planner, lists and timers is how people without ADHD cope too, "
+            "and with ADHD it may take more deliberate effort, which is fair. Ask what they'd say to a friend who used the same "
+            "tool, and what the tool buys them."
+        ),
+        "source": "Ramsay & Rostain ch.2 (comparative thinking)",
+    },
+    {
+        "id": "progress_in_percent",
+        "when": "'nothing has changed', discounts improvement, one bad day cancels the good weeks, all-or-nothing about progress",
+        "how": (
+            "Change usually shows up as a shift in percentages: skipping 40% of classes became 15%, not zero. Ask for rough numbers "
+            "then and now (days out of seven, how often they start on time) and say the difference out loud. If they wave it off, "
+            "point out that a medicine producing this change would be called a success. Problems remain, but they are trending the "
+            "right way."
+        ),
+        "source": "Ramsay & Rostain ch.2 (magnification of problems, trends)",
+    },
+    {
+        "id": "escape_feeling",
+        "when": "checks email or snacks right before starting, 'I have to be in the mood', an uncomfortable feeling sends them elsewhere",
+        "how": (
+            "Name the pattern kindly: the task brings an uncomfortable feeling, switching away gives instant relief, and that "
+            "relief rewards the avoidance. They can feel it and still do the first step. Ask them to say aloud how they feel, then "
+            "do one tiny physical step (open the notebook) while the feeling is still there. Afterwards, ask what the feeling did "
+            "once they started. Nobody is 'in the mood' for most tasks."
+        ),
+        "source": "Ramsay & Rostain ch.2 (escape behaviour, emotional management)",
+    },
+    {
+        "id": "not_ready_yet",
+        "when": "'I don't really need to change', bristles at being told what to do, agrees and then ignores the plan, ambivalent about coaching",
+        "how": (
+            "Don't argue or push. Say the part of them that is reluctant makes sense and ask what could be better in their life "
+            "right now, without mentioning ADHD. Compare what staying the same costs with what changing would buy. Let them set the "
+            "pace, and accept a 'not yet' without pressure. Check back lightly later. Their choice stands."
+        ),
+        "source": "Ramsay & Rostain ch.5 (readiness for change, motivational enhancement)",
+    },
+    {
+        "id": "untangle_problem",
+        "when": "a tangled mess of a problem (money, an overdue thing, a conflict) that feels impossible, 'I don't know what to do'",
+        "how": (
+            "Split it into separate problems (the audit, telling my wife, paying the money) and handle one at a time. For the one "
+            "that matters, brainstorm without editing, then rank the options and pick the least bad; the healthy choice is often "
+            "the least comfortable. Write the steps down, set the next time they can do it (not 'when the moment feels right') and "
+            "ask what worries them about it. Some problems get managed, not solved."
+        ),
+        "source": "Ramsay & Rostain ch.2 (problem management)",
+    },
+    {
+        "id": "task_spot",
+        "when": "can't settle into work or study at home, everything happens everywhere, no place that says 'do this here'",
+        "how": (
+            "Give each kind of task its own spot, even a corner (a desk for bills, another for work, a chair for reading). The "
+            "place becomes a cue. The first step can be just 'go and sit there'. Where space is shared or noisy, use a library, a "
+            "coffee shop, an empty meeting room or a closed curtain. It doesn't have to be ideal, only good enough."
+        ),
+        "source": "Ramsay & Rostain ch.2 (environmental engineering)",
+    },
+    {
+        "id": "tools_fools_gold",
+        "when": "spends hours choosing a planner or app, keeps switching systems, a tool that isn't working but they keep using",
+        "how": (
+            "A tool is judged by whether it solves the problem. Researching the perfect app is a way to avoid the real task. Keep "
+            "it simple: one visible clock (a watch beats a phone in a pocket), one place for lists. If a tool hasn't helped in two "
+            "weeks, change one thing or drop it. Pick the plainest option and move on."
+        ),
+        "source": "Ramsay & Rostain ch.2 (outsourcing, fool's gold)",
+    },
+    {
+        "id": "pocket_journal",
+        "when": "forgets what people told them, dates, promises and instructions, loses thoughts mid-task, appears unreliable",
+        "how": (
+            "One small notebook (or one phone note) that's always with them: write every date, promise, instruction and idea the "
+            "moment it arises, and have an alarm every half hour or so while they work to look at it. A stray thought during a task "
+            "goes in the notebook, then back to work. If it feels awkward, say 'let me write that down'. If they can't write it down, they can ask the other person to send it in a message."
+        ),
+        "source": "Barkley ch.19 (carry a journal); Ramsay & Rostain ch.2 (data management)",
+    },
+    {
+        "id": "say_it_aloud",
+        "when": "'I know what to do and don't do it', decisions made in their head go wrong, they repeat the same mistake",
+        "how": (
+            "Use their inner voice out loud: narrate what's happening, what they could do next and what will happen, as if "
+            "interviewing themselves ('Have I been here before? What did I do? What will tomorrow-me think?'). Instructing "
+            "themselves aloud while doing a task helps them finish it. Then have them pull one rule from it ('I wait until after "
+            "the meeting'). Alone in the car or on a walk is an easy place to start."
+        ),
+        "source": "Barkley ch.18 (say the past and the future)",
+    },
+    {
+        "id": "solve_it_on_paper",
+        "when": "stuck on a problem that has many pieces, can't hold it all in their head, options go round in circles",
+        "how": (
+            "Get the problem out of their head and into something they can move: write each factor on its own card or sticky note "
+            "and rearrange them, sketch it, or lay out objects. Sorting and grouping with their hands often reveals the answer, and "
+            "a photo or sketch keeps it. Whatever helps them think, whether paper, boxes or a whiteboard, is fine."
+        ),
+        "source": "Barkley ch.22 (make problems external, physical and manual)",
+    },
+    {
+        "id": "own_it_with_humour",
+        "when": "embarrassed after a slip in front of others, hides mistakes, over-apologises or defends, takes the ADHD too seriously",
+        "how": (
+            "Give them a short line they can say with a smile: 'My ADHD acting up again, sorry. I'll try to do better next time.' "
+            "It owns the mistake, explains it, apologises without blame and promises effort. Rehearse a version in their own words. "
+            "A private laugh at themselves counts too; keep it kind, never as a way to dismiss real harm."
+        ),
+        "source": "Barkley ch.23 (a sense of humour)",
+    },
+    {
+        "id": "work_allies",
+        "when": "struggling at work, no one to ask, afraid to look incompetent, unclear what the boss thinks",
+        "how": (
+            "Suggest practical allies: a coworker to swap notes or cover for forgotten things, a regular catch-up with a supervisor "
+            "every few weeks instead of waiting for the annual review, and a written summary after meetings. A short walk before a "
+            "long meeting helps attention for an hour, and taking notes keeps them engaged. Be fair when asking for support, and "
+            "offer something back."
+        ),
+        "source": "Barkley ch.25 (work)",
     },
 ]
 

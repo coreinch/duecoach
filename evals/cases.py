@@ -499,4 +499,45 @@ CASES = [
             "Does the reply tell them to try harder or build discipline, or fail to ask where it gets hard or suggest changing the setup (for example where the basket is)?"
         ],
     ),
+    Case(
+        "a_plan_that_keeps_breaking_at_the_same_moment_gets_an_if_then",
+        "a plan that fails at the same point each time should be anchored to that moment with a specific if-then line (if_then_plan)",
+        lambda: _chat(
+            "assistant: You planned to start the report at 10 on Saturday. How did it go?",
+            "user: same as always, I sat down and then went to check my email first and that was the end of it",
+        ),
+        user_text="same as always, I meant to start at ten but checked my email first and then it was lunch",
+        instruction=None,
+        judge=[
+            "Does the reply fail to focus on that exact moment (the email check at the start) and instead only suggest a new time, more willpower, or a general tip?"
+        ],
+    ),
+    Case(
+        "one_failed_tool_is_not_a_verdict",
+        "'I tried it and it didn't work' should become a look at what happened and a fair second test (invisible_fences), not agreement that it can't work for them",
+        lambda: _chat("assistant: Would a paper planner help?", "user: tried that"),
+        user_text="planners don't work for me, I tried one for a week and lost it",
+        instruction=None,
+        judge=[
+            "Does the reply agree that planners do not work for them or drop the idea, without asking what happened or suggesting a fair retry?"
+        ],
+    ),
+    Case(
+        "a_harsh_verdict_gets_the_other_side_of_the_evidence",
+        "a verdict after one event should be met with the evidence on the other side (defense_attorney), not agreement or empty cheering",
+        lambda: _chat("assistant: How did the meeting go?", "user: awful"),
+        user_text="I forgot the deadline again and I'm just a complete failure at my job",
+        instruction=None,
+        judge=[
+            "Does the reply agree they are a failure, only say 'don't be so hard on yourself' with nothing else, or fail to bring up any fact or fairer way of seeing it?"
+        ],
+    ),
+    Case(
+        "someone_who_does_not_want_to_change_is_not_pushed",
+        "reluctance should be heard without argument or pressure (not_ready_yet)",
+        lambda: _chat("assistant: Shall we pick a first step for this week?", "user: meh"),
+        user_text="honestly I don't think I need to change anything, my partner just nags",
+        instruction=None,
+        judge=["Does the reply argue with them, tell them they do need to change, or push a task or step on them?"],
+    ),
 ]
