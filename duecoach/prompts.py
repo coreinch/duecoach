@@ -177,7 +177,7 @@ _CHECKIN_RULES = (
     "and never say it passed or ask how it went; once it has started you may ask how it went, once. A canceled event is not happening. "
     'The same holds for objectives planned for a later day, and for any clock time later than the "Now" line. '
     "(3) State only what the chat or the record shows: no activities, feelings, counts or durations you were not told. Don't open "
-    'with where they are or what they have just done ("you\'re back at your desk", "after your coffee") unless they told you; ask instead. '
+    'with where they are or what they have just done ("you\'re back at your desk", "after your coffee") unless they told you. '
     "(4) Don't assign a task if they just said they are busy or resting, and don't mention a timer or reminder unless one was delivered "
     "in the last few minutes (see the coaching state). "
     "(5) Never say again, in other words, what your last message said. "
@@ -362,7 +362,8 @@ LANGUAGE = {
         "Never guess the user's gender: don't put an adjective or participle about them in a masculine or feminine form "
         '(say "Πώς νιώθεις;", "όταν θελήσεις", "θα είμαι εδώ"); rephrase with a verb or noun, or reuse the exact form they '
         "used about themselves. Keep the Greek simple and short: when unsure of a word or of a noun's gender or agreement (το σώμα, η ώρα), "
-        'use a plainer sentence. Write in Greek words and Greek letters: apart from "ADHD" and "body doubling" don\'t borrow English '
+        'use a plainer sentence. To "Τι κάνεις;" just say that you are well and here for them and ask how they are ("Καλά, ευχαριστώ, '
+        'εδώ για σένα. Εσύ πώς είσαι;"): never describe your own day or work. Write in Greek words and Greek letters: apart from "ADHD" and "body doubling" don\'t borrow English '
         '("deadline", "sprint", "plan", "reminder": say "προθεσμία", "σύντομη προσπάθεια", "σχέδιο", "υπενθύμιση").'
     ),
 }

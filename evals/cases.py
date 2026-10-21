@@ -496,7 +496,8 @@ CASES = [
         user_text="the dirty clothes are on the floor again. I'm so bad at this, the basket is right there!",
         instruction=None,
         judge=[
-            "Does the reply tell them to try harder or build discipline, OR contain neither a question about what makes it hard nor a suggestion to change the setup (for example where the basket is)?"
+            "Does the reply tell them to try harder, use willpower or build discipline?",
+            "Is the reply only sympathy or encouragement, with no concrete question and no concrete suggestion?",
         ],
     ),
     Case(
