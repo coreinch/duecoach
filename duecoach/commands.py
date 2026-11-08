@@ -68,6 +68,13 @@ async def _toolbox(uid, args):
     return f"{say(uid, 'TOOLBOX_HEADER')}:\n" + "\n".join(f"• {t['text']}" for t in items)
 
 
+async def _tasks(uid, args):
+    items = db.open_tasks(uid)
+    if not items:
+        return say(uid, "TASKS_EMPTY")
+    return f"{say(uid, 'TASKS_HEADER')}:\n" + "\n".join(f"• {t['text']}" for t in items)
+
+
 async def _progress(uid, args):
     return await coach(uid, "/progress", prompts.PROGRESS)
 
@@ -184,6 +191,7 @@ COMMANDS = {
     "goals": _goals,
     "wrong": _wrong,
     "toolbox": _toolbox,
+    "tasks": _tasks,
     "progress": _progress,
     "timezone": _timezone,
     "language": _language,

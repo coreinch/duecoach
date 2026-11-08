@@ -28,6 +28,7 @@ STRINGS = {
             "/wrong - το τελευταίο μήνυμά μου ήταν λάθος\n"
             "/progress - σημείωση προόδου της εβδομάδας\n"
             "/toolbox - τι έχει δουλέψει για σένα\n"
+            "/tasks - η λίστα με όσα θέλεις να κάνεις\n"
             "/language <el|en> - γλώσσα\n"
             "/notes - τι θυμάμαι για σένα\n"
             "/privacy - πώς χρησιμοποιώ τα δεδομένα σου\n"
@@ -58,6 +59,8 @@ STRINGS = {
         "GOALS_NONE": "Δεν έχουμε στόχους ακόμα. Πες μου τι θα ήθελες να δουλέψουμε και θα τους φτιάξουμε μαζί.",
         "OBJ_HEADER": "Αυτή την εβδομάδα",
         "OBJ_NONE": "Δεν υπάρχουν ανοιχτοί στόχοι εβδομάδας αυτή τη στιγμή.",
+        "TASKS_HEADER": "Η λίστα σου",
+        "TASKS_EMPTY": "Δεν υπάρχει τίποτα στη λίστα. Πες μου τι πρέπει να κάνεις, θα το κρατήσω και θα σου το θυμίσω όταν ταιριάζει.",
         "TOOLBOX_HEADER": "Το εργαλειοκουτί σου (τι έχει δουλέψει)",
         "TOOLBOX_EMPTY": "Άδειο ακόμα. Θα βάζουμε εδώ ό,τι σε βοηθάει.",
         "INTERVAL_SHOW": "Θα σε ρωτάω περίπου κάθε {minutes} λεπτά (πιο αραιά αν δεν απαντάς). Άλλαξέ το με /interval 60 ή /interval off",
@@ -76,7 +79,7 @@ STRINGS = {
         "KEEP_MESSAGES": " Τα μηνύματα της συνομιλίας σβήνονται μετά από {days} ημέρες.",
         "KEEP_INACTIVE": " Όλα όσα έχω για σένα σβήνονται μετά από {days} ημέρες χωρίς μήνυμά σου.",
         "AGREED": "Ευχαριστώ, είμαστε έτοιμοι. Πρώτα, πού μένεις; Πες μου την πόλη (ή τη χώρα) σου και θα ορίσω τη ζώνη ώρας, ώστε υπενθυμίσεις και check-in να έρχονται στη σωστή ώρα. Μπορείς και να πεις «παράλειψη». Μετά πες μου τι σε έφερε εδώ.",
-        "DELETE_CONFIRM": "Αυτό σβήνει οριστικά ό,τι έχω για σένα: ιστορικό συνομιλίας, σημειώσεις, στόχους, εβδομαδιαία βήματα, εργαλειοκουτί και υπενθυμίσεις. Στείλε /deletedata confirm για να προχωρήσω.",
+        "DELETE_CONFIRM": "Αυτό σβήνει οριστικά ό,τι έχω για σένα: ιστορικό συνομιλίας, σημειώσεις, στόχους, εβδομαδιαία βήματα, εργασίες της λίστας, εργαλειοκουτί και υπενθυμίσεις. Στείλε /deletedata confirm για να προχωρήσω.",
         "DELETED": "Έγινε. Όλα όσα είχα για σένα σβήστηκαν (τα αντίγραφα ασφαλείας αντικαθίστανται μέσα σε περίπου μία εβδομάδα). Μπορείς να ξεκινήσεις από την αρχή όποτε θέλεις.",
         "RATE_LIMITED": "Είναι πολλά μαζί. Θα κάνω μια παύση λίγων λεπτών για να προλάβω.",
         "EMPTY_REPLY": "Δεν κατάφερα να σκεφτώ σωστή απάντηση αυτή τη στιγμή. Μπορείς να το ξαναγράψεις σε λίγο;",
@@ -118,6 +121,7 @@ STRINGS = {
             "/wrong - my last message was wrong\n"
             "/progress - this week's progress note\n"
             "/toolbox - what has worked for you\n"
+            "/tasks - your to-do list\n"
             "/language <el|en> - language\n"
             "/notes - see what I remember about you\n"
             "/privacy - how your data is used\n"
@@ -148,6 +152,8 @@ STRINGS = {
         "GOALS_NONE": "No goals yet. Tell me what you'd like to work on and we'll shape them together.",
         "OBJ_HEADER": "This week",
         "OBJ_NONE": "No open objectives right now.",
+        "TASKS_HEADER": "Your to-do list",
+        "TASKS_EMPTY": "Nothing on the list. Tell me what you need to get done and I'll keep it for you and nudge you when it fits.",
         "TOOLBOX_HEADER": "Your toolbox (what has worked)",
         "TOOLBOX_EMPTY": "Empty for now. We'll keep whatever helps you here.",
         "INTERVAL_SHOW": "I check in about every {minutes} minutes (further apart if you go quiet). Change it with /interval 60 or /interval off",
@@ -165,7 +171,7 @@ STRINGS = {
         "KEEP_MESSAGES": " Chat messages are deleted after {days} days.",
         "KEEP_INACTIVE": " Everything about you is deleted after {days} days without a message from you.",
         "AGREED": "Thanks, you're set. First, where do you live? Tell me your city (or country) and I'll set your timezone, so reminders and check-ins land at the right time. You can also say \"skip\". Then tell me what brought you here.",
-        "DELETE_CONFIRM": "This permanently erases everything I have about you: chat history, notes, goals, weekly steps, toolbox and reminders. Send /deletedata confirm to go ahead.",
+        "DELETE_CONFIRM": "This permanently erases everything I have about you: chat history, notes, goals, weekly steps, to-dos, toolbox and reminders. Send /deletedata confirm to go ahead.",
         "DELETED": "Done. Everything I had about you has been erased (backup copies are overwritten within about a week). You're welcome to start fresh any time.",
         "RATE_LIMITED": "That's a lot at once. I'll pause for a few minutes to catch up.",
         "EMPTY_REPLY": "I couldn't put a proper answer together just now. Could you send that again in a moment?",

@@ -157,6 +157,7 @@ def maintain() -> None:
     gone = db.delete_inactive_users(INACTIVE_DELETE_DAYS) if INACTIVE_DELETE_DAYS > 0 else 0
     abandoned = db.abandon_stale_reminders(REMINDER_GIVE_UP_HOURS)
     db.prune_events()
+    db.prune_tasks()
     db.prune_turn_stats()
     db.prune_flagged_drafts(FLAGGED_DRAFT_DAYS)
     recent = db.turn_stats_summary(time.time() - MAINTENANCE_SECONDS)

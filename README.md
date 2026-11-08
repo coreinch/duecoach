@@ -5,7 +5,7 @@ From what you meant to do to what you did.
 Duecoach is an ADHD coach in your chat app, on Telegram (Greek and English), built around follow-through. It coaches with a structured method — goals,
 small weekly objectives, barrier analysis, a toolbox of what works, a weekly review — with a 103-card playbook of strategies in
 the prompt of every reply (one model call per message). New users are asked for their timezone first and then talk freely: the coach learns about them, sets goals and weekly steps
-and follows up on them in conversation, saving them with tools. Once the timezone is known, the bot checks in after 30 minutes of silence
+and follows up on them in conversation, saving them with tools. It also keeps a running to-do list of whatever you say you need to do (no time attached) and brings one item back, with a tiny first step, in its check-ins when you have been quiet. Once the timezone is known, the bot checks in after 30 minutes of silence
 during the day and backs off when ignored (`/interval off` turns it off).
 
 It is a coaching aid, not therapy or medical advice. Chats are stored in a local SQLite database and each message is sent to the
@@ -84,7 +84,7 @@ them off the box if the data matters.
 
 ## Commands
 
-`/help` lists them. Highlights: `/stuck`, `/plan`, `/overwhelm`, `/goals`, `/toolbox`, `/progress`, `/remind`, `/timezone`,
+`/help` lists them. Highlights: `/stuck`, `/plan`, `/overwhelm`, `/goals`, `/tasks`, `/toolbox`, `/progress`, `/remind`, `/timezone`,
 `/interval on|off|<minutes>`, `/morning`, `/evening`, `/language`, `/wrong` (marks the coach's last message as wrong, for the maintainer), `/privacy`, `/deletedata`.
 
 ## Telegram profile
