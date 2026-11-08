@@ -276,3 +276,15 @@ def test_the_activity_log_keeps_only_the_newest_hundred(user):
         db.add_activity(uid, f"thing {i}", "done")
     count = db._conn.execute("SELECT COUNT(*) FROM activities WHERE user_id=?", (uid,)).fetchone()[0]
     assert count == db.MAX_ACTIVITIES
+
+
+def test_the_activity_view_covers_two_weeks_and_up_to_thirty_entries(user):
+    uid = user["user_id"]
+    old, recent = db.add_activity(uid, "ten days ago", "done"), db.add_activity(uid, "yesterday", "done")
+    gone = db.add_activity(uid, "twenty days ago", "done")
+    for aid, days in ((old, 10), (recent, 1), (gone, 20)):
+        db._conn.execute("UPDATE activities SET created=? WHERE id=?", (time.time() - days * 86400, aid))
+    assert [a["text"] for a in db.recent_activities(uid)] == ["ten days ago", "yesterday"]
+    for i in range(40):
+        db.add_activity(uid, f"thing {i}", "done")
+    assert len(db.recent_activities(uid)) == 30

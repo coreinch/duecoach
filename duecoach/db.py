@@ -924,7 +924,7 @@ def add_activity(user_id: int, text: str, status: str) -> int:
     return cur.lastrowid or 0
 
 
-def recent_activities(user_id: int, days: int = 7, n: int = 15) -> list[sqlite3.Row]:
+def recent_activities(user_id: int, days: int = 14, n: int = 30) -> list[sqlite3.Row]:
     """The newest `n` from the last `days` days, oldest first."""
     rows = _conn.execute(
         "SELECT * FROM activities WHERE user_id=? AND created>? ORDER BY id DESC LIMIT ?", (user_id, time.time() - days * 86400, n)
