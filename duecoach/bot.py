@@ -114,6 +114,9 @@ async def checkin(u) -> None:
             return
         instruction, marks = plan
         seen_inbound = u["last_inbound"] or 0
+        parked = db.parked_to_return(uid) if instruction in (prompts.MORNING, prompts.PULSE) else None
+        if parked:  # an idea set aside earlier: offered at a calm moment, never to someone who is ignoring check-ins
+            instruction += prompts.PARKED_RETURN.format(idea=parked["text"])
         try:
             await channels.send(u, await llm.reply(uid, "", instruction))
         except channels.Unreachable:
@@ -132,6 +135,8 @@ async def checkin(u) -> None:
         if marks:
             db.set_fields(uid, **marks)
         db.record_checkin_sent(uid, seen_inbound)
+        if parked:
+            db.mark_parked_returned(parked["id"])
         if backoff.exhausted((u["unanswered"] or 0) + 1):
             log.info("user %s stayed silent through every check-in; going quiet until they write", uid)
 
@@ -159,6 +164,7 @@ def maintain() -> None:
     db.prune_events()
     db.prune_tasks()
     db.prune_activities()
+    db.prune_parked()
     db.prune_turn_stats()
     db.prune_flagged_drafts(FLAGGED_DRAFT_DAYS)
     recent = db.turn_stats_summary(time.time() - MAINTENANCE_SECONDS)

@@ -210,3 +210,44 @@ async def test_a_withheld_check_in_backs_off_quietly_and_a_real_failure_logs_its
     with caplog.at_level("INFO", logger="duecoach"):
         await bot.checkin(db.get_user(uid))
     assert any(r.exc_info for r in caplog.records)  # a real failure keeps its traceback
+
+
+@pytest.fixture
+def seen_instructions(monkeypatch):
+    seen = []
+
+    async def fake_reply(uid, text, instruction=None):
+        seen.append(instruction)
+        return "hello"
+
+    class FakeChannel:
+        name = "telegram"
+
+        async def send(self, u, text):
+            pass
+
+    monkeypatch.setattr(llm, "reply", fake_reply)
+    monkeypatch.setitem(channels.REGISTRY, "telegram", FakeChannel())
+    return seen
+
+
+async def test_a_check_in_brings_back_a_parked_idea_once_and_not_again_the_same_day(clock, user, seen_instructions):
+    uid = user["user_id"]
+    enable_checkins(uid)
+    pid = db.park_idea(uid, "look up flights")
+    db._conn.execute("UPDATE parked SET created=?", (clock.t - 3 * 3600,))
+    await run_for(clock, 6)
+    assert seen_instructions[0].startswith(prompts.MORNING) and "look up flights" in seen_instructions[0]
+    row = db.open_parked(uid)[0]
+    assert row["id"] == pid and row["returns"] == 1
+    assert [i for i in seen_instructions[1:] if "look up flights" in (i or "")] == []
+
+
+async def test_a_re_engagement_check_in_never_carries_a_parked_idea(clock, user, seen_instructions):
+    uid = user["user_id"]
+    enable_checkins(uid, unanswered=1, last_proactive=clock.t - 86400)
+    db.park_idea(uid, "look up flights")
+    db._conn.execute("UPDATE parked SET created=? ", (clock.t - 3 * 3600,))
+    await run_for(clock, 6)
+    assert seen_instructions and all("look up flights" not in (i or "") for i in seen_instructions)
+    assert db.open_parked(uid)[0]["returns"] == 0

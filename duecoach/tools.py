@@ -143,6 +143,25 @@ TOOLS = [
         ["objective_id", "outcome"],
     ),
     _fn(
+        "park_idea",
+        "Set aside, on your own initiative, something the user drifted onto that is NOT what they are doing right now (an errand, a "
+        "new idea, a tangent) so they can stay on track and it is not lost; you bring it back later at a calm moment. Call it in the "
+        "same turn they drift, without asking. Not for their main topic, anything with a day and time (add_event / set_reminder), "
+        "feelings or anything about safety.",
+        {"text": {"type": "string", "description": "The idea in a few words, in the user's language, in their terms: never add to it."}},
+        ["text"],
+    ),
+    _fn(
+        "resolve_parked",
+        "Close a parked idea once it has been dealt with (by the id in the parked list): moved = it became a to-do or an event, "
+        "done = they did it, dropped = they no longer want it.",
+        {
+            "parked_id": {"type": "integer", "description": "The #id shown in the parked list."},
+            "outcome": {"type": "string", "enum": ["moved", "done", "dropped"]},
+        },
+        ["parked_id", "outcome"],
+    ),
+    _fn(
         "log_activity",
         "Note something the user told you they did, or are doing right now (finished the report, went for a run, started cleaning the "
         "kitchen, had the awkward call), so you can build on it later and suggest related next steps. Call it in the same turn they say "
@@ -443,6 +462,22 @@ def _remove_from_toolbox(uid: int, a: dict) -> str:
     return "ok: removed from the toolbox" if db.remove_tool(uid, int(a["tool_id"])) else "error: no such toolbox item"
 
 
+def _park_idea(uid: int, a: dict) -> str:
+    text = _text(a)
+    for p in db.open_parked(uid):
+        if _norm(p["text"]) == _norm(text) or _similar(p["text"], text):
+            return f"ok: already parked as #{p['id']}; not saved again"
+    pid = db.park_idea(uid, text)
+    return f"ok: parked as #{pid}" if pid else f"error: already {db.MAX_PARKED} parked ideas; resolve some first"
+
+
+def _resolve_parked(uid: int, a: dict) -> str:
+    outcome = str(a.get("outcome") or "")
+    if outcome not in ("moved", "done", "dropped"):
+        return "error: outcome must be moved, done or dropped"
+    return "ok: parked idea closed" if db.resolve_parked(uid, int(a["parked_id"]), outcome) else "error: no such parked idea"
+
+
 def _log_activity(uid: int, a: dict) -> str:
     text, status = _text(a), str(a.get("status") or "done")
     if status not in ("done", "doing"):
@@ -479,6 +514,8 @@ def _update_task(uid: int, a: dict) -> str:
 
 
 _DISPATCH = {
+    "park_idea": _park_idea,
+    "resolve_parked": _resolve_parked,
     "log_activity": _log_activity,
     "forget_activity": _forget_activity,
     "add_task": _add_task,
@@ -575,6 +612,15 @@ def coaching_state(user_id: int) -> str:
     if finished:
         lines.append("Ticked off in the last 3 days (worth a word of recognition, not a new question):")
         lines += [f"  {t['text']}" for t in finished]
+    parked = db.open_parked(user_id)
+    if parked:
+        lines.append(
+            "Parked ideas (set aside mid-conversation so they could stay on track; oldest first; bring one back only when nothing is "
+            "in progress, as a short offer they can take up, put on the list or let go):"
+        )
+        lines += [f"  #{p['id']} {p['text']}, parked {_ago(p['created'], zone)}" for p in parked]
+    else:
+        lines.append("Parked ideas: none.")
     acts = db.recent_activities(user_id)
     if acts:
         lines.append(
