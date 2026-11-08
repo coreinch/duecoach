@@ -123,3 +123,53 @@ async def test_the_parked_idea_cases_check_the_to_do_and_the_closing(scripted):
     drop = next(c for c in CASES if c.name == "letting_a_parked_idea_go_closes_it_without_a_to_do")
     scripted += [NO_AGREEMENT, message(calls=[("resolve_parked", {"parked_id": 1, "outcome": "dropped"})]), message("Gone."), message("NO")]
     assert await runner.run_once(drop) == []
+
+
+async def test_the_to_do_cases_check_saving_ticking_off_and_the_dated_exception(scripted):
+    saved = next(c for c in CASES if c.name == "a_todo_mentioned_in_passing_is_saved_without_a_made_up_time")
+    scripted += [
+        NO_AGREEMENT,
+        message(calls=[("add_task", {"text": "Email the landlord about the boiler"})]),
+        message("Noted."),
+        message("NO"),
+    ]
+    assert await runner.run_once(saved) == []
+    scripted += [NO_AGREEMENT, message("Good idea, do it today."), message("NO")]
+    assert await runner.run_once(saved) == ["database: the to-do was saved"]
+    dated = next(c for c in CASES if c.name == "a_task_with_a_day_and_time_is_not_a_todo")
+    scripted += [NO_AGREEMENT, message(calls=[("add_task", {"text": "Call the bank"})]), message("Noted.")]
+    assert await runner.run_once(dated) == ["database: nothing went on the to-do list", "database: an event or a reminder was set"]
+    done = next(c for c in CASES if c.name == "doing_a_todo_ticks_it_off")
+    scripted += [
+        NO_AGREEMENT,
+        message(calls=[("complete_task", {"task_id": 1})]),
+        message("Well done, that one was hanging over you."),
+        message("NO"),
+    ]
+    assert await runner.run_once(done) == []
+    scripted += [NO_AGREEMENT, message(calls=[("drop_task", {"task_id": 1})]), message("Removed."), message("NO")]
+    assert await runner.run_once(done) == ["database: it was ticked off, not dropped"]
+
+
+async def test_the_activity_cases_check_logging_plans_and_unasked_to_dos(scripted):
+    did = next(c for c in CASES if c.name == "what_they_did_is_noted_in_their_words_and_one_next_step_is_offered")
+    log = message(calls=[("log_activity", {"text": "Finished writing the quarterly report", "status": "done"})])
+    scripted += [NO_AGREEMENT, log, message("That one was big. Want to send it over now?"), message("NO"), message("NO"), message("NO")]
+    assert await runner.run_once(did) == []
+    scripted += [
+        NO_AGREEMENT,
+        message(calls=[("add_task", {"text": "Send the report"})]),
+        message("Added to your list."),
+        message("NO"),
+        message("NO"),
+        message("NO"),
+    ]
+    assert await runner.run_once(did) == ["database: the activity was noted as done", "database: nothing was put on the to-do list unasked"]
+    plan = next(c for c in CASES if c.name == "a_plan_is_not_logged_as_something_done")
+    scripted += [
+        NO_AGREEMENT,
+        message(calls=[("log_activity", {"text": "Cleaned the garage", "status": "done"})]),
+        message("Nice."),
+        message("NO"),
+    ]
+    assert await runner.run_once(plan) == ["database: nothing was logged as an activity"]
