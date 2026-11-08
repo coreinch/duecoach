@@ -98,3 +98,28 @@ async def test_an_outage_during_a_check_in_case_is_a_failure_not_a_pass(monkeypa
     assert (await runner.run_once(case))[0].startswith("the model failed")
     monkeypatch.setattr(llm, "reply", withheld)
     assert await runner.run_once(case) == []
+
+
+async def test_the_parking_case_passes_only_when_the_idea_is_parked_and_the_reply_is_clean(scripted):
+    case = next(c for c in CASES if c.name == "a_tangent_during_a_sprint_is_parked_without_asking")
+    park = message(calls=[("park_idea", {"text": "look up flights to Rome"})])
+    scripted += [NO_AGREEMENT, park, message("Parked: flights to Rome. Back to the report."), message("NO"), message("NO"), message("NO")]
+    assert await runner.run_once(case) == []
+    scripted += [NO_AGREEMENT, message("Sure, what dates are you flying?"), message("YES"), message("YES"), message("NO")]
+    failed = await runner.run_once(case)
+    assert "database: the idea was parked" in failed and sum(line.startswith("judge said YES") for line in failed) == 2
+
+
+async def test_the_parked_idea_cases_check_the_to_do_and_the_closing(scripted):
+    yes = next(c for c in CASES if c.name == "saying_yes_to_a_parked_idea_puts_it_on_the_list_and_closes_it")
+    scripted += [
+        NO_AGREEMENT,
+        message(calls=[("add_task", {"text": "Look up flights to Rome"}), ("resolve_parked", {"parked_id": 1, "outcome": "moved"})]),
+        message("On your list."),
+    ]
+    assert await runner.run_once(yes) == []
+    scripted += [NO_AGREEMENT, message("Great, I'll remember that.")]
+    assert await runner.run_once(yes) == ["database: a to-do about flights was saved", "database: the parked idea was closed"]
+    drop = next(c for c in CASES if c.name == "letting_a_parked_idea_go_closes_it_without_a_to_do")
+    scripted += [NO_AGREEMENT, message(calls=[("resolve_parked", {"parked_id": 1, "outcome": "dropped"})]), message("Gone."), message("NO")]
+    assert await runner.run_once(drop) == []

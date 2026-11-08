@@ -206,6 +206,33 @@ def _event_tomorrow_1030() -> bool:
     return when.date() == tomorrow and (when.hour, when.minute) == (10, 30)
 
 
+def _sprint_on_the_report() -> None:
+    _chat(
+        "user: starting a 25 minute sprint on the quarterly report",
+        "assistant: Good pick. Open the report and write the first section. I'll stay quiet until the timer ends.",
+    )
+    db.add_reminder(UID, _in_hours(0.3), "25 minutes are up: how far did the report get?")
+    db.set_field(UID, "last_inbound", _in_hours(-0.1))
+
+
+def _parked_flights(hours_ago: float = 3) -> None:
+    db.park_idea(UID, "look up flights to Rome")
+    db._conn.execute("UPDATE parked SET created=?", (time.time() - hours_ago * 3600,))
+    db._conn.commit()
+
+
+def _parked_idea_offered() -> None:
+    _parked_flights()
+    _chat(
+        "user: ok, back to normal",
+        "assistant: Earlier you set aside looking up flights to Rome. Want to do it now, put it on your list, or let it go?",
+    )
+
+
+def _tasks_mention(word: str) -> bool:
+    return any(word in t["text"].lower() for t in db.open_tasks(UID))
+
+
 CASES = [
     Case(
         "checkin_before_the_appointment",
@@ -575,5 +602,85 @@ CASES = [
         judge=[
             "Does the message say or assume where the user is or what they have just done or are doing (for example being at their desk, having had coffee, being back from something) when they never said so?"
         ],
+    ),
+    Case(
+        "a_tangent_during_a_sprint_is_parked_without_asking",
+        "mid-sprint 'I need to look up flights' either derailed the sprint (the coach started planning the trip) or was lost",
+        _sprint_on_the_report,
+        user_text="oh I just remembered I need to look up flights to Rome",
+        instruction=None,
+        database=[("the idea was parked", lambda: any("flight" in p["text"].lower() for p in db.open_parked(UID)))],
+        judge=[
+            "Does the reply start helping with the flights or the trip itself (asks about dates, budget or airlines, suggests sites or plans it) instead of keeping the user on the report?",
+            "Does the reply leave out any sign that the idea was noted, saved or set aside for later?",
+            "Does the reply ask the user whether they would like it parked or saved, instead of just saying it is done?",
+        ],
+    ),
+    Case(
+        "the_main_topic_is_not_parked",
+        "the thing the user came to talk about must be coached, never set aside as a tangent",
+        lambda: _chat("assistant: What's on your mind today?"),
+        user_text="I keep putting off my taxes and it's stressing me out, can we work on that?",
+        instruction=None,
+        database=[("nothing was parked", lambda: not db.open_parked(UID))],
+        judge=["Does the reply decline to talk about the taxes now, or say it has set the taxes aside for later?"],
+    ),
+    Case(
+        "a_feeling_during_a_sprint_is_not_parked",
+        "feelings are never parked: the coach stays with them instead of steering back to the task",
+        _sprint_on_the_report,
+        user_text="ugh, I feel like such a failure today, I never finish anything",
+        instruction=None,
+        database=[("nothing was parked", lambda: not db.open_parked(UID))],
+        judge=["Does the reply ignore how they feel and only tell them to go back to the report or the timer?"],
+    ),
+    Case(
+        "an_appointment_during_a_sprint_is_an_event_not_a_parked_idea",
+        "a thing with a day and a time belongs in the events list, not in the parked ideas",
+        _sprint_on_the_report,
+        user_text="oh and I have the dentist next Friday at 14:30",
+        instruction=None,
+        database=[
+            ("nothing was parked", lambda: not db.open_parked(UID)),
+            ("one upcoming event was saved", lambda: len([e for e in _events() if e["status"] == "upcoming"]) == 1),
+        ],
+    ),
+    Case(
+        "a_checkin_brings_back_one_parked_idea_as_a_short_offer",
+        "a parked idea that is never brought back is lost; one that is brought back with invented details or several questions is nagging",
+        lambda: (
+            _parked_flights(),
+            _chat("assistant: Morning. What is the plan?", "user: slow start today"),
+            db.set_field(UID, "last_inbound", _in_hours(-2)),
+        ),
+        instruction=prompts.PULSE + prompts.PARKED_RETURN.format(idea="look up flights to Rome"),
+        judge=[
+            "Does the message leave out the idea entirely (it never mentions looking up flights)?",
+            "Does the message add details about the trip that the user never gave (dates, budget, airline, who is travelling)?",
+            "Does the message ask more than one question?",
+        ],
+    ),
+    Case(
+        "saying_yes_to_a_parked_idea_puts_it_on_the_list_and_closes_it",
+        "taking up a parked idea must end with a to-do and a closed parked entry, or it is offered again and again",
+        _parked_idea_offered,
+        user_text="yes, put it on my list",
+        instruction=None,
+        database=[
+            ("a to-do about flights was saved", lambda: _tasks_mention("flight")),
+            ("the parked idea was closed", lambda: not db.open_parked(UID)),
+        ],
+    ),
+    Case(
+        "letting_a_parked_idea_go_closes_it_without_a_to_do",
+        "'let it go' must drop the parked idea and not turn it into a task",
+        _parked_idea_offered,
+        user_text="nah, let that one go",
+        instruction=None,
+        database=[
+            ("the parked idea was closed", lambda: not db.open_parked(UID)),
+            ("no to-do was created", lambda: not db.open_tasks(UID)),
+        ],
+        judge=["Does the reply push the flights again or offer to do them anyway?"],
     ),
 ]
