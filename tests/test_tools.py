@@ -251,3 +251,28 @@ def test_the_to_do_list_is_capped_private_and_old_finished_items_are_pruned(user
     run(uid, "complete_task", task_id=tid)
     db._conn.execute("UPDATE tasks SET closed=? WHERE id=?", (time.time() - 30 * 86400, tid))
     assert db.prune_tasks() == 1
+
+
+def test_activities_are_noted_shown_deduplicated_forgotten_and_pruned(user):
+    uid = user["user_id"]
+    other = db.get_or_create_user("telegram", "2002", "2002")["user_id"]
+    assert "nothing noted yet" in tools.coaching_state(uid)
+    assert run(uid, "log_activity", text="Finished the quarterly report", status="done").startswith("ok: noted as #")
+    assert "already noted" in run(uid, "log_activity", text=" finished the quarterly report. ", status="done")
+    assert run(uid, "log_activity", text="Cleaning the kitchen", status="doing").startswith("ok")
+    assert run(uid, "log_activity", text="x", status="maybe").startswith("error")
+    state = tools.coaching_state(uid)
+    assert "[done] Finished the quarterly report" in state and "[doing] Cleaning the kitchen" in state
+    first = db.recent_activities(uid)[0]["id"]
+    assert run(other, "forget_activity", activity_id=first).startswith("error")  # not another user's note
+    assert run(uid, "forget_activity", activity_id=first) == "ok: forgotten"
+    db._conn.execute("UPDATE activities SET created=?", (time.time() - 40 * 86400,))
+    assert db.prune_activities() == 1 and db.recent_activities(uid, 365) == []
+
+
+def test_the_activity_log_keeps_only_the_newest_hundred(user):
+    uid = user["user_id"]
+    for i in range(db.MAX_ACTIVITIES + 5):
+        db.add_activity(uid, f"thing {i}", "done")
+    count = db._conn.execute("SELECT COUNT(*) FROM activities WHERE user_id=?", (uid,)).fetchone()[0]
+    assert count == db.MAX_ACTIVITIES

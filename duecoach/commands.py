@@ -75,6 +75,13 @@ async def _tasks(uid, args):
     return f"{say(uid, 'TASKS_HEADER')}:\n" + "\n".join(f"• {t['text']}" for t in items)
 
 
+async def _log(uid, args):
+    items = db.recent_activities(uid)
+    if not items:
+        return say(uid, "LOG_EMPTY")
+    return f"{say(uid, 'LOG_HEADER')}:\n" + "\n".join(f"• {a['text']}" + (" …" if a["status"] == "doing" else "") for a in items)
+
+
 async def _progress(uid, args):
     return await coach(uid, "/progress", prompts.PROGRESS)
 
@@ -192,6 +199,7 @@ COMMANDS = {
     "wrong": _wrong,
     "toolbox": _toolbox,
     "tasks": _tasks,
+    "log": _log,
     "progress": _progress,
     "timezone": _timezone,
     "language": _language,

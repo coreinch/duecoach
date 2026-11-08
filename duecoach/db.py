@@ -270,6 +270,13 @@ def _m13_tasks() -> None:
     _conn.execute("CREATE INDEX IF NOT EXISTS idx_tasks_user ON tasks (user_id, status)")
 
 
+def _m14_activities() -> None:
+    """What the user said they did or are doing, in short lines, so the coach can build on it and suggest related next steps."""
+    _conn.execute("CREATE TABLE IF NOT EXISTS activities (id INTEGER PRIMARY KEY)")
+    _ensure_columns("activities", {"user_id": "INTEGER", "text": "TEXT", "status": "TEXT DEFAULT 'done'", "created": "REAL"})
+    _conn.execute("CREATE INDEX IF NOT EXISTS idx_activities_user ON activities (user_id, created)")
+
+
 MIGRATIONS = [
     _m1_baseline,
     _m2_consent_and_resilience,
@@ -284,6 +291,7 @@ MIGRATIONS = [
     _m11_flagged_drafts,
     _m12_clock_reminders_and_nudge,
     _m13_tasks,
+    _m14_activities,
 ]
 
 
@@ -516,7 +524,19 @@ def delete_inactive_users(days: int) -> int:
 
 def delete_user_data(user_id: int) -> None:
     """Erase everything stored about this user."""
-    for table in ("messages", "reminders", "goals", "objectives", "toolbox", "tasks", "events", "turn_stats", "flags", "flagged_drafts"):
+    for table in (
+        "messages",
+        "reminders",
+        "goals",
+        "objectives",
+        "toolbox",
+        "tasks",
+        "activities",
+        "events",
+        "turn_stats",
+        "flags",
+        "flagged_drafts",
+    ):
         _conn.execute(f"DELETE FROM {table} WHERE user_id=?", (user_id,))
     _conn.execute("DELETE FROM users WHERE user_id=?", (user_id,))
     _conn.commit()
@@ -884,5 +904,41 @@ def update_task(user_id: int, task_id: int, text: str) -> bool:
 
 def prune_tasks(days: int = TASK_KEEP_DAYS) -> int:
     cur = _conn.execute("DELETE FROM tasks WHERE status!='open' AND closed<?", (time.time() - days * 86400,))
+    _conn.commit()
+    return cur.rowcount
+
+
+# --- activities: what the user says they did or are doing ---
+
+ACTIVITY_KEEP_DAYS = 30
+MAX_ACTIVITIES = 100  # per user; the oldest go first
+
+
+def add_activity(user_id: int, text: str, status: str) -> int:
+    cur = _conn.execute("INSERT INTO activities (user_id, text, status, created) VALUES (?,?,?,?)", (user_id, text, status, time.time()))
+    _conn.execute(
+        "DELETE FROM activities WHERE user_id=? AND id NOT IN (SELECT id FROM activities WHERE user_id=? ORDER BY id DESC LIMIT ?)",
+        (user_id, user_id, MAX_ACTIVITIES),
+    )
+    _conn.commit()
+    return cur.lastrowid or 0
+
+
+def recent_activities(user_id: int, days: int = 7, n: int = 15) -> list[sqlite3.Row]:
+    """The newest `n` from the last `days` days, oldest first."""
+    rows = _conn.execute(
+        "SELECT * FROM activities WHERE user_id=? AND created>? ORDER BY id DESC LIMIT ?", (user_id, time.time() - days * 86400, n)
+    ).fetchall()
+    return rows[::-1]
+
+
+def forget_activity(user_id: int, activity_id: int) -> bool:
+    cur = _conn.execute("DELETE FROM activities WHERE id=? AND user_id=?", (activity_id, user_id))
+    _conn.commit()
+    return cur.rowcount == 1
+
+
+def prune_activities(days: int = ACTIVITY_KEEP_DAYS) -> int:
+    cur = _conn.execute("DELETE FROM activities WHERE created<?", (time.time() - days * 86400,))
     _conn.commit()
     return cur.rowcount
