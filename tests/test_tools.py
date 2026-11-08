@@ -221,3 +221,33 @@ def test_a_reminder_cancelled_after_its_time_would_have_passed_is_not_listed_as_
     db._conn.execute("UPDATE reminders SET due=?", (time.time() - 600,))  # its time came and went while it was still waiting
     assert db.cancel_reminder(uid, rid)
     assert "already delivered" not in tools.coaching_state(uid) and db.recent_reminders(uid, 1) == []
+
+
+def test_the_to_do_list_is_kept_shown_ticked_off_and_not_duplicated(user):
+    uid = user["user_id"]
+    assert run(uid, "add_task", text="Email the landlord about the boiler").startswith("ok: to-do #")
+    assert "already on the to-do list" in run(uid, "add_task", text="  email the landlord about the boiler. ")
+    run(uid, "add_task", text="Renew passport")
+    state = tools.coaching_state(uid)
+    assert "To-do list" in state and "Email the landlord about the boiler" in state and "Renew passport" in state
+    first, second = (t["id"] for t in db.open_tasks(uid))
+    assert run(uid, "update_task", task_id=second, text="Book passport photo").startswith("ok")
+    assert run(uid, "complete_task", task_id=first) == "ok: ticked off"
+    assert run(uid, "complete_task", task_id=first).startswith("error")  # already closed
+    state = tools.coaching_state(uid)
+    assert "Ticked off in the last 3 days" in state and "Book passport photo" in state
+    assert run(uid, "drop_task", task_id=second).startswith("ok")
+    assert "To-do list: empty." in tools.coaching_state(uid)
+
+
+def test_the_to_do_list_is_capped_private_and_old_finished_items_are_pruned(user):
+    uid = user["user_id"]
+    other = db.get_or_create_user("telegram", "2002", "2002")["user_id"]
+    for i in range(db.MAX_OPEN_TASKS):
+        assert run(uid, "add_task", text=f"unique chore number {i} alpha{i}").startswith("ok")
+    assert run(uid, "add_task", text="one more entirely different thing").startswith("error: already")
+    tid = db.open_tasks(uid)[0]["id"]
+    assert run(other, "complete_task", task_id=tid).startswith("error")  # not another user's item
+    run(uid, "complete_task", task_id=tid)
+    db._conn.execute("UPDATE tasks SET closed=? WHERE id=?", (time.time() - 30 * 86400, tid))
+    assert db.prune_tasks() == 1

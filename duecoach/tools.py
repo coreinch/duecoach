@@ -143,6 +143,33 @@ TOOLS = [
         ["objective_id", "outcome"],
     ),
     _fn(
+        "add_task",
+        "Put something on the user's running to-do list: a thing they said they want or need to do that has NO set time (with a day and "
+        "a time use add_event or set_reminder instead). Call it in the same turn they mention it ('I need to email the landlord', "
+        "'I keep meaning to renew my passport'), so it is not forgotten. Not for coaching goals or weekly steps (use add_goal / "
+        "add_objective) and not for facts about them.",
+        {"text": {"type": "string", "description": "The thing to do, short, starting with a verb, in the user's language."}},
+        ["text"],
+    ),
+    _fn(
+        "complete_task",
+        "Tick a to-do off when the user says they did it (by the id in the to-do list).",
+        {"task_id": {"type": "integer", "description": "The #id shown in the to-do list."}},
+        ["task_id"],
+    ),
+    _fn(
+        "drop_task",
+        "Remove a to-do the user no longer wants or needs to do, or one saved by mistake (by the id in the to-do list).",
+        {"task_id": {"type": "integer", "description": "The #id shown in the to-do list."}},
+        ["task_id"],
+    ),
+    _fn(
+        "update_task",
+        "Reword an open to-do, for example to a smaller first step, when the user changes it (by the id in the to-do list).",
+        {"task_id": {"type": "integer"}, "text": {"type": "string", "description": "The new wording."}},
+        ["task_id", "text"],
+    ),
+    _fn(
         "save_to_toolbox",
         "Save a coping strategy that actually worked for the user (or a mantra they chose) so you can bring it back later. Only that: "
         "never facts about them, their projects, names, or anything you were told rather than something that helped.",
@@ -395,7 +422,32 @@ def _remove_from_toolbox(uid: int, a: dict) -> str:
     return "ok: removed from the toolbox" if db.remove_tool(uid, int(a["tool_id"])) else "error: no such toolbox item"
 
 
+def _add_task(uid: int, a: dict) -> str:
+    text = _text(a)
+    for t in db.open_tasks(uid):
+        if _norm(t["text"]) == _norm(text) or _similar(t["text"], text):
+            return f"ok: already on the to-do list as #{t['id']}; not saved again"
+    tid = db.add_task(uid, text)
+    return f"ok: to-do #{tid} saved" if tid else f"error: already {db.MAX_OPEN_TASKS} open to-dos; finish or drop some first"
+
+
+def _complete_task(uid: int, a: dict) -> str:
+    return "ok: ticked off" if db.close_task(uid, int(a["task_id"]), "done") else "error: no such open to-do"
+
+
+def _drop_task(uid: int, a: dict) -> str:
+    return "ok: removed from the to-do list" if db.close_task(uid, int(a["task_id"]), "dropped") else "error: no such open to-do"
+
+
+def _update_task(uid: int, a: dict) -> str:
+    return "ok: reworded" if db.update_task(uid, int(a["task_id"]), _text(a)) else "error: no such open to-do"
+
+
 _DISPATCH = {
+    "add_task": _add_task,
+    "complete_task": _complete_task,
+    "drop_task": _drop_task,
+    "update_task": _update_task,
     "set_timezone": _set_timezone,
     "skip_timezone": _skip_timezone,
     "set_checkins": _set_checkins,
@@ -474,6 +526,18 @@ def coaching_state(user_id: int) -> str:
         for o in closed:
             detail = ", ".join(x for x in (o["barrier"], o["note"]) if x)
             lines.append(f"  #{o['id']} {o['status']}: {o['text']}" + (f" ({detail})" if detail else ""))
+    todo = db.open_tasks(user_id)
+    lines.append(
+        "To-do list (things they said they want or need to do, no set time; oldest first; bring them back gently when it fits):"
+        if todo
+        else "To-do list: empty."
+    )
+    for t in todo:
+        lines.append(f"  #{t['id']} {t['text']}, on the list since {_ago(t['created'], zone)}")
+    finished = db.recent_finished_tasks(user_id)
+    if finished:
+        lines.append("Ticked off in the last 3 days (worth a word of recognition, not a new question):")
+        lines += [f"  {t['text']}" for t in finished]
     reminders = db.pending_reminders(user_id)
     lines.append("Reminders waiting (already set, don't set them again):" if reminders else "Reminders waiting: none.")
     for r in reminders:

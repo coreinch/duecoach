@@ -253,6 +253,23 @@ def _m12_clock_reminders_and_nudge() -> None:
     _conn.execute("CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT)")  # small facts about the bot itself
 
 
+def _m13_tasks() -> None:
+    """A running to-do list: things the user said they want or need to do, with no time attached, so the coach can bring them back."""
+    _conn.execute("CREATE TABLE IF NOT EXISTS tasks (id INTEGER PRIMARY KEY)")
+    _ensure_columns(
+        "tasks",
+        {
+            "user_id": "INTEGER",
+            "text": "TEXT",
+            "status": "TEXT DEFAULT 'open'",
+            "created": "REAL",
+            "closed": "REAL DEFAULT 0",
+            "last_nudged": "REAL DEFAULT 0",
+        },
+    )
+    _conn.execute("CREATE INDEX IF NOT EXISTS idx_tasks_user ON tasks (user_id, status)")
+
+
 MIGRATIONS = [
     _m1_baseline,
     _m2_consent_and_resilience,
@@ -266,6 +283,7 @@ MIGRATIONS = [
     _m10_events_stats_flags,
     _m11_flagged_drafts,
     _m12_clock_reminders_and_nudge,
+    _m13_tasks,
 ]
 
 
@@ -498,7 +516,7 @@ def delete_inactive_users(days: int) -> int:
 
 def delete_user_data(user_id: int) -> None:
     """Erase everything stored about this user."""
-    for table in ("messages", "reminders", "goals", "objectives", "toolbox", "events", "turn_stats", "flags", "flagged_drafts"):
+    for table in ("messages", "reminders", "goals", "objectives", "toolbox", "tasks", "events", "turn_stats", "flags", "flagged_drafts"):
         _conn.execute(f"DELETE FROM {table} WHERE user_id=?", (user_id,))
     _conn.execute("DELETE FROM users WHERE user_id=?", (user_id,))
     _conn.commit()
@@ -822,3 +840,49 @@ def remove_tool(user_id: int, tool_id: int) -> bool:
 
 def toolbox(user_id: int, n: int = MAX_TOOLBOX) -> list[sqlite3.Row]:
     return _conn.execute("SELECT * FROM toolbox WHERE user_id=? ORDER BY id DESC LIMIT ?", (user_id, n)).fetchall()
+
+
+# --- tasks: the running to-do list ---
+
+MAX_OPEN_TASKS = 25
+TASK_KEEP_DAYS = 14  # finished and dropped tasks stay this long so the coach can celebrate them, then go
+
+
+def add_task(user_id: int, text: str) -> int | None:
+    """None when the list is full."""
+    if len(open_tasks(user_id)) >= MAX_OPEN_TASKS:
+        return None
+    cur = _conn.execute("INSERT INTO tasks (user_id, text, created) VALUES (?,?,?)", (user_id, text, time.time()))
+    _conn.commit()
+    return cur.lastrowid
+
+
+def open_tasks(user_id: int) -> list[sqlite3.Row]:
+    """Oldest-waiting first."""
+    return _conn.execute("SELECT * FROM tasks WHERE user_id=? AND status='open' ORDER BY id", (user_id,)).fetchall()
+
+
+def recent_finished_tasks(user_id: int, days: int = 3) -> list[sqlite3.Row]:
+    return _conn.execute(
+        "SELECT * FROM tasks WHERE user_id=? AND status='done' AND closed>? ORDER BY closed", (user_id, time.time() - days * 86400)
+    ).fetchall()
+
+
+def close_task(user_id: int, task_id: int, status: str) -> bool:
+    cur = _conn.execute(
+        "UPDATE tasks SET status=?, closed=? WHERE id=? AND user_id=? AND status='open'", (status, time.time(), task_id, user_id)
+    )
+    _conn.commit()
+    return cur.rowcount == 1
+
+
+def update_task(user_id: int, task_id: int, text: str) -> bool:
+    cur = _conn.execute("UPDATE tasks SET text=? WHERE id=? AND user_id=? AND status='open'", (text, task_id, user_id))
+    _conn.commit()
+    return cur.rowcount == 1
+
+
+def prune_tasks(days: int = TASK_KEEP_DAYS) -> int:
+    cur = _conn.execute("DELETE FROM tasks WHERE status!='open' AND closed<?", (time.time() - days * 86400,))
+    _conn.commit()
+    return cur.rowcount

@@ -106,6 +106,7 @@ def test_delete_user_data_removes_everything(user):
     db.add_goal(uid, "g")
     db.add_objective(uid, None, "o", "")
     db.add_tool(uid, "t")
+    db.add_task(uid, "email the landlord")
     db.add_reminder(uid, 0, "r")
     db.add_event(uid, "Dentist", time.time() + 3600)
     db.add_turn_stat(uid, "reply", "sent", [], [], 1, 0.5)
@@ -114,7 +115,7 @@ def test_delete_user_data_removes_everything(user):
     db.add_flagged_draft(uid, ["off_target"], "hi", "a draft", "why")
     db.delete_user_data(uid)
     assert db.get_user(uid) is None
-    for table in ("messages", "goals", "objectives", "toolbox", "reminders", "events", "turn_stats", "flags", "flagged_drafts"):
+    for table in ("messages", "goals", "objectives", "toolbox", "tasks", "reminders", "events", "turn_stats", "flags", "flagged_drafts"):
         assert db._conn.execute(f"SELECT COUNT(*) FROM {table} WHERE user_id=?", (uid,)).fetchone()[0] == 0
 
 
