@@ -277,6 +277,24 @@ def _m14_activities() -> None:
     _conn.execute("CREATE INDEX IF NOT EXISTS idx_activities_user ON activities (user_id, created)")
 
 
+def _m15_parked() -> None:
+    """Ideas the coach set aside on the user's behalf mid-conversation so they could stay on track, to bring back at a calm moment."""
+    _conn.execute("CREATE TABLE IF NOT EXISTS parked (id INTEGER PRIMARY KEY)")
+    _ensure_columns(
+        "parked",
+        {
+            "user_id": "INTEGER",
+            "text": "TEXT",
+            "status": "TEXT DEFAULT 'parked'",
+            "created": "REAL",
+            "closed": "REAL DEFAULT 0",
+            "returned_at": "REAL DEFAULT 0",
+            "returns": "INTEGER DEFAULT 0",
+        },
+    )
+    _conn.execute("CREATE INDEX IF NOT EXISTS idx_parked_user ON parked (user_id, status)")
+
+
 MIGRATIONS = [
     _m1_baseline,
     _m2_consent_and_resilience,
@@ -292,6 +310,7 @@ MIGRATIONS = [
     _m12_clock_reminders_and_nudge,
     _m13_tasks,
     _m14_activities,
+    _m15_parked,
 ]
 
 
@@ -532,6 +551,7 @@ def delete_user_data(user_id: int) -> None:
         "toolbox",
         "tasks",
         "activities",
+        "parked",
         "events",
         "turn_stats",
         "flags",
@@ -940,5 +960,62 @@ def forget_activity(user_id: int, activity_id: int) -> bool:
 
 def prune_activities(days: int = ACTIVITY_KEEP_DAYS) -> int:
     cur = _conn.execute("DELETE FROM activities WHERE created<?", (time.time() - days * 86400,))
+    _conn.commit()
+    return cur.rowcount
+
+
+# --- parked ideas: set aside mid-conversation, brought back later ---
+
+MAX_PARKED = 20
+PARKED_KEEP_DAYS = 30  # an idea nobody took up in a month goes; resolved ones stay a fortnight
+PARKED_SETTLE_SECONDS = 2 * 3600  # a fresh idea is not brought back in the same sitting
+PARKED_RETURN_GAP_SECONDS = 2 * 86400  # one idea is brought back at most every two days
+PARKED_MAX_RETURNS = 3  # then it stays on the list, but the coach stops raising it
+
+
+def park_idea(user_id: int, text: str) -> int | None:
+    """None when the list is full."""
+    if len(open_parked(user_id)) >= MAX_PARKED:
+        return None
+    cur = _conn.execute("INSERT INTO parked (user_id, text, created) VALUES (?,?,?)", (user_id, text, time.time()))
+    _conn.commit()
+    return cur.lastrowid
+
+
+def open_parked(user_id: int) -> list[sqlite3.Row]:
+    """Oldest first."""
+    return _conn.execute("SELECT * FROM parked WHERE user_id=? AND status='parked' ORDER BY id", (user_id,)).fetchall()
+
+
+def resolve_parked(user_id: int, parked_id: int, status: str) -> bool:
+    cur = _conn.execute(
+        "UPDATE parked SET status=?, closed=? WHERE id=? AND user_id=? AND status='parked'", (status, time.time(), parked_id, user_id)
+    )
+    _conn.commit()
+    return cur.rowcount == 1
+
+
+def parked_to_return(user_id: int) -> sqlite3.Row | None:
+    """The idea a check-in should bring back now: the oldest one that has settled and was not raised too often, and only if none was raised lately."""
+    now = time.time()
+    return _conn.execute(
+        "SELECT * FROM parked WHERE user_id=? AND status='parked' AND created<? AND returns<?"
+        " AND NOT EXISTS (SELECT 1 FROM parked p WHERE p.user_id=? AND p.status='parked' AND p.returned_at>=?)"
+        " ORDER BY id LIMIT 1",
+        (user_id, now - PARKED_SETTLE_SECONDS, PARKED_MAX_RETURNS, user_id, now - PARKED_RETURN_GAP_SECONDS),
+    ).fetchone()
+
+
+def mark_parked_returned(parked_id: int) -> None:
+    _conn.execute("UPDATE parked SET returned_at=?, returns=returns+1 WHERE id=?", (time.time(), parked_id))
+    _conn.commit()
+
+
+def prune_parked() -> int:
+    now = time.time()
+    cur = _conn.execute(
+        "DELETE FROM parked WHERE (status='parked' AND created<?) OR (status!='parked' AND closed<?)",
+        (now - PARKED_KEEP_DAYS * 86400, now - 14 * 86400),
+    )
     _conn.commit()
     return cur.rowcount

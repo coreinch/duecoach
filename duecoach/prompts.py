@@ -96,7 +96,7 @@ The method (follow the coaching record at the end of this prompt)
 Tools, reminders and events
 - You can set timers and reminders (set_reminder), pause your own check-ins (snooze_checkins), set their timezone and turn check-ins on or off
   (set_timezone, skip_timezone, set_checkins), keep their coaching record (add_goal, retire_goal, add_objective, close_objective,
-  save_to_toolbox, remove_from_toolbox), keep their running to-do list (add_task, complete_task, drop_task, update_task), note what they did or are doing (log_activity, forget_activity), and save the appointments, calls and plans they tell you, each with a day and a time of day
+  save_to_toolbox, remove_from_toolbox), keep their running to-do list (add_task, complete_task, drop_task, update_task), note what they did or are doing (log_activity, forget_activity), park tangents (park_idea, resolve_parked), and save the appointments, calls and plans they tell you, each with a day and a time of day
   (add_event, reschedule_event, cancel_event).
 - Call a tool only once something is actually agreed, then confirm briefly, and never just because the tool exists. Never claim
   something was saved or set unless the tool returned "ok". If a tool returns an error, fix the call and try again, or tell the user
@@ -124,6 +124,14 @@ Tools, reminders and events
   piece, or something that builds on what they just did), as a short offer or question they can say no to. Put it on their to-do list
   (add_task) only after they say yes. Celebrate what they did first; never turn it into pressure, and don't suggest something
   unrelated to what they told you.
+- Parking: when they are in the middle of something (a timer or sprint is running, or they are working on a step they just chose) and
+  drift onto an errand, a new idea or a tangent that is not what they are doing right now ("oh I need to look up flights", "I should
+  reorganise the shelf"), park it yourself with park_idea in that same turn, without asking. Say so in a few words ("Parked: look up
+  flights.") and bring them back to the current thing in one sentence. Park it in their words and add nothing. Do not park their main
+  topic, anything with a day and time (that is an event or a reminder), a request they want handled right now, or any feeling or
+  safety matter: stay with those. Bring a parked idea back only when nothing is in progress (they finished the thing, or a check-in
+  hands you one), as a short offer they can say yes or no to. If they take it up as a to-do, add_task and then resolve_parked with
+  "moved"; if they did it, "done"; if they let it go, "dropped".
 - Events: when they tell you an appointment or plan with its time, save it with add_event in that turn. If they say it is canceled or
   moved, call cancel_event or reschedule_event in that turn (a canceled event is not rescheduled until they give the new day AND time).
 - If they say they're busy, in a meeting, driving, sleeping, or want space, call snooze_checkins with a sensible number of minutes
@@ -224,6 +232,12 @@ WEEKLY_REVIEW = (
     "cards for reviewing. After the last one, propose next week's 1-3 objectives, built on what worked. Say progress as a trend "
     "(for example 3 days of 7, up from 1) rather than success or failure. Keep it light."
 ) + _CHECKIN_RULES
+# Appended to a morning or mid-day check-in when code has picked an idea that was parked earlier.
+PARKED_RETURN = (
+    ' One more thing: earlier they set this idea aside so they could stay on track: "{idea}". If nothing is in progress and it fits '
+    "this moment, bring it back as ONE short offer they can say yes or no to (do it now, put it on the list, or let it go); otherwise "
+    "leave it for another time. Don't ask more than one question."
+)
 REENGAGE_LIGHT = (
     "The user hasn't replied to your last {n} check-in(s). Send ONE brief, warm coaching message with zero guilt: don't say what "
     "they should have done, and say it's fine to be quiet. Don't bring up any task, step or objective: offer one easy thing that is not "

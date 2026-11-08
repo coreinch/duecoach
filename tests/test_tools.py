@@ -288,3 +288,46 @@ def test_the_activity_view_covers_two_weeks_and_up_to_thirty_entries(user):
     for i in range(40):
         db.add_activity(uid, f"thing {i}", "done")
     assert len(db.recent_activities(uid)) == 30
+
+
+def test_parked_ideas_are_saved_shown_deduplicated_resolved_capped_and_private(user):
+    uid = user["user_id"]
+    other = db.get_or_create_user("telegram", "2002", "2002")["user_id"]
+    assert "Parked ideas: none." in tools.coaching_state(uid)
+    assert run(uid, "park_idea", text="Look up flights to Rome").startswith("ok: parked as #")
+    assert "already parked" in run(uid, "park_idea", text=" look up flights to rome. ")
+    assert "Look up flights to Rome" in tools.coaching_state(uid)
+    pid = db.open_parked(uid)[0]["id"]
+    assert run(other, "resolve_parked", parked_id=pid, outcome="done").startswith("error")  # not another user's idea
+    assert run(uid, "resolve_parked", parked_id=pid, outcome="bogus").startswith("error")
+    assert run(uid, "resolve_parked", parked_id=pid, outcome="moved") == "ok: parked idea closed"
+    assert run(uid, "resolve_parked", parked_id=pid, outcome="moved").startswith("error")  # already closed
+    for i in range(db.MAX_PARKED):
+        assert run(uid, "park_idea", text=f"unrelated idea number {i} zz{i}").startswith("ok")
+    assert run(uid, "park_idea", text="one more entirely different thing").startswith("error: already")
+
+
+def test_a_parked_idea_comes_back_once_it_has_settled_and_not_too_often(user):
+    uid = user["user_id"]
+    assert db.parked_to_return(uid) is None
+    pid = db.park_idea(uid, "look up flights")
+    assert db.parked_to_return(uid) is None  # parked a moment ago: not in the same sitting
+    db._conn.execute("UPDATE parked SET created=?", (time.time() - 3 * 3600,))
+    assert db.parked_to_return(uid)["id"] == pid
+    db.mark_parked_returned(pid)
+    assert db.parked_to_return(uid) is None  # raised just now
+    db._conn.execute("UPDATE parked SET returned_at=?", (time.time() - 3 * 86400,))
+    assert db.parked_to_return(uid)["id"] == pid  # two days later it may come back
+    db._conn.execute("UPDATE parked SET returns=?", (db.PARKED_MAX_RETURNS,))
+    assert db.parked_to_return(uid) is None  # raised often enough: it stays on the list, but is not pushed
+    assert len(db.open_parked(uid)) == 1
+
+
+def test_old_parked_ideas_are_pruned(user):
+    uid = user["user_id"]
+    old, fresh, done = db.park_idea(uid, "old idea"), db.park_idea(uid, "fresh idea"), db.park_idea(uid, "done idea")
+    db.resolve_parked(uid, done, "done")
+    db._conn.execute("UPDATE parked SET created=? WHERE id=?", (time.time() - 40 * 86400, old))
+    db._conn.execute("UPDATE parked SET closed=? WHERE id=?", (time.time() - 20 * 86400, done))
+    assert db.prune_parked() == 2
+    assert [p["id"] for p in db.open_parked(uid)] == [fresh]
