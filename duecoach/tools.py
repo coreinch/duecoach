@@ -578,7 +578,7 @@ def coaching_state(user_id: int) -> str:
     acts = db.recent_activities(user_id)
     if acts:
         lines.append(
-            "Activity they told you about (their words, last 7 days, oldest first; build on it and suggest related next steps; "
+            "Activity they told you about (their words, last 2 weeks, oldest first; build on it and suggest related next steps; "
             "'doing' entries from earlier than a few hours ago are probably over, so ask rather than assume):"
         )
         lines += [f"  #{a['id']} [{a['status']}] {a['text']}, {_ago(a['created'], zone)}" for a in acts]
