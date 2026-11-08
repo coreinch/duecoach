@@ -158,6 +158,7 @@ def maintain() -> None:
     abandoned = db.abandon_stale_reminders(REMINDER_GIVE_UP_HOURS)
     db.prune_events()
     db.prune_tasks()
+    db.prune_activities()
     db.prune_turn_stats()
     db.prune_flagged_drafts(FLAGGED_DRAFT_DAYS)
     recent = db.turn_stats_summary(time.time() - MAINTENANCE_SECONDS)

@@ -143,6 +143,27 @@ TOOLS = [
         ["objective_id", "outcome"],
     ),
     _fn(
+        "log_activity",
+        "Note something the user told you they did, or are doing right now (finished the report, went for a run, started cleaning the "
+        "kitchen, had the awkward call), so you can build on it later and suggest related next steps. Call it in the same turn they say "
+        "it, only for what they actually said, in their words: never guess, infer or embellish. Not for plans (use add_task), "
+        "appointments (add_event) or how a weekly objective went (close_objective).",
+        {
+            "text": {
+                "type": "string",
+                "description": "What they did or are doing, one short line, in the user's language, past or present tense.",
+            },
+            "status": {"type": "string", "enum": ["done", "doing"], "description": "done = finished; doing = under way now."},
+        },
+        ["text", "status"],
+    ),
+    _fn(
+        "forget_activity",
+        "Delete a logged activity that is wrong or that the user asks you to forget (by the id in the activity list).",
+        {"activity_id": {"type": "integer", "description": "The #id shown in the activity list."}},
+        ["activity_id"],
+    ),
+    _fn(
         "add_task",
         "Put something on the user's running to-do list: a thing they said they want or need to do that has NO set time (with a day and "
         "a time use add_event or set_reminder instead). Call it in the same turn they mention it ('I need to email the landlord', "
@@ -422,6 +443,20 @@ def _remove_from_toolbox(uid: int, a: dict) -> str:
     return "ok: removed from the toolbox" if db.remove_tool(uid, int(a["tool_id"])) else "error: no such toolbox item"
 
 
+def _log_activity(uid: int, a: dict) -> str:
+    text, status = _text(a), str(a.get("status") or "done")
+    if status not in ("done", "doing"):
+        return "error: status must be done or doing"
+    for r in db.recent_activities(uid, 1, 5):
+        if _norm(r["text"]) == _norm(text) or _similar(r["text"], text):
+            return f"ok: already noted as #{r['id']}; not saved again"
+    return f"ok: noted as #{db.add_activity(uid, text, status)}"
+
+
+def _forget_activity(uid: int, a: dict) -> str:
+    return "ok: forgotten" if db.forget_activity(uid, int(a["activity_id"])) else "error: no such activity"
+
+
 def _add_task(uid: int, a: dict) -> str:
     text = _text(a)
     for t in db.open_tasks(uid):
@@ -444,6 +479,8 @@ def _update_task(uid: int, a: dict) -> str:
 
 
 _DISPATCH = {
+    "log_activity": _log_activity,
+    "forget_activity": _forget_activity,
     "add_task": _add_task,
     "complete_task": _complete_task,
     "drop_task": _drop_task,
@@ -538,6 +575,15 @@ def coaching_state(user_id: int) -> str:
     if finished:
         lines.append("Ticked off in the last 3 days (worth a word of recognition, not a new question):")
         lines += [f"  {t['text']}" for t in finished]
+    acts = db.recent_activities(user_id)
+    if acts:
+        lines.append(
+            "Activity they told you about (their words, last 7 days, oldest first; build on it and suggest related next steps; "
+            "'doing' entries from earlier than a few hours ago are probably over, so ask rather than assume):"
+        )
+        lines += [f"  #{a['id']} [{a['status']}] {a['text']}, {_ago(a['created'], zone)}" for a in acts]
+    else:
+        lines.append("Activity they told you about: nothing noted yet.")
     reminders = db.pending_reminders(user_id)
     lines.append("Reminders waiting (already set, don't set them again):" if reminders else "Reminders waiting: none.")
     for r in reminders:
