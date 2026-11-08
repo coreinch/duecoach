@@ -206,6 +206,57 @@ def _event_tomorrow_1030() -> bool:
     return when.date() == tomorrow and (when.hour, when.minute) == (10, 30)
 
 
+def _sprint_on_the_report() -> None:
+    _chat(
+        "user: starting a 25 minute sprint on the quarterly report",
+        "assistant: Good pick. Open the report and write the first section. I'll stay quiet until the timer ends.",
+    )
+    db.add_reminder(UID, _in_hours(0.3), "25 minutes are up: how far did the report get?")
+    db.set_field(UID, "last_inbound", _in_hours(-0.1))
+
+
+def _parked_flights(hours_ago: float = 3) -> None:
+    db.park_idea(UID, "look up flights to Rome")
+    db._conn.execute("UPDATE parked SET created=?", (time.time() - hours_ago * 3600,))
+    db._conn.commit()
+
+
+def _parked_idea_offered() -> None:
+    _parked_flights()
+    _chat(
+        "user: ok, back to normal",
+        "assistant: Earlier you set aside looking up flights to Rome. Want to do it now, put it on your list, or let it go?",
+    )
+
+
+def _tasks_mention(word: str) -> bool:
+    return any(word in t["text"].lower() for t in db.open_tasks(UID))
+
+
+def _landlord_todo() -> None:
+    db.add_task(UID, "Email the landlord about the boiler")
+    _chat("assistant: How is the day going?", "user: busy")
+
+
+def _two_todos() -> None:
+    db.add_task(UID, "Email the landlord about the boiler")
+    db.add_task(UID, "Renew passport")
+    _chat("assistant: Morning. What is the plan?", "user: slow start today")
+    db.set_field(UID, "last_inbound", _in_hours(-2))
+
+
+def _ran_yesterday() -> None:
+    db.add_activity(UID, "went for a run", "done")
+    db._conn.execute("UPDATE activities SET created=?", (time.time() - 86400,))
+    db._conn.commit()
+    _chat("assistant: Morning. What is the plan?", "user: slow start today")
+    db.set_field(UID, "last_inbound", _in_hours(-2))
+
+
+def _logged(word: str) -> bool:
+    return any(word in a["text"].lower() for a in db.recent_activities(UID, 1))
+
+
 CASES = [
     Case(
         "checkin_before_the_appointment",
@@ -574,6 +625,188 @@ CASES = [
         instruction=prompts.PULSE,
         judge=[
             "Does the message say or assume where the user is or what they have just done or are doing (for example being at their desk, having had coffee, being back from something) when they never said so?"
+        ],
+    ),
+    Case(
+        "a_tangent_during_a_sprint_is_parked_without_asking",
+        "mid-sprint 'I need to look up flights' either derailed the sprint (the coach started planning the trip) or was lost",
+        _sprint_on_the_report,
+        user_text="oh I just remembered I need to look up flights to Rome",
+        instruction=None,
+        database=[("the idea was parked", lambda: any("flight" in p["text"].lower() for p in db.open_parked(UID)))],
+        judge=[
+            "Does the reply start helping with the flights or the trip itself (asks about dates, budget or airlines, suggests sites or plans it) instead of keeping the user on the report?",
+            "Does the reply leave out any sign that the idea was noted, saved or set aside for later?",
+            "Does the reply ask the user whether they would like it parked or saved, instead of just saying it is done?",
+        ],
+    ),
+    Case(
+        "the_main_topic_is_not_parked",
+        "the thing the user came to talk about must be coached, never set aside as a tangent",
+        lambda: _chat("assistant: What's on your mind today?"),
+        user_text="I keep putting off my taxes and it's stressing me out, can we work on that?",
+        instruction=None,
+        database=[("nothing was parked", lambda: not db.open_parked(UID))],
+        judge=["Does the reply decline to talk about the taxes now, or say it has set the taxes aside for later?"],
+    ),
+    Case(
+        "a_feeling_during_a_sprint_is_not_parked",
+        "feelings are never parked: the coach stays with them instead of steering back to the task",
+        _sprint_on_the_report,
+        user_text="ugh, I feel like such a failure today, I never finish anything",
+        instruction=None,
+        database=[("nothing was parked", lambda: not db.open_parked(UID))],
+        judge=["Does the reply ignore how they feel and only tell them to go back to the report or the timer?"],
+    ),
+    Case(
+        "an_appointment_during_a_sprint_is_an_event_not_a_parked_idea",
+        "a thing with a day and a time belongs in the events list, not in the parked ideas",
+        _sprint_on_the_report,
+        user_text="oh and I have the dentist next Friday at 14:30",
+        instruction=None,
+        database=[
+            ("nothing was parked", lambda: not db.open_parked(UID)),
+            ("one upcoming event was saved", lambda: len([e for e in _events() if e["status"] == "upcoming"]) == 1),
+        ],
+    ),
+    Case(
+        "a_checkin_brings_back_one_parked_idea_as_a_short_offer",
+        "a parked idea that is never brought back is lost; one that is brought back with invented details or several questions is nagging",
+        lambda: (
+            _parked_flights(),
+            _chat("assistant: Morning. What is the plan?", "user: slow start today"),
+            db.set_field(UID, "last_inbound", _in_hours(-2)),
+        ),
+        instruction=prompts.PULSE + prompts.PARKED_RETURN.format(idea="look up flights to Rome"),
+        judge=[
+            "Does the message leave out the idea entirely (it never mentions looking up flights)?",
+            "Does the message add details about the trip that the user never gave (dates, budget, airline, who is travelling)?",
+            "Does the message ask more than one question?",
+        ],
+    ),
+    Case(
+        "saying_yes_to_a_parked_idea_puts_it_on_the_list_and_closes_it",
+        "taking up a parked idea must end with a to-do and a closed parked entry, or it is offered again and again",
+        _parked_idea_offered,
+        user_text="yes, put it on my list",
+        instruction=None,
+        database=[
+            ("a to-do about flights was saved", lambda: _tasks_mention("flight")),
+            ("the parked idea was closed", lambda: not db.open_parked(UID)),
+        ],
+    ),
+    Case(
+        "letting_a_parked_idea_go_closes_it_without_a_to_do",
+        "'let it go' must drop the parked idea and not turn it into a task",
+        _parked_idea_offered,
+        user_text="nah, let that one go",
+        instruction=None,
+        database=[
+            ("the parked idea was closed", lambda: not db.open_parked(UID)),
+            ("no to-do was created", lambda: not db.open_tasks(UID)),
+        ],
+        judge=["Does the reply push the flights again or offer to do them anyway?"],
+    ),
+    Case(
+        "a_todo_mentioned_in_passing_is_saved_without_a_made_up_time",
+        "things the user says they need to do were forgotten unless they asked for a reminder; a saved to-do must not get an invented time",
+        lambda: _chat("assistant: How is the day going?", "user: busy"),
+        user_text="I really need to email my landlord about the boiler, I keep forgetting",
+        instruction=None,
+        database=[
+            ("the to-do was saved", lambda: _tasks_mention("landlord")),
+            ("no reminder was set", lambda: not db.pending_reminders(UID)),
+        ],
+        judge=["Does the reply promise to remind them at a particular day or clock time that the user never gave?"],
+    ),
+    Case(
+        "a_task_with_a_day_and_time_is_not_a_todo",
+        "a thing with a day and a time of day belongs in events or reminders, not on the undated to-do list",
+        lambda: _chat("assistant: How is the day going?", "user: busy"),
+        user_text="I have to call the bank on Thursday at 11:00",
+        instruction=None,
+        database=[
+            ("nothing went on the to-do list", lambda: not db.open_tasks(UID)),
+            (
+                "an event or a reminder was set",
+                lambda: any(e["status"] == "upcoming" for e in _events()) or bool(db.pending_reminders(UID)),
+            ),
+        ],
+    ),
+    Case(
+        "doing_a_todo_ticks_it_off",
+        "a to-do the user reports as done must be closed in that turn, or it keeps coming back in check-ins",
+        _landlord_todo,
+        user_text="I emailed the landlord about the boiler, finally",
+        instruction=None,
+        database=[
+            ("the to-do is no longer open", lambda: not db.open_tasks(UID)),
+            ("it was ticked off, not dropped", lambda: bool(db.recent_finished_tasks(UID))),
+        ],
+        judge=["Does the reply fail to acknowledge that they did it, for example by moving straight to another task?"],
+    ),
+    Case(
+        "a_checkin_offers_one_todo_with_a_tiny_first_step",
+        "check-ins asked how they were instead of bringing back what the user said they wanted to do; a list dumped in one message is worse",
+        _two_todos,
+        instruction=prompts.PULSE,
+        judge=[
+            "Does the message bring up more than one thing from the user's to-do list?",
+            "Does the message say how long a to-do has been waiting, or make the user feel guilty about the delay?",
+            "Does the message ask more than one question?",
+        ],
+    ),
+    Case(
+        "a_quiet_checkin_does_not_bring_up_the_todo_list",
+        "once the user stops answering, check-ins must not mention any task, including undated to-dos",
+        lambda: (_two_todos(), db.add_message(UID, "assistant", "Hey, how is the day going?"), db.set_field(UID, "unanswered", 1)),
+        instruction=prompts.REENGAGE_LIGHT.format(n=1),
+        judge=["Does the message mention or propose a task, such as emailing the landlord or renewing a passport?"],
+    ),
+    Case(
+        "what_they_did_is_noted_in_their_words_and_one_next_step_is_offered",
+        "the coach should remember what the user did and build on it, without embellishing it or deciding for them",
+        lambda: _chat("assistant: How is the day going?", "user: busy"),
+        user_text="just finished writing the quarterly report",
+        instruction=None,
+        database=[
+            ("the activity was noted as done", lambda: _logged("report")),
+            ("nothing was put on the to-do list unasked", lambda: not db.open_tasks(UID)),
+        ],
+        judge=[
+            "Does the reply add details about the report that the user never gave (its length, quality, how long it took, how they felt)?",
+            "Does the reply suggest more than one next action?",
+            "Does the reply fail to acknowledge what they did before suggesting anything?",
+        ],
+    ),
+    Case(
+        "a_plan_is_not_logged_as_something_done",
+        "only what the user did or is doing is noted; a plan for tomorrow is a to-do or nothing, never an activity",
+        lambda: _chat("assistant: How is the day going?", "user: busy"),
+        user_text="I'm going to clean the garage tomorrow",
+        instruction=None,
+        database=[("nothing was logged as an activity", lambda: not db.recent_activities(UID, 1))],
+        judge=["Does the reply say or imply that the garage has already been cleaned or is being cleaned right now?"],
+    ),
+    Case(
+        "a_heavy_moment_gets_no_related_suggestion",
+        "after something finished with 'I feel useless', the coach must stay with the feeling instead of handing over the next action",
+        lambda: _chat("assistant: How is the day going?", "user: busy"),
+        user_text="I finally finished the report but I feel awful and useless, it took me all week",
+        instruction=None,
+        judge=[
+            "Does the reply suggest a next task or action, or move the conversation to what they should do next, instead of responding to how they feel?",
+            "Does the reply agree that they are useless, or argue with how they feel?",
+        ],
+    ),
+    Case(
+        "a_checkin_builds_on_a_logged_activity_without_embellishing_it",
+        "a check-in that mentions a logged run must not invent how it went; it may only use what the user said",
+        _ran_yesterday,
+        instruction=prompts.PULSE,
+        judge=[
+            "Does the message say or assume anything about the run beyond the fact that it happened (how it went, how long, how far, how the user felt)?",
+            "Does the message ask more than one question?",
         ],
     ),
 ]
