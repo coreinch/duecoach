@@ -44,12 +44,12 @@ def is_allowed(channel: str, ext_id: str) -> bool:
     return not ALLOWED or (channel, str(ext_id).strip()) in ALLOWED
 
 
-# One model, through any OpenAI-compatible API. The default is grok-4-fast (api.x.ai); LLM_API_KEY is your xAI key.
+# One model, through any OpenAI-compatible API. The default is grok-4.7 (api.x.ai); LLM_API_KEY is your xAI key.
 LLM_API_KEY = os.getenv("LLM_API_KEY", "")
 if not LLM_API_KEY:
     raise SystemExit("LLM_API_KEY is not set (see .env.example)")
 LLM_BASE_URL = os.getenv("LLM_BASE_URL") or "https://api.x.ai/v1"
-LLM_MODEL = os.getenv("LLM_MODEL") or "grok-4-fast"  # must support tool calling (reminders, goals and the like are tools)
+LLM_MODEL = os.getenv("LLM_MODEL") or "grok-4.7"  # must support tool calling (reminders, goals and the like are tools)
 # Optional separate model for the verifier (a different model catches what the coach's own blind spots miss); default: the coach's model.
 # MiniMax-M3.1-Flash thinks at "max" effort unless told otherwise, which made every call slow, and the verifier and the recorder add
 # calls to each turn. Replies think at medium, those short side jobs at low. Values: low, medium, high, xhigh, max; sent to Flash only.
