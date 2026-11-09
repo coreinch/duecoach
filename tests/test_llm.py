@@ -175,10 +175,11 @@ async def test_the_configured_model_is_the_only_one_used_and_minimax_is_asked_to
         seen.append(kw)
         return NS(choices=[NS(message=NS(content="ok", tool_calls=None), finish_reason="stop")])
 
+    monkeypatch.setattr(llm, "LLM_MODEL", "MiniMax-M3")
     monkeypatch.setattr(llm._client, "chat", NS(completions=NS(create=create)))
     await llm._chat([{"role": "user", "content": "hi"}])
-    assert seen[0]["model"] == llm.LLM_MODEL and seen[0]["extra_body"] == llm._extra(llm.LLM_MODEL)["extra_body"]
-    assert llm.status() == {"model": llm.LLM_MODEL}
+    assert seen[0]["model"] == "MiniMax-M3" and seen[0]["extra_body"] == llm._extra("MiniMax-M3")["extra_body"]
+    assert llm.status() == {"model": "MiniMax-M3"}
 
 
 async def test_a_check_in_gets_no_tools_but_a_reply_to_the_user_does(model, user):
