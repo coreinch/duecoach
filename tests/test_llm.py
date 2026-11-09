@@ -824,3 +824,14 @@ async def test_the_last_reply_is_not_written_from_a_reminder_that_was_just_taken
     assert db.pending_reminders(1001) == []
     note = [m for m in model.calls[-1]["messages"] if m["role"] == "system"][-1]["content"]
     assert "ok: reminder" not in note and "tool results show: none" in note
+
+
+def test_grok_4_3_and_newer_get_a_reasoning_effort_and_nothing_else():
+    assert llm._extra("grok-4.7") == {"extra_body": {"reasoning_effort": llm.LLM_REASONING_EFFORT}}
+    assert llm._extra("grok-4.3", "low") == {"extra_body": {"reasoning_effort": "low"}}
+    assert llm._extra("grok-5") == {"extra_body": {"reasoning_effort": llm.LLM_REASONING_EFFORT}}
+
+
+def test_models_that_reject_reasoning_effort_get_no_extras():
+    for model in ("grok-4.20-non-reasoning", "grok-4.20-reasoning", "grok-4-fast", "grok-code-fast-1", "some-other-model"):
+        assert llm._extra(model) == {}
