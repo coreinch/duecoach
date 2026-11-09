@@ -1,8 +1,17 @@
+import math
 import os
 
 from dotenv import load_dotenv
 
 load_dotenv()
+
+
+def _limit(low: float | None, high: float | None) -> str:
+    if low is not None and high is not None:
+        return f"between {low} and {high}"
+    if low is not None:
+        return f"at least {low}"
+    return f"at most {high}"
 
 
 def _number(name: str, default: float, kind: type = int, low: float | None = None, high: float | None = None):
@@ -12,8 +21,10 @@ def _number(name: str, default: float, kind: type = int, low: float | None = Non
         value = kind(raw) if raw else kind(default)
     except ValueError:
         raise SystemExit(f"{name} must be a number, got {raw!r}") from None
+    if isinstance(value, float) and not math.isfinite(value):
+        raise SystemExit(f"{name} must be a finite number, got {raw!r}")
     if (low is not None and value < low) or (high is not None and value > high):
-        raise SystemExit(f"{name} must be between {low} and {high}, got {value}")
+        raise SystemExit(f"{name} must be {_limit(low, high)}, got {value}")
     return value
 
 
@@ -74,12 +85,27 @@ EVENING_HOUR = _number("EVENING_HOUR", 20, low=0, high=23)
 # message from either side. Each unanswered check-in widens the gap to the matching entry here (never below the user's interval);
 # after the last entry it stays quiet until the user writes again.
 CHECKIN_INTERVAL_MINUTES = _number("CHECKIN_INTERVAL_MINUTES", 30, low=1, high=None)
-try:
-    BACKOFF_MINUTES = [
-        float(x) for x in os.getenv("BACKOFF_MINUTES", "30,60,120,240,480,1440,2880,5760,10080,20160").split(",") if x.strip()
-    ]
-except ValueError:
-    raise SystemExit("BACKOFF_MINUTES must be comma-separated numbers") from None
+
+
+def _backoff_minutes() -> list[float]:
+    """Gaps between ignored check-ins. A blank, negative, or non-finite step would make check-ins stop or fire immediately."""
+    raw = os.getenv("BACKOFF_MINUTES", "30,60,120,240,480,1440,2880,5760,10080,20160")
+    parts = [part.strip() for part in raw.split(",") if part.strip()]
+    if not parts:
+        raise SystemExit("BACKOFF_MINUTES must be comma-separated numbers")
+    values: list[float] = []
+    for part in parts:
+        try:
+            value = float(part)
+        except ValueError:
+            raise SystemExit("BACKOFF_MINUTES must be comma-separated numbers") from None
+        if not math.isfinite(value) or value <= 0:
+            raise SystemExit(f"BACKOFF_MINUTES must be positive numbers, got {part!r}")
+        values.append(value)
+    return values
+
+
+BACKOFF_MINUTES = _backoff_minutes()
 REVIEW_WEEKDAY = _number("REVIEW_WEEKDAY", 6, low=0, high=6)  # evening check-in on this weekday (Mon=0) becomes the weekly review
 DB_PATH = os.getenv("DB_PATH", "duecoach.db")
 HISTORY_TURNS = 20
