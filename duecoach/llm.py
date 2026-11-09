@@ -17,6 +17,7 @@ from .config import (
     LLM_API_KEY,
     LLM_BASE_URL,
     LLM_CONCURRENCY,
+    LLM_GROK_EFFORT,
     LLM_HELPER_EFFORT,
     LLM_MODEL,
     LLM_REASONING_EFFORT,
@@ -50,13 +51,13 @@ _verifier_client = (
 
 
 # MiniMax puts its reasoning inside the reply as <think>...</think> unless asked to split it off; the regex is a second safety net.
-# Grok 4.3 and newer take reasoning_effort and think at a slow default without it; grok-4.20 (reasoning or not) rejects the parameter.
+# Grok 4.3 and newer take reasoning_effort and think at a slow default without it (on the real prompt: low 18 s, medium 51 s); grok-4.20 (reasoning or not) rejects the parameter.
 _GROK_EFFORT = re.compile(r"grok-(4\.[3-9](?!\d)|[5-9])")
 
 
 def _extra(model: str, effort: str | None = None) -> dict[str, Any]:
     if _GROK_EFFORT.match(model):
-        return {"extra_body": {"reasoning_effort": effort or LLM_REASONING_EFFORT}}
+        return {"extra_body": {"reasoning_effort": effort or LLM_GROK_EFFORT}}
     if not model.startswith("MiniMax-"):
         return {}
     body: dict[str, Any] = {"reasoning_split": True}

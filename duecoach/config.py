@@ -66,6 +66,8 @@ LLM_MODEL = os.getenv("LLM_MODEL") or "grok-4.7"  # must support tool calling (r
 # calls to each turn. Replies think at medium, those short side jobs at low. Values: low, medium, high, xhigh, max; sent to MiniMax Flash and Grok 4.3+ only.
 LLM_REASONING_EFFORT = os.getenv("LLM_REASONING_EFFORT") or "medium"
 LLM_HELPER_EFFORT = os.getenv("LLM_HELPER_EFFORT") or "low"
+# Grok 4.3+ replies: medium took 51 s on the real prompt, low 18 s, so low is the default there.
+LLM_GROK_EFFORT = os.getenv("LLM_GROK_EFFORT") or "low"
 LLM_VERIFIER_MODEL = os.getenv("LLM_VERIFIER_MODEL") or LLM_MODEL
 # ...optionally at another provider: its OpenAI-compatible URL and key (default: the coach's).
 LLM_VERIFIER_BASE_URL = os.getenv("LLM_VERIFIER_BASE_URL") or LLM_BASE_URL
