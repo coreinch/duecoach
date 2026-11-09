@@ -602,7 +602,7 @@ async def test_the_verifier_cancels_a_reminder_set_for_a_time_the_user_never_gav
     assert db.pending_reminders(1001) == []
 
 
-async def test_the_verifier_model_is_used_only_when_it_differs_from_the_coachs(monkeypatch, user):
+async def test_a_side_job_runs_on_the_side_model_which_is_the_coachs_unless_set(monkeypatch, user):
     seen = []
 
     async def fake_chat(messages, tool_defs=None, max_tokens=1500, model=None, effort=None):
@@ -612,7 +612,7 @@ async def test_the_verifier_model_is_used_only_when_it_differs_from_the_coachs(m
     monkeypatch.setattr(llm, "_chat", fake_chat)
     await REAL_COMPLETE([{"role": "user", "content": "x"}], model=llm.LLM_MODEL)
     await REAL_COMPLETE([{"role": "user", "content": "x"}], model="another-model")
-    assert seen == [None, "another-model"]
+    assert seen == [llm.LLM_SIDE_MODEL, "another-model"] and llm.LLM_SIDE_MODEL == llm.LLM_MODEL
 
 
 async def test_an_event_saved_for_a_time_nobody_gave_is_taken_back_and_greek_users_get_a_greek_question(model, user, recorder, verifier):
@@ -835,3 +835,17 @@ def test_grok_4_3_and_newer_get_a_reasoning_effort_and_nothing_else():
 def test_models_that_reject_reasoning_effort_get_no_extras():
     for model in ("grok-4.20-non-reasoning", "grok-4.20-reasoning", "grok-4-fast", "grok-code-fast-1", "some-other-model"):
         assert llm._extra(model) == {}
+
+
+async def test_side_jobs_use_the_side_model_but_a_named_model_is_kept(monkeypatch):
+    seen = []
+
+    async def chat(messages, tool_defs=None, max_tokens=1500, model=None, effort=None):
+        seen.append(model)
+        return NS(content="ok")
+
+    monkeypatch.setattr(llm, "_chat", chat)
+    monkeypatch.setattr(llm, "LLM_SIDE_MODEL", "grok-4.20-non-reasoning")
+    await REAL_COMPLETE([{"role": "user", "content": "x"}])
+    await REAL_COMPLETE([{"role": "user", "content": "x"}], model="grok-4.7")
+    assert seen == ["grok-4.20-non-reasoning", "grok-4.7"]

@@ -21,6 +21,7 @@ from .config import (
     LLM_HELPER_EFFORT,
     LLM_MODEL,
     LLM_REASONING_EFFORT,
+    LLM_SIDE_MODEL,
     LLM_TIMEOUT,
     LLM_VERIFIER_API_KEY,
     LLM_VERIFIER_BASE_URL,
@@ -322,9 +323,8 @@ async def _chat(
 
 
 async def _complete(messages: list[dict], max_tokens: int = 1500, model: str | None = None) -> str:
-    if model and model != LLM_MODEL:  # only a different model is passed on
-        return ((await _chat(messages, max_tokens=max_tokens, model=model, effort=LLM_HELPER_EFFORT)).content or "").strip()
-    return ((await _chat(messages, max_tokens=max_tokens, effort=LLM_HELPER_EFFORT)).content or "").strip()
+    """A short side job at the helper effort, on the side model unless a model is named (the verifier names its own)."""
+    return ((await _chat(messages, max_tokens=max_tokens, model=model or LLM_SIDE_MODEL, effort=LLM_HELPER_EFFORT)).content or "").strip()
 
 
 def _since(last_inbound: float | None) -> str:
