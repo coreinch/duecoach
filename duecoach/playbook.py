@@ -2,7 +2,7 @@
 
 The ideas come from ADHD coaching practice as described in Prevatt & Levrini, "ADHD Coaching: A Guide for Mental Health
 Professionals" (APA, 2015), Ratey, "The Disorganized Mind" (2008), Tuckman, "The ADHD Productivity Manual" (2025),
-Barkley, "Taking Charge of Adult ADHD" (2021), Ramsay & Rostain, "CBT for Adult ADHD" (2015), Gendron, "The Mini ADHD Coach" (2023)
+Barkley, "Taking Charge of Adult ADHD" (2021), Ramsay & Rostain, "CBT for Adult ADHD" (2015) and "The Adult ADHD Tool Kit" (2014), Gendron, "The Mini ADHD Coach" (2023)
 and 50Minutes, "Boost Your Concentration" (2016); the wording here is our own (see "Sources of the playbook" in the README).
 Each card says when to use it and how to coach it in chat.
 """
@@ -1089,6 +1089,48 @@ CARDS = [
             "offer something back."
         ),
         "source": "Barkley ch.25 (work)",
+    },
+    {
+        "id": "device_plan",
+        "when": "loses hours on the phone or computer, 'just checking' something and an hour is gone, scrolling instead of the task, games or videos at bedtime",
+        "how": (
+            "Don't ask them to give up the device; ask for a plan each time they pick it up. Before opening it, they say what they are "
+            "going to do first and for how long ('open the report, reread the last page, then write the next section'), plus an if-then "
+            "for the pull ('if I want to check a site, I write it on a list and carry on'). Make the tempting thing a step further away: "
+            "turn off automatic Wi-Fi so connecting is a choice, log out of the app, block or password-protect the one site that eats "
+            "their time. Look at the moments that go wrong most (leaving the house, the switch between tasks, bedtime) and give each a "
+            "rule they pick ('no texts until I'm at the office', 'screens off at 10'). A screen break gets a start, an end and a timer, "
+            "and a plan for what to do the moment the timer goes (stand up, drink water, start the smallest next step). Think of it like a "
+            "food that disagrees with you: not banned, but they choose when and how much."
+        ),
+        "source": "Ramsay & Rostain, Adult ADHD Tool Kit ch.17 (turn on the device with a plan, stimulus control, pivot points)",
+    },
+    {
+        "id": "coping_drift",
+        "when": "a routine that used to work has quietly stopped, 'I used to do this', lateness or mess creeping back, no big event, just slipping",
+        "how": (
+            "Treat it as drift, not failure: slipping is expected, and what counts is catching it early. Work backwards together: when "
+            "did it last work, what changed that week, which small step went first? Often one skipped step (the evening prep, the "
+            "charger spot) set off the rest. Then ask two things: what exactly is the behaviour, in plain terms, and why does it matter "
+            "to them? If it still does, pick the smallest way back and a set time to restart it. If it no longer matters, let them "
+            "drop or change it on purpose; a decision, not a lapse. If several things slipped at once, they probably took on too many: "
+            "keep one or two. Blame the plan, not the person, and change the plan."
+        ),
+        "source": "Ramsay & Rostain, Adult ADHD Tool Kit ch.18 (coping drift, shifting priorities, start small)",
+    },
+    {
+        "id": "hard_talks",
+        "when": "dreading a talk with a partner, family member or boss, rows that end badly, shuts down or gets defensive when criticised, 'we never talk about money'",
+        "how": (
+            "Help them pick a time and place for the talk, so it is not sprung on anyone or squeezed into a busy moment, and prepare "
+            "two or three reminders for themselves: listen without interrupting, repeat back what they heard, ask what was meant, turn "
+            "feedback into a concrete thing to do rather than an attack. If they are in the middle of one and feel flooded, they may "
+            "ask for a short time-out ('I need ten minutes to collect my thoughts, and then I'll come back') and then do come back. "
+            "For a partner, suggest two regular face-to-face check-ins a week with phones and TV away, for plain household business, "
+            "so small things get sorted before they turn into rows. Keep the message that feelings are allowed; the goal is that the "
+            "feeling doesn't take over what they say."
+        ),
+        "source": "Ramsay & Rostain, Adult ADHD Tool Kit ch.15 (scheduling conversations, check-ins, handling emotions)",
     },
 ]
 

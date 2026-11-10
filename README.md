@@ -3,7 +3,7 @@
 From what you meant to do to what you did.
 
 Duecoach is an ADHD coach in your chat app, on Telegram (Greek and English), built around follow-through. It coaches with a structured method — goals,
-small weekly objectives, barrier analysis, a toolbox of what works, a weekly review — with a 103-card playbook of strategies in
+small weekly objectives, barrier analysis, a toolbox of what works, a weekly review — with a 106-card playbook of strategies in
 the prompt of every reply (one model call per message). New users are asked for their timezone first and then talk freely: the coach learns about them, sets goals and weekly steps
 and follows up on them in conversation, saving them with tools. It also keeps a running to-do list of whatever you say you need to do (no time attached) and brings one item back, with a tiny first step, in its check-ins when you have been quiet. It also notes what you say you did or are doing (kept 30 days; the last 2 weeks are shown with `/log` and used for suggestions) and suggests one related next step, which goes on the list only if you say yes. When you drift onto a tangent mid-task, it parks the idea on its own (`/parked`), keeps you on track, and brings it back in a later check-in as a yes/no offer. Once the timezone is known, the bot checks in after 30 minutes of silence
 during the day and backs off when ignored (`/interval off` turns it off).
@@ -130,6 +130,7 @@ field says which book and chapter its idea comes from. The books themselves are 
 | Tuckman, *The ADHD Productivity Manual* (Working Memory Press, 2025) | Planning, awareness and motivation as the places a plan breaks, feeling the future, sticky and slippery activities, fake productivity, perfectionism and real deadlines |
 | Barkley & Benton, *Taking Charge of Adult ADHD*, 2nd ed. (Guilford, 2021) | Stopping the action, external memory (a pocket journal), talking aloud, solving problems on paper, and owning mistakes with humour |
 | Ramsay & Rostain, *Cognitive-Behavioral Therapy for Adult ADHD*, 2nd ed. (Routledge, 2015) | If-then plans, the 10-minute rule, working with automatic thoughts, readiness for change, and problem management |
+| Ramsay & Rostain, *The Adult ADHD Tool Kit* (Routledge, 2014) | Living with devices (a plan for each time you pick one up, distance from temptations), noticing coping drift, and preparing for hard conversations and partner check-ins |
 | Gendron, *The Mini ADHD Coach* (Chronicle Books, 2023) | Everyday hacks: habit stacking, gamifying, batching, checklists, removing friction, body doubling and music |
 | 50Minutes, *Boost Your Concentration* (2016) | A distraction tally and a few small concentration tips |
 
