@@ -251,3 +251,22 @@ async def test_a_re_engagement_check_in_never_carries_a_parked_idea(clock, user,
     await run_for(clock, 6)
     assert seen_instructions and all("look up flights" not in (i or "") for i in seen_instructions)
     assert db.open_parked(uid)[0]["returns"] == 0
+
+
+@pytest.mark.parametrize(("unanswered", "expected"), [(1, "morning"), (2, "morning"), (3, "backoff")])
+def test_the_morning_briefing_is_not_shadowed_by_the_back_off_until_several_check_ins_were_ignored(clock, user, unanswered, expected):
+    uid = user["user_id"]
+    enable_checkins(uid, unanswered=unanswered, last_proactive=clock.t - 86400)
+    clock.advance(3 * 60)  # 09:00
+    plan = bot.plan_checkin(db.get_user(uid), clock.t, clock.local())
+    assert plan is not None
+    assert (plan[0] == prompts.MORNING) is (expected == "morning")
+    assert (plan[1] == {"last_morning": clock.local().date().isoformat()}) is (expected == "morning")
+
+
+def test_the_evening_wrap_up_is_not_shadowed_by_the_back_off_after_one_ignored_check_in(clock, user):
+    uid = user["user_id"]
+    enable_checkins(uid, unanswered=1, last_morning=clock.local().date().isoformat(), last_proactive=clock.t - 86400)
+    clock.advance(14 * 60)  # 20:00 if the clock starts at 06:00
+    plan = bot.plan_checkin(db.get_user(uid), clock.t, clock.local())
+    assert plan is not None and plan[0] == prompts.EVENING

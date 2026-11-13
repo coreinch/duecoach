@@ -56,6 +56,7 @@ async def deliver_reminders() -> None:
 
 # --- check-ins ---
 
+DAILY_UNTIL_UNANSWERED = 3  # the morning briefing and evening wrap-up still go out until this many check-ins were ignored in a row
 AGENDA_KINDS = {prompts.MORNING: "morning", prompts.EVENING: "evening", prompts.PULSE: "pulse"}
 
 
@@ -80,15 +81,24 @@ def plan_checkin(u, now_ts: float, now: datetime) -> tuple[str, dict] | None:
     # weekly review: on the chosen weekday, or whenever it has become overdue (so back-off or snoozing can't skip it for weeks)
     review_due = has_record and days_since_review >= 6 and (now.weekday() == REVIEW_WEEKDAY or days_since_review >= 8)
 
+    daily: tuple[str, dict] | None = None  # the day's morning briefing and evening wrap-up
+    if u["last_morning"] != today:
+        daily = prompts.MORNING, {"last_morning": today}
+    elif now.hour == end and u["last_evening"] != today:
+        daily = (
+            (prompts.WEEKLY_REVIEW, {"last_evening": today, "last_review": today})
+            if review_due
+            else (prompts.EVENING, {"last_evening": today})
+        )
     if unanswered > 0:
+        # someone who has stayed silent for a while gets the gentle back-off; one who has only missed a check-in or two still gets
+        # the day's briefing and wrap-up (before, the back-off note came first and they never arrived)
+        if daily and unanswered < DAILY_UNTIL_UNANSWERED:
+            return daily
         note = backoff.instruction(unanswered, u["last_inbound"], now_ts)
         return (note, {}) if note else None
-    if u["last_morning"] != today:
-        return prompts.MORNING, {"last_morning": today}
-    if now.hour == end and u["last_evening"] != today:
-        if review_due:
-            return prompts.WEEKLY_REVIEW, {"last_evening": today, "last_review": today}
-        return prompts.EVENING, {"last_evening": today}
+    if daily:
+        return daily
     if review_due and days_since_review >= 8:
         return prompts.WEEKLY_REVIEW, {"last_review": today}
     return prompts.PULSE, {}
@@ -116,7 +126,7 @@ async def checkin(u) -> None:
             return
         instruction, marks = plan
         seen_inbound = u["last_inbound"] or 0
-        parked = db.parked_to_return(uid) if instruction in (prompts.MORNING, prompts.PULSE) else None
+        parked = db.parked_to_return(uid) if instruction in (prompts.MORNING, prompts.PULSE) and not u["unanswered"] else None
         kind = AGENDA_KINDS.get(instruction)
         if kind:  # what is really on their day, worked out by code, so the coach starts from their calendar and list
             instruction += agenda.prompt_block(uid, kind)
