@@ -1,9 +1,10 @@
 """The slash commands: each is an async function (user id, arguments) -> reply text."""
 
+import logging
 import time
 from zoneinfo import ZoneInfo
 
-from . import agenda, db, prompts, ratelimit, strings
+from . import agenda, db, llm, prompts, ratelimit, strings
 from .chat import coach, privacy, say
 from .config import CHECKIN_INTERVAL_MINUTES
 
@@ -68,11 +69,24 @@ async def _toolbox(uid, args):
     return f"{say(uid, 'TOOLBOX_HEADER')}:\n" + "\n".join(f"• {t['text']}" for t in items)
 
 
+log = logging.getLogger("duecoach.commands")
+
+
+async def _fresh(uid: int) -> None:
+    """Catch the planner up with what the user has said before showing it, so it never lags behind the chat."""
+    try:
+        await llm.refresh_planner(uid)
+    except Exception:
+        log.exception("could not refresh the planner for %s", uid)
+
+
 async def _tasks(uid, args):
+    await _fresh(uid)
     return agenda.tasks_text(uid)
 
 
 async def _projects(uid, args):
+    await _fresh(uid)
     return agenda.projects_text(uid)
 
 

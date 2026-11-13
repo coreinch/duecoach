@@ -323,6 +323,11 @@ def _m18_auto_filed() -> None:
     _ensure_columns("users", {"planner_sorted": "INTEGER DEFAULT 0"})
 
 
+def _m19_grouping() -> None:
+    """The loose to-dos (not in a project) the last grouping check looked at, so it runs again only when they change."""
+    _ensure_columns("users", {"grouped_ids": "TEXT DEFAULT ''"})
+
+
 MIGRATIONS = [
     _m1_baseline,
     _m2_consent_and_resilience,
@@ -342,6 +347,7 @@ MIGRATIONS = [
     _m16_planner,
     _m17_projects,
     _m18_auto_filed,
+    _m19_grouping,
 ]
 
 
@@ -374,6 +380,7 @@ def close() -> None:
 
 USER_FIELDS = {
     "planner_sorted",
+    "grouped_ids",
     "chat_id",
     "nudged_at",
     "tz",

@@ -412,6 +412,22 @@ Answer with JSON only: {{"tasks": [...], "projects": [...], "events": [...]}}
 {first_pass_rules}- At most {limits}. Empty lists when there is nothing: that is the usual answer for a single exchange.
 """
 
+GROUPER = """You tidy the planner of a coaching chat: some to-dos belong together as a project. You only return JSON.
+
+To-dos in no project yet:
+{loose}
+
+Projects already there: {projects}
+Their coaching goals (context): {goals}
+{notes}
+Answer with JSON only: {{"new_projects": [{{"title": ..., "task_ids": [...]}}], "add_to": [{{"project_id": ..., "task_ids": [...]}}]}}
+- "new_projects": two or more of the to-dos above that are about the same named thing or effort (a build, a move, a job search, a trip, a
+  course, a business, a creative piece) are one project. "title" is short, in {language} and in their words (use the name they use for
+  the thing); "task_ids" are the numbers (without the #) of those to-dos.
+- "add_to": to-dos above that clearly belong to a project already listed (its number in "project_id").
+- A one-off chore stays loose. Never put unrelated to-dos together. When unsure, leave it out. Empty lists are a fine answer.
+"""
+
 SORTER_FIRST_PASS = """- This is the first pass over a long chat, so read it all, oldest first. Look specifically for ongoing efforts: things they are working
   on or want to get done that take several separate actions over days or weeks (a move, a job search, a course, a trip, a business, a
   health routine, a big cleanup, a creative piece). Each one is a project, even if they only mentioned it in passing or in several places;

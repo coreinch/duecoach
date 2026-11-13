@@ -33,6 +33,7 @@ async def _refresh_notes(uid: int) -> None:
 async def _sort_planner(uid: int) -> None:
     try:
         await llm.sort_into_planner(uid)
+        await llm.group_into_projects(uid)  # after the sort, so the to-dos it just filed are grouped in the same go
     except Exception:
         log.exception("planner sort failed for %s", uid)
 
