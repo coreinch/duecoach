@@ -849,3 +849,8 @@ async def test_side_jobs_use_the_side_model_but_a_named_model_is_kept(monkeypatc
     await REAL_COMPLETE([{"role": "user", "content": "x"}])
     await REAL_COMPLETE([{"role": "user", "content": "x"}], model="grok-4.7")
     assert seen == ["grok-4.20-non-reasoning", "grok-4.7"]
+
+
+def test_opencode_gets_the_session_header_it_requires_and_other_providers_do_not():
+    assert llm._headers("https://opencode.ai/zen/go/v1")["x-opencode-session"]
+    assert llm._headers("https://api.x.ai/v1") == {}

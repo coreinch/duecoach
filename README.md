@@ -68,10 +68,10 @@ Runs on the same branch are queued, never cancelled, so the newest commit is alw
 | `DEPLOY_HOST` | VPS address (never committed; the inventory is generated in CI) |
 | `DEPLOY_SSH_KEY` | private key CI uses to SSH in as root |
 | `GHCR_PULL_PAT` | token with `read:packages`, so the VPS can pull the private image |
-| `TELEGRAM_BOT_TOKEN`, `LLM_API_KEY` | the bot's credentials (`LLM_API_KEY` is your MiniMax key) |
+| `TELEGRAM_BOT_TOKEN`, `LLM_API_KEY` | the bot's credentials (`LLM_API_KEY` is the key of the provider in `LLM_BASE_URL`) |
 | `ALLOWED_USERS` | who may use the bot, e.g. `telegram:123`. **Required** unless the `OPEN_ACCESS` variable is `true`: the deploy refuses to run with it empty |
 | `OPEN_ACCESS` (repository *variable*, not secret) | set to `true` to let everyone use the bot in production; it overrides `ALLOWED_USERS`. Everyone then shares your model quota and their chats are stored |
-| `LLM_MODEL` | optional, defaults to `grok-4.7`. The bot uses this one model; it must support tool calling. Another OpenAI-compatible provider works via the `LLM_BASE_URL` repository variable (default `https://api.x.ai/v1`) and its key in `LLM_API_KEY` |
+| `LLM_MODEL` | optional, defaults to `grok-4.7`. The bot uses this one model; it must support tool calling. Another OpenAI-compatible provider works via the `LLM_BASE_URL` repository variable (default `https://api.x.ai/v1`; OpenCode Go is `https://opencode.ai/zen/go/v1`, and the bot then sends the `x-opencode-session` header it requires) and its key in `LLM_API_KEY` |
 | `LLM_SIDE_MODEL` | optional (repository variable), a faster model for the short side jobs: safety check, recorder, notes refresh. Defaults to `LLM_MODEL`. The reply and the verifier never use it. `grok-4.20-non-reasoning` matched `grok-4.7` on `python -m evals.crisis`; as a verifier it wrongly flagged 18 of 33 good drafts |
 | `ADMIN_CHAT_ID` | optional: the Telegram chat id that gets a daily digest (replies, median and slowest reply time, fallbacks, verifier flags) and an alert when replies keep falling back to "say it again". Without it both are only written to the log. `LLM_REASONING_EFFORT` (replies, default `medium`) and `LLM_HELPER_EFFORT` (verifier and other short calls, default `low`) tune how long grok-4.7 thinks |
 
