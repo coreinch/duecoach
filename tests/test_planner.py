@@ -258,3 +258,15 @@ def test_the_coach_is_told_which_project_has_no_next_step(user):
     assert "Projects with no open next step: Taxes" in agenda.prompt_block(uid, "morning")
     assert "Projects with no open next step" in agenda.prompt_block(uid, "evening")
     assert "Projects with no open next step" not in agenda.prompt_block(uid, "pulse")
+
+
+async def test_projects_view_shows_the_next_step_and_flags_a_stalled_project(user):
+    uid = user["user_id"]
+    assert "No projects yet" in await cmd(uid, "/projects")
+    run(uid, "add_project", title="Trip", steps=["Pick the dates", "Book the flight"])
+    run(uid, "add_project", title="Taxes", steps=["Find the forms"])
+    run(uid, "break_down_task", task_id=1, steps=["Check my calendar", "Ask Sam"])
+    run(uid, "complete_task", task_id=3)  # the only step of "Taxes"
+    view = await cmd(uid, "/projects")
+    assert "• Trip — next: Check my calendar (4 open)" in view  # the first step under the first to-do, not the umbrella
+    assert "• Taxes — no next step yet" in view
