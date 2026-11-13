@@ -270,3 +270,11 @@ def test_the_evening_wrap_up_is_not_shadowed_by_the_back_off_after_one_ignored_c
     clock.advance(14 * 60)  # 20:00 if the clock starts at 06:00
     plan = bot.plan_checkin(db.get_user(uid), clock.t, clock.local())
     assert plan is not None and plan[0] == prompts.EVENING
+
+
+async def test_a_back_off_check_in_still_carries_the_to_dos_to_remind_them_of(clock, user, seen_instructions):
+    uid = user["user_id"]
+    db.add_task(uid, "send the invoice", due=clock.local().date().isoformat())
+    enable_checkins(uid, unanswered=1, last_morning=clock.local().date().isoformat(), last_proactive=clock.t - 86400)
+    await run_for(clock, 3)
+    assert seen_instructions and any("send the invoice" in (i or "") for i in seen_instructions)

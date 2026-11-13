@@ -127,9 +127,8 @@ async def checkin(u) -> None:
         instruction, marks = plan
         seen_inbound = u["last_inbound"] or 0
         parked = db.parked_to_return(uid) if instruction in (prompts.MORNING, prompts.PULSE) and not u["unanswered"] else None
-        kind = AGENDA_KINDS.get(instruction)
-        if kind:  # what is really on their day, worked out by code, so the coach starts from their calendar and list
-            instruction += agenda.prompt_block(uid, kind)
+        # what is really on their day, worked out by code, so every check-in (the back-off and weekly review ones too) can remind them of it
+        instruction += agenda.prompt_block(uid, AGENDA_KINDS.get(instruction, "pulse"))
         if parked:  # an idea set aside earlier: offered at a calm moment, never to someone who is ignoring check-ins
             instruction += prompts.PARKED_RETURN.format(idea=parked["text"])
         try:

@@ -271,17 +271,19 @@ PARKED_RETURN = (
 )
 REENGAGE_LIGHT = (
     "The user hasn't replied to your last {n} check-in(s). Send ONE brief, warm coaching message with zero guilt: don't say what "
-    "they should have done, and say it's fine to be quiet. Don't bring up any task, step or objective: offer one easy thing that is not "
-    "work (a glass of water, a short walk, a stretch) or simply that you are here, and make replying effortless (a word is enough)."
+    "they should have done, and say it's fine to be quiet. If an agenda follows below, start by reminding them of ONE to-do or appointment "
+    "from it in a plain sentence (what and when), then offer one easy thing that is not work (a glass of water, a short walk, a "
+    "stretch) or simply say you are here, and make replying effortless (a word is enough)."
 ) + _CHECKIN_RULES
 REENGAGE_LONG = (
-    "The user hasn't written for about {days} days. Send ONE brief coaching message: life gets busy, no guilt. Don't bring up a specific "
-    "task or step; ask whether they'd like to keep going, change the plan, or hear from you less often (offer weekly). Make replying effortless."
+    "The user hasn't written for about {days} days. Send ONE brief coaching message: life gets busy, no guilt. If an agenda follows "
+    "below, remind them of ONE to-do or appointment from it in a plain sentence; then ask whether they'd like to keep going, change the plan, or hear from you less often (offer weekly). Make replying effortless."
 ) + _CHECKIN_RULES
 REENGAGE_LAST = (
     "This is your last check-in for now. Send ONE brief, kind message: say you'll stay quiet so you don't nag, that nothing is "
     "lost (their goals and toolbox are saved), and that they can message you any time, even just 'hi', to pick up where they "
-    "left off. Add one tiny idea they could try on their own from the playbook card that fits, not a task they left open."
+    "left off. If an agenda follows below, include a one-line reminder of ONE to-do or appointment from it. Add one tiny idea they could "
+    "try on their own from the playbook card that fits."
 ) + _CHECKIN_RULES
 STUCK = "The user is stuck starting a task{task}. Help them via the smallest possible first step, then propose a short timer."
 PLAN = "Help the user plan today{extra}. Use their open objectives first. Ask what's on their plate if you don't know, then narrow to 1-3 priorities."
