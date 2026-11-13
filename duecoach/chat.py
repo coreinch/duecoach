@@ -8,7 +8,7 @@ from . import db, llm, strings
 from .config import CRISIS_HELP, INACTIVE_DELETE_DAYS, RETENTION_DAYS
 
 log = logging.getLogger("duecoach.chat")
-background: set[asyncio.Task] = set()  # fire-and-forget jobs (notes refresh); shutdown waits for them
+background: set[asyncio.Task] = set()  # fire-and-forget jobs (notes refresh, planner sort); shutdown waits for them
 CRISIS_QUIET_SECONDS = 24 * 3600  # no proactive check-ins for a day after someone writes about harming themselves
 
 
@@ -30,6 +30,13 @@ async def _refresh_notes(uid: int) -> None:
         log.exception("notes refresh failed for %s", uid)
 
 
+async def _sort_planner(uid: int) -> None:
+    try:
+        await llm.sort_into_planner(uid)
+    except Exception:
+        log.exception("planner sort failed for %s", uid)
+
+
 async def coach(uid: int, text: str, instruction: str | None = None) -> str:
     """The coach's answer to `text` (the fixed apology if the model is unavailable)."""
     try:
@@ -38,6 +45,8 @@ async def coach(uid: int, text: str, instruction: str | None = None) -> str:
         log.exception("LLM call failed")
         return say(uid, "LLM_ERROR")
     _spawn(_refresh_notes(uid))  # after the reply is on its way, so it never delays the user
+    if not instruction and not text.startswith("/"):
+        _spawn(_sort_planner(uid))  # files what they said they need to do, for the coach to mention at its next reply
     return out
 
 

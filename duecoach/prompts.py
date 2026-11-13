@@ -377,6 +377,36 @@ Last message:
 
 Answer with JSON only: {{"crisis": true}} or {{"crisis": false}}."""
 
+SORTER = """You keep the planner of a coaching chat up to date. Read what the USER wrote and file what they said they need to do. You write
+nothing to them; you only return JSON.
+
+Now: {now}
+{mode}
+
+Already in their planner (never file any of this again, not even in other words):
+Projects: {projects}
+To-dos: {tasks}
+Appointments: {events}
+
+{background}Chat (oldest first):
+{convo}
+
+Answer with JSON only: {{"tasks": [...], "projects": [...], "events": [...]}}
+- "tasks": things the USER said they need, want, should or plan to do, with no time of day: {{"text": ..., "due": "YYYY-MM-DD" or null,
+  "important": true/false, "project_id": number or null}}. "text" is short, starts with a verb, in {language}, in their terms. "due" only
+  when they named a deadline day (work it out from Now). "important" only when they said it matters most. "project_id" when it clearly
+  belongs to a project already listed. A thing they agreed to when the coach proposed it counts; a thing only the coach proposed does not.
+- "projects": a bigger effort that takes several steps over days or weeks and that they described as something they are doing or want to
+  do (move flat, apply for jobs, plan a trip): {{"title": ..., "steps": [...]}} with 1 to 4 first steps, each a concrete literal action in
+  {language}, the first one tiny (about 5 minutes). Not for a single chore: that is a to-do.
+- "events": an appointment, call or plan for which they gave BOTH a day and a time of day: {{"title": ..., "at": "YYYY-MM-DD HH:MM"}}
+  (24h, their local time, from Now). Never guess a missing time or day.
+- Never file: something they already did, feelings, ideas they set aside, hypotheticals, advice they asked for, things for the coach to
+  do, coaching goals or weekly steps (stored elsewhere), or anything the chat does not support. If a later message says it was done or
+  cancelled, skip it. When unsure, leave it out: a missed item is cheap, a wrong one is noise.
+- At most {limits}. Empty lists when there is nothing: that is the usual answer.
+"""
+
 SUMMARIZE = """Update the coaching notes about this user. Keep durable facts learned in conversation only: recurring struggles,
 what strategies worked or failed, routines, preferences, how they like to be coached. Record only what the user said or did, never your own explanations or guesses (such as why something happens). Do not repeat goals, objectives or toolbox
 items, which are stored elsewhere. Leave out anything tied to a moment: appointments, calls and plans with a day or time (they are stored
