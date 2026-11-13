@@ -228,16 +228,22 @@ def calendar_text(uid: int, days: int = 7) -> str:
 # --- what the check-ins are told ---
 
 _USE = (
-    " These are facts from their own calendar and to-do list: use them to coach, don't read them back as a list. Mention at most "
-    "three items, lead with the one that matters most or comes first, and turn it into a concrete next step (when, where, a tiny first "
-    "move). Never say an item is done or missed unless the lists say so."
+    " These are facts from their own calendar and to-do list: use them to coach, don't read them back as a list. Open "
+    "with a plain reminder of the one to-do or appointment that matters most or comes first (what it is and when), then turn it into a "
+    "concrete next step (when, where, a tiny first move) as your one question. Mention at most three items. Never say an item is done or missed unless the lists say so."
+)
+
+
+_USE_BRIEF = (
+    " These are facts from their own calendar and to-do list: put them in the briefing, each in a few words, appointments first and "
+    "then the to-dos, and never say an item is done or missed unless the lists say so."
 )
 
 
 def prompt_block(uid: int, kind: str) -> str:
     """Facts for a check-in instruction ('morning', 'evening' or 'pulse'), or '' when there is nothing on their calendar or list."""
     zone, today, now = zone_of(uid), today_for(uid), time.time()
-    overdue, due_today, due_later, _ = _split_tasks(uid, today)
+    overdue, due_today, due_later, undated = _split_tasks(uid, today)
     start, end = day_bounds(today, zone)
     lines: list[str] = []
 
@@ -254,8 +260,11 @@ def prompt_block(uid: int, kind: str) -> str:
             )
         tasks("Due today", due_today)
         tasks("Overdue (carried over; offer to reschedule, shrink or drop, no guilt)", overdue)
-        top = [t for t in db.open_tasks(uid) if not t["due"] and t["priority"]]
-        tasks("Top-priority with no date", top)
+        tasks("Top-priority with no date", [t for t in undated if t["priority"]])
+        steps = [f"{p['title']}: #{rows[0][0]['id']} {rows[0][0]['text']}" for p, rows in task_tree(uid) if p is not None and rows]
+        if steps:
+            lines.append("Next step in their projects: " + "; ".join(steps[:3]))
+        tasks("Also on their list", [t for t in undated if not t["priority"]][:2])
     elif kind == "evening":
         tomorrow = today + timedelta(days=1)
         t_start, t_end = day_bounds(tomorrow, zone)
@@ -283,9 +292,10 @@ def prompt_block(uid: int, kind: str) -> str:
             )
         tasks("Due today", due_today)
         tasks("Overdue", overdue[:3])
+        tasks("Also on their list (remind them of one if nothing is due)", undated[:3])
     if not lines:
         return ""
-    return f" Their agenda ({lang_note(kind)}):\n" + "\n".join(lines) + _USE
+    return f" Their agenda ({lang_note(kind)}):\n" + "\n".join(lines) + (_USE_BRIEF if kind == "morning" else _USE)
 
 
 def lang_note(kind: str) -> str:

@@ -234,12 +234,15 @@ _CHECKIN_RULES = (
     "check-in this is or quote these instructions."
 )
 MORNING = (
-    "Start-of-day coaching check-in. Do real coaching, not small talk. Use their coaching record: if they have an open objective, "
-    "pick the one most due and help them plan it for today (exact time and place, the obstacle most likely to get in the way and "
-    "its fix, a short start timer if it is hard to begin). When an agenda follows below, start from it: what is on their day (appointments first, then what is due or overdue) decides what to plan, before any other coaching. If not, offer one item from their to-do list, or help them choose the one most important thing today, and its "
-    "first tiny step. If they have no goal yet, or a goal but no open objective, offer one sentence of wording for it that they can say "
-    "yes to. Read the playbook card that fits their situation and apply it. End with one concrete question or action."
-) + _CHECKIN_RULES
+    "Start-of-day check-in: a short briefing for their day, then coaching. Open with a one-line greeting. When an agenda follows below, "
+    "give the briefing from it as short lines starting with a dash: first every appointment with its time, then the to-dos to do today "
+    "(due today and overdue first, then top-priority ones, then the next step of a project), at most six lines in all, each in a few "
+    "words, with no commentary. Then coach: use their coaching record, and if they have an open objective, pick the one most due and "
+    "help them plan it for today (exact time and place, the obstacle most likely to get in the way and its fix, a short start timer if "
+    "it is hard to begin); otherwise help them choose the one most important thing today, and its first tiny step. If they have no "
+    "agenda and no goal yet, or a goal but no open objective, offer one sentence of wording for it that they can say yes to. Read the "
+    "playbook card that fits their situation and apply it. End with one concrete question or action."
+) + _CHECKIN_RULES.replace("in at most 3 short sentences", "after the briefing lines, in at most 3 short sentences")
 EVENING = (
     "End-of-day coaching check-in. Coach the review, one objective at a time: if today's objective was done, find out what made "
     "it work and name it; if not, ask what got in the way without blame, then adjust the plan or the reward. Record the outcome with "
@@ -268,17 +271,19 @@ PARKED_RETURN = (
 )
 REENGAGE_LIGHT = (
     "The user hasn't replied to your last {n} check-in(s). Send ONE brief, warm coaching message with zero guilt: don't say what "
-    "they should have done, and say it's fine to be quiet. Don't bring up any task, step or objective: offer one easy thing that is not "
-    "work (a glass of water, a short walk, a stretch) or simply that you are here, and make replying effortless (a word is enough)."
+    "they should have done, and say it's fine to be quiet. If an agenda follows below, start by reminding them of ONE to-do or appointment "
+    "from it in a plain sentence (what and when), then offer one easy thing that is not work (a glass of water, a short walk, a "
+    "stretch) or simply say you are here, and make replying effortless (a word is enough)."
 ) + _CHECKIN_RULES
 REENGAGE_LONG = (
-    "The user hasn't written for about {days} days. Send ONE brief coaching message: life gets busy, no guilt. Don't bring up a specific "
-    "task or step; ask whether they'd like to keep going, change the plan, or hear from you less often (offer weekly). Make replying effortless."
+    "The user hasn't written for about {days} days. Send ONE brief coaching message: life gets busy, no guilt. If an agenda follows "
+    "below, remind them of ONE to-do or appointment from it in a plain sentence; then ask whether they'd like to keep going, change the plan, or hear from you less often (offer weekly). Make replying effortless."
 ) + _CHECKIN_RULES
 REENGAGE_LAST = (
     "This is your last check-in for now. Send ONE brief, kind message: say you'll stay quiet so you don't nag, that nothing is "
     "lost (their goals and toolbox are saved), and that they can message you any time, even just 'hi', to pick up where they "
-    "left off. Add one tiny idea they could try on their own from the playbook card that fits, not a task they left open."
+    "left off. If an agenda follows below, include a one-line reminder of ONE to-do or appointment from it. Add one tiny idea they could "
+    "try on their own from the playbook card that fits."
 ) + _CHECKIN_RULES
 STUCK = "The user is stuck starting a task{task}. Help them via the smallest possible first step, then propose a short timer."
 PLAN = "Help the user plan today{extra}. Use their open objectives first. Ask what's on their plate if you don't know, then narrow to 1-3 priorities."
