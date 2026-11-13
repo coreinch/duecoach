@@ -18,6 +18,7 @@ from .config import (
     LLM_API_KEY,
     LLM_BASE_URL,
     LLM_CONCURRENCY,
+    LLM_DEEPSEEK_EFFORT,
     LLM_GROK_EFFORT,
     LLM_HELPER_EFFORT,
     LLM_MODEL,
@@ -77,6 +78,8 @@ _GROK_EFFORT = re.compile(r"grok-(4\.[3-9](?!\d)|[5-9])")
 def _extra(model: str, effort: str | None = None) -> dict[str, Any]:
     if _GROK_EFFORT.match(model):
         return {"extra_body": {"reasoning_effort": effort or LLM_GROK_EFFORT}}
+    if model.startswith("deepseek-"):
+        return {"extra_body": {"reasoning_effort": effort or LLM_DEEPSEEK_EFFORT}}
     if not model.startswith("MiniMax-"):
         return {}
     body: dict[str, Any] = {"reasoning_split": True}

@@ -68,6 +68,8 @@ LLM_REASONING_EFFORT = os.getenv("LLM_REASONING_EFFORT") or "medium"
 LLM_HELPER_EFFORT = os.getenv("LLM_HELPER_EFFORT") or "low"
 # Grok 4.3+ replies: medium took 51 s on the real prompt, low 18 s, so low is the default there.
 LLM_GROK_EFFORT = os.getenv("LLM_GROK_EFFORT") or "low"
+# DeepSeek V4 reasons at a slow default (a verifier call took 14-22 s); reasoning_effort caps it. Values: none, low, medium, high.
+LLM_DEEPSEEK_EFFORT = os.getenv("LLM_DEEPSEEK_EFFORT") or "low"
 LLM_VERIFIER_MODEL = os.getenv("LLM_VERIFIER_MODEL") or LLM_MODEL
 # Optional faster model for the short side jobs (safety check, recorder, notes refresh); the coach and the verifier keep their own models.
 # grok-4.20-non-reasoning matched grok-4.7 on the crisis eval (0/36 missed, 0/36 false alarms) but flagged 18/33 good drafts as a verifier.

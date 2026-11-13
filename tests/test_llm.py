@@ -854,3 +854,8 @@ async def test_side_jobs_use_the_side_model_but_a_named_model_is_kept(monkeypatc
 def test_opencode_gets_the_session_header_it_requires_and_other_providers_do_not():
     assert llm._headers("https://opencode.ai/zen/go/v1")["x-opencode-session"]
     assert llm._headers("https://api.x.ai/v1") == {}
+
+
+def test_deepseek_calls_cap_the_reasoning_effort():
+    assert llm._extra("deepseek-v4.1-flash") == {"extra_body": {"reasoning_effort": "low"}}
+    assert llm._extra("deepseek-v4.1-flash", "none") == {"extra_body": {"reasoning_effort": "none"}}
