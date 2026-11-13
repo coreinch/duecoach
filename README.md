@@ -8,7 +8,7 @@ the prompt of every reply (one model call per message). New users are asked for 
 and follows up on them in conversation, saving them with tools. It also keeps a running to-do list of whatever you say you need to do (no time attached) and brings one item back, with a tiny first step, in its check-ins when you have been quiet. It also notes what you say you did or are doing (kept 30 days; the last 2 weeks are shown with `/log` and used for suggestions) and suggests one related next step, which goes on the list only if you say yes. When you drift onto a tangent mid-task, it parks the idea on its own (`/parked`), keeps you on track, and brings it back in a later check-in as a yes/no offer. It is also a planner you run by talking: the coach keeps to-dos with due days, projects (bigger things with several steps) and notes, breaks a vague or
 big to-do into small literal steps (the first one tiny) and, when a step of a project is finished, adds the next one so every project always has a next
 step. Appointments with a time go on a calendar. It also files things by itself: after each message a small background call (on `LLM_SIDE_MODEL`) reads the latest exchange and adds the to-dos, projects and appointments you mentioned that the coach didn't save, through the same checked tools, and the coach tells you once what it filed. The first time it runs for a user it reads everything the bot still holds from them (messages, notes), so an existing user's planner fills in from their history after their next message. Everything is saved with tools, so there are no commands for changing anything; the plain views are
-`/today` (appointments, reminders, overdue and due to-dos), `/calendar` (the next 7 days), `/tasks` (to-dos by project, steps under their task) and
+`/today` (appointments, reminders, overdue and due to-dos), `/calendar` (the next 7 days), `/tasks` (to-dos by project, steps under their task), `/projects` (each project and its next step) and
 `/notes` (what you asked it to write down; what the coach has learned about you is `/memory`). Check-ins are handed the same facts, worked out by code: the
 morning one starts from today's appointments and due items, the evening one looks at what got done and what is on tomorrow, the mid-day one only mentions
 what is close, and morning and evening also point at projects with no next step (the coach offers one; check-ins cannot save, so it is saved once you say yes). Once the timezone is known, the bot checks in after 30 minutes of silence
@@ -91,7 +91,7 @@ them off the box if the data matters.
 
 ## Commands
 
-`/help` lists them. Highlights: `/stuck`, `/plan`, `/overwhelm`, `/goals`, `/today`, `/calendar`, `/tasks`, `/notes`, `/memory`, `/log`, `/parked`, `/toolbox`, `/progress`, `/remind`, `/timezone`,
+`/help` lists them. Highlights: `/stuck`, `/plan`, `/overwhelm`, `/goals`, `/today`, `/calendar`, `/tasks`, `/projects`, `/notes`, `/memory`, `/log`, `/parked`, `/toolbox`, `/progress`, `/remind`, `/timezone`,
 `/interval on|off|<minutes>`, `/morning`, `/evening`, `/language`, `/wrong` (marks the coach's last message as wrong, for the maintainer), `/privacy`, `/deletedata`.
 
 ## Telegram profile

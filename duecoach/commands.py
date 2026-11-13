@@ -72,6 +72,10 @@ async def _tasks(uid, args):
     return agenda.tasks_text(uid)
 
 
+async def _projects(uid, args):
+    return agenda.projects_text(uid)
+
+
 async def _today(uid, args):
     return agenda.today_text(uid)
 
@@ -220,6 +224,7 @@ COMMANDS = {
     "toolbox": _toolbox,
     "tasks": _tasks,
     "today": _today,
+    "projects": _projects,
     "calendar": _calendar,
     "agenda": _calendar,
     "log": _log,

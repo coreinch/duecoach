@@ -40,7 +40,8 @@ STRINGS = {
             "/toolbox - τι έχει δουλέψει για σένα\n"
             "/today - τι έχεις σήμερα\n"
             "/calendar - η επόμενη εβδομάδα\n"
-            "/tasks - οι εργασίες και τα projects σου\n"
+            "/tasks - οι εργασίες σου\n"
+            "/projects - τα projects σου και το επόμενο βήμα\n"
             "/notes - οι σημειώσεις σου\n"
             "/log - τι μου είπες ότι έκανες πρόσφατα\n"
             "/parked - ιδέες που άφησα στην άκρη για αργότερα\n"
@@ -92,6 +93,10 @@ STRINGS = {
         "CALENDAR_EMPTY": "Δεν έχεις τίποτα προγραμματισμένο τις επόμενες {days} μέρες. Πες μου τι έχεις και θα το γράψω.",
         "NOTE_HEADER": "Οι σημειώσεις σου (οι πιο πρόσφατες πρώτα)",
         "NOTE_EMPTY": "Δεν έχεις σημειώσεις. Πες μου «κράτα σημείωση ότι…» και θα τη γράψω.",
+        "PROJECTS_HEADER": "Τα projects σου",
+        "PROJECTS_NEXT": "επόμενο βήμα: {step} ({n} ανοιχτά)",
+        "PROJECTS_NO_STEP": "δεν υπάρχει επόμενο βήμα ακόμα",
+        "PROJECTS_EMPTY": "Δεν έχεις projects. Πες μου για κάτι που θέλει αρκετά βήματα (μετακόμιση, αναζήτηση δουλειάς, ένα ταξίδι) και θα το στήσω.",
         "PROJECT_HEADER": "Project: {title}",
         "PROJECT_NO_STEP": "    (δεν υπάρχει επόμενο βήμα ακόμα)",
         "TASKS_OTHER": "Άλλες εργασίες",
@@ -159,7 +164,8 @@ STRINGS = {
             "/toolbox - what has worked for you\n"
             "/today - what's on today\n"
             "/calendar - the next week\n"
-            "/tasks - your to-dos and projects\n"
+            "/tasks - your to-dos\n"
+            "/projects - your projects and their next step\n"
             "/notes - your notes\n"
             "/log - what you told me you did lately\n"
             "/parked - ideas I set aside for later\n"
@@ -211,6 +217,10 @@ STRINGS = {
         "CALENDAR_EMPTY": "Nothing planned for the next {days} days. Tell me what's coming up and I'll put it in.",
         "NOTE_HEADER": "Your notes (newest first)",
         "NOTE_EMPTY": 'No notes yet. Tell me "note down that…" and I\'ll write it for you.',
+        "PROJECTS_HEADER": "Your projects",
+        "PROJECTS_NEXT": "next: {step} ({n} open)",
+        "PROJECTS_NO_STEP": "no next step yet",
+        "PROJECTS_EMPTY": "No projects yet. Tell me about something that takes several steps (a move, a job search, a trip) and I'll set it up.",
         "PROJECT_HEADER": "Project: {title}",
         "PROJECT_NO_STEP": "    (no next step yet)",
         "TASKS_OTHER": "Other to-dos",

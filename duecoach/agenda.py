@@ -118,6 +118,22 @@ def task_tree(uid: int) -> list[tuple]:
     return sections
 
 
+def projects_text(uid: int) -> str:
+    """Each active project with its next step and how many to-dos are open, for `/projects`."""
+    lang = db.get_user(uid)["lang"]
+    lines = []
+    for project, rows in task_tree(uid):
+        if project is None:
+            continue
+        # the next step: the first step under the first to-do if it has any, else that to-do itself
+        nxt = rows[1][0] if len(rows) > 1 and rows[1][1] else rows[0][0] if rows else None
+        detail = strings.t(lang, "PROJECTS_NEXT", step=nxt["text"], n=len(rows)) if nxt else strings.t(lang, "PROJECTS_NO_STEP")
+        lines.append(f"• {project['title']} — {detail}")
+    if not lines:
+        return strings.t(lang, "PROJECTS_EMPTY")
+    return f"{strings.t(lang, 'PROJECTS_HEADER')}:\n" + "\n".join(lines)
+
+
 def tasks_text(uid: int) -> str:
     """The whole to-do list for `/tasks`: by project, steps under their task."""
     lang, today = db.get_user(uid)["lang"], today_for(uid)
