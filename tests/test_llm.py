@@ -859,3 +859,16 @@ def test_opencode_gets_the_session_header_it_requires_and_other_providers_do_not
 def test_deepseek_calls_cap_the_reasoning_effort():
     assert llm._extra("deepseek-v4.1-flash") == {"extra_body": {"reasoning_effort": "low"}}
     assert llm._extra("deepseek-v4.1-flash", "none") == {"extra_body": {"reasoning_effort": "none"}}
+
+
+async def test_an_agreement_read_by_the_precheck_is_saved_by_the_reply_without_another_model_call(model, user, recorder):
+    db.add_message(1001, "assistant", 'A goal that could work: "Send every invoice within 48 hours". Does that fit?')
+    model.queue += [
+        message('{"goal": "Send every invoice within 48 hours.", "step": null}'),
+        message("Got it. What is the first invoice you will send?"),
+    ]
+    assert await llm.precheck(1001, "yes") is False
+    assert db.active_goals(1001) == []  # read, not saved yet
+    assert await llm.reply(1001, "yes") == "Got it. What is the first invoice you will send?"
+    assert [g["text"] for g in db.active_goals(1001)] == ["Send every invoice within 48 hours."]
+    assert len(model.calls) == 2  # the reading and the reply: the reply did not read the agreement again
