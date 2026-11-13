@@ -1,3 +1,4 @@
+import asyncio
 import time
 
 import pytest
@@ -130,3 +131,42 @@ async def test_a_failing_safety_check_never_blocks_a_normal_reply(model, monkeyp
     monkeypatch.setattr(llm, "_complete", broken)
     make_user(8)
     assert await say("a normal message") == "coached"
+
+
+async def test_the_safety_check_and_the_agreement_reading_run_at_the_same_time(model, monkeypatch):
+    make_user(8)
+    running, overlapped = [], []
+
+    async def slow(name, result):
+        running.append(name)
+        await asyncio.sleep(0.05)
+        overlapped.append(len(running))
+        running.remove(name)
+        return result
+
+    async def crisis_check(user_id, text):
+        return await slow("crisis", False)
+
+    async def agreements(user_id, text):
+        return await slow("agreements", None)
+
+    monkeypatch.setattr(llm, "signals_crisis", crisis_check)
+    monkeypatch.setattr(llm, "read_agreements", agreements)
+    assert await say("a normal message") == "coached"
+    assert overlapped == [2, 1]  # both were in flight together
+
+
+async def test_nothing_is_saved_from_the_agreement_reading_when_the_message_is_a_crisis(model, monkeypatch):
+    uid = make_user(8)
+    db.add_message(uid, "assistant", 'A goal that could work: "Send every invoice within 48 hours". Does that fit?')
+
+    async def sees_a_crisis(user_id, text):
+        return True
+
+    async def agreed_a_goal(user_id, text):
+        return {"goal": "Send every invoice within 48 hours.", "step": None}
+
+    monkeypatch.setattr(llm, "signals_crisis", sees_a_crisis)
+    monkeypatch.setattr(llm, "read_agreements", agreed_a_goal)
+    assert "112" in await say("yes, but honestly I want to disappear")
+    assert db.active_goals(uid) == [] and uid not in llm._preread

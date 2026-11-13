@@ -361,19 +361,21 @@ def _since(last_inbound: float | None) -> str:
     )
 
 
-async def record_agreements(user_id: int, user_text: str) -> list[str]:
-    """Before the coach answers: if the user just agreed to a goal or a step the coach proposed, save it.
+_UNREAD: Any = object()  # "the agreement check has not been run yet" (None means it ran and found nothing)
+_preread: dict[int, tuple[str, Any]] = {}  # per user: (message, what the agreement check read), set by precheck, used by the next reply
 
-    Saving is not left to the coach's own tool call, which the model skips about half the time. A separate small call reads the one
-    exchange and returns what, if anything, was agreed; the code writes it. Only runs while a goal or a step is still missing.
-    Returns notes for the coach about what was saved.
+
+async def read_agreements(user_id: int, user_text: str) -> dict | None:
+    """The model call of the agreement check: what the user just agreed to, if anything. Saves nothing.
+
+    Only runs while a goal or a step is still missing, and only when the coach's last message is there to be agreed to.
     """
     goals, steps = db.active_goals(user_id), db.open_objectives(user_id)
     if (goals and steps) or user_text.startswith("/"):
-        return []
+        return None
     last = next((m["content"] for m in reversed(db.recent_messages(user_id, 6)) if m["role"] == "assistant"), None)
     if not last:
-        return []
+        return None
     prompt = prompts.RECORDER.format(
         coach=last[:1200],
         user=user_text[:600],
@@ -386,7 +388,21 @@ async def record_agreements(user_id: int, user_text: str) -> list[str]:
         found = json.loads(re.search(r"\{.*\}", out, re.DOTALL).group(0))  # type: ignore[union-attr]
     except Exception:
         log.warning("could not read the agreement check, leaving the saving to the coach")
+        return None
+    return found if isinstance(found, dict) else None
+
+
+async def record_agreements(user_id: int, user_text: str, found: Any = _UNREAD) -> list[str]:
+    """Before the coach answers: if the user just agreed to a goal or a step the coach proposed, save it.
+
+    Saving is not left to the coach's own tool call, which the model skips about half the time. A separate small call reads the one
+    exchange (`read_agreements`) and the code writes what was agreed. Returns notes for the coach about what was saved.
+    """
+    if found is _UNREAD:
+        found = await read_agreements(user_id, user_text)
+    if not found:
         return []
+    goals, steps = db.active_goals(user_id), db.open_objectives(user_id)
     notes = []
     goal, step = found.get("goal"), found.get("step")
     if isinstance(goal, str) and goal.strip() and not goals:
@@ -399,6 +415,19 @@ async def record_agreements(user_id: int, user_text: str) -> list[str]:
         if tools.run_tool(user_id, "add_objective", json.dumps(args)).startswith("ok"):
             notes.append(f"step saved: {step.strip()}")
     return notes
+
+
+async def precheck(user_id: int, text: str) -> bool:
+    """Run the safety check and the agreement reading at the same time (each is a model call, and they don't depend on each other).
+
+    Returns whether the message shows a crisis. When it does, nothing is saved from the agreement reading; otherwise the reading is
+    kept for the reply that follows, which saves it.
+    """
+    crisis, found = await asyncio.gather(signals_crisis(user_id, text), read_agreements(user_id, text))
+    _preread.pop(user_id, None)
+    if not crisis:
+        _preread[user_id] = (text, found)
+    return crisis
 
 
 async def signals_crisis(user_id: int, text: str) -> bool:
@@ -535,7 +564,9 @@ async def reply(user_id: int, user_text: str, instruction: str | None = None) ->
 
 
 async def _reply(user_id: int, user_text: str, instruction: str | None, stat: dict[str, Any]) -> str:
-    recorded = await record_agreements(user_id, user_text) if user_text and not instruction else []
+    pre = _preread.pop(user_id, None)
+    found = pre[1] if pre and pre[0] == user_text else _UNREAD
+    recorded = await record_agreements(user_id, user_text, found) if user_text and not instruction else []
     if user_text:
         db.add_message(user_id, "user", user_text)
     messages = [

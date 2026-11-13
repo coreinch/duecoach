@@ -63,7 +63,7 @@ async def handle_text(channel: str, ext_id: str, chat_id: str, text: str, lang_h
             if command in BEFORE_CONSENT:
                 return await COMMANDS[command](uid, args) if command not in ("start", "help") else chat.privacy(uid)
             return chat.privacy(uid)
-        if not crisis and not command and await llm.signals_crisis(uid, text):
+        if not crisis and not command and await llm.precheck(uid, text):
             crisis = True  # wording the list does not know: judged by the model (only after consent: it sends the text to the provider)
         if crisis:
             return await chat.crisis(uid, text)
