@@ -5,6 +5,7 @@ import logging
 import re
 import time
 from collections.abc import Callable
+from datetime import datetime
 from typing import Any, NamedTuple
 
 import openai
@@ -501,9 +502,11 @@ async def reply(user_id: int, user_text: str, instruction: str | None = None) ->
     `instruction` is a hidden steering note for this turn (e.g. a /stuck command or a check-in's purpose).
     """
     stat: dict[str, Any] = {"outcome": "sent", "flags": [], "tools": [], "rounds": 0}
-    started = time.monotonic()
+    started, began = time.monotonic(), time.time()
     try:
-        return await _reply(user_id, user_text, instruction, stat)
+        out = await _reply(user_id, user_text, instruction, stat)
+        db.mark_auto_announced(user_id, began)  # the coach's notes listed what was filed before this reply began
+        return out
     except Exception:
         stat["outcome"] = "dropped" if not user_text else "error"
         raise
@@ -753,3 +756,111 @@ async def refresh_notes(user_id: int) -> None:
     notes = await _complete([{"role": "user", "content": prompt}], max_tokens=SHORT_JOB_TOKENS)
     if notes:
         db.set_fields(user_id, notes=notes, notes_at_count=count)
+
+
+_sorting: dict[int, asyncio.Lock] = {}  # one planner pass at a time per user, so two quick messages cannot file the same thing twice
+BACKFILL_MESSAGES = 60
+RECENT_MESSAGES = 6
+
+
+def _planner_snapshot(user_id: int) -> tuple[str, str, str]:
+    """What is already in the planner, as short lines for the sorter: (projects, to-dos, appointments)."""
+    zone = tools._local_zone(user_id)
+    projects = "; ".join(f"#{p['id']} {p['title']}" for p in db.active_projects(user_id)) or "none"
+    todos = "; ".join(
+        f"#{t['id']} {t['text']}" + (f" [project #{t['project_id']}]" if t["project_id"] else "") for t in db.open_tasks(user_id)
+    )
+    events = "; ".join(
+        f"{e['title']} {datetime.fromtimestamp(e['start'], zone):%Y-%m-%d %H:%M}"
+        for e in db.events_between(user_id, time.time() - 86400, time.time() + 90 * 86400)
+    )
+    return projects, todos or "none", events or "none"
+
+
+def _backfill_background(user_id: int) -> str:
+    """Everything else the bot knows about someone, for the one-time first pass over what they have already told it."""
+    lines = []
+    if notes := db.get_notes(user_id):
+        lines.append(f"Long-term notes about them:\n{notes}")
+    if goals := db.active_goals(user_id):
+        lines.append("Their coaching goals (already stored; context only): " + "; ".join(g["text"] for g in goals))
+    if parked := db.open_parked(user_id):
+        lines.append("Ideas they set aside (do NOT file these): " + "; ".join(p["text"] for p in parked))
+    return "\n".join(lines) + "\n\n" if lines else ""
+
+
+async def sort_into_planner(user_id: int) -> int:
+    """After a reply: file what the user said they need to do (to-dos, projects, appointments) that the coach has not saved itself.
+
+    The coach saves these with its own tools, but skips them often, and someone who has told the bot about their life for weeks has
+    nothing in the planner. A small separate call reads the latest exchange (the first time for a user: everything the bot still has
+    from them) and returns what to file; the code writes it through the same checked tools the coach uses, marked as filed by itself
+    so the coach tells the user once. Returns how many things were filed.
+    """
+    user = db.get_user(user_id)
+    if user is None or not user["consent_at"]:
+        return 0
+    lock = _sorting.setdefault(user_id, asyncio.Lock())
+    async with lock:
+        first_pass = not user["planner_sorted"]
+        history = db.recent_messages(user_id, BACKFILL_MESSAGES if first_pass else RECENT_MESSAGES)
+        if not any(m["role"] == "user" for m in history):
+            return 0
+        projects, todos, events = _planner_snapshot(user_id)
+        zone = tools._local_zone(user_id)
+        prompt = prompts.SORTER.format(
+            now=datetime.now(zone).strftime("%A %Y-%m-%d %H:%M") + f" ({user['tz']})",
+            mode=(
+                "This is the first pass over everything they have told you so far: file what is still open."
+                if first_pass
+                else "This is the latest exchange: file only what is new in it."
+            ),
+            projects=projects,
+            tasks=todos,
+            events=events,
+            background=_backfill_background(user_id) if first_pass else "",
+            convo="\n".join(f"{m['role']}: {m['content'][:600]}" for m in history),
+            language=prompts.LANGUAGE_NAME.get(user["lang"], "English"),
+            limits="10 to-dos, 4 projects and 6 appointments" if first_pass else "4 to-dos, 2 projects and 3 appointments",
+        )
+        try:
+            out = await _complete([{"role": "user", "content": prompt}], max_tokens=SHORT_JOB_TOKENS)
+            found = json.loads(re.search(r"\{.*\}", out, re.DOTALL).group(0))  # type: ignore[union-attr]
+        except Exception:
+            log.warning("could not read the planner sort for %s, trying again after the next message", user_id)
+            return 0
+        if first_pass:
+            db.set_field(user_id, "planner_sorted", 1)
+        return _file(user_id, found, 10 if first_pass else 4, 4 if first_pass else 2, 6 if first_pass else 3)
+
+
+def _file(user_id: int, found: dict, max_tasks: int, max_projects: int, max_events: int) -> int:
+    """Write what the sorter found through the coach's own tools (so duplicates, caps and bad days are refused the same way)."""
+
+    def items(key: str, limit: int) -> list[dict]:
+        raw = found.get(key) if isinstance(found, dict) else None
+        return [i for i in raw if isinstance(i, dict)][:limit] if isinstance(raw, list) else []
+
+    token = db.filing_by_itself.set(True)
+    filed = 0
+    try:
+        for p in items("projects", max_projects):
+            filed += tools.run_tool(user_id, "add_project", json.dumps({"title": p.get("title"), "steps": p.get("steps")})).startswith(
+                "ok: project #"
+            )
+        for t in items("tasks", max_tasks):
+            args = {"text": t.get("text"), "important": bool(t.get("important"))}
+            if t.get("due"):
+                args["due"] = t["due"]
+            if isinstance(t.get("project_id"), int) and t["project_id"] > 0:
+                args["project_id"] = t["project_id"]
+            filed += tools.run_tool(user_id, "add_task", json.dumps(args)).startswith("ok: to-do #")
+        for e in items("events", max_events):
+            filed += tools.run_tool(user_id, "add_event", json.dumps({"title": e.get("title"), "at": e.get("at")})).startswith(
+                "ok: event #"
+            )
+    finally:
+        db.filing_by_itself.reset(token)
+    if filed:
+        log.info("filed %d things in the planner of %s by itself", filed, user_id)
+    return filed

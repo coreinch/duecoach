@@ -4,6 +4,7 @@ import json
 import os
 import sqlite3
 import time
+from contextvars import ContextVar
 from datetime import datetime, timedelta
 from typing import Any
 from zoneinfo import ZoneInfo
@@ -314,6 +315,14 @@ def _m17_projects() -> None:
     _conn.execute("CREATE INDEX IF NOT EXISTS idx_projects_user ON projects (user_id, status)")
 
 
+def _m18_auto_filed() -> None:
+    """Things the bot filed by itself from what the user said (1 = not yet mentioned to them, 2 = mentioned), and whether the one-time
+    pass over everything a user had already told it has been done."""
+    for table in ("tasks", "projects", "events"):
+        _ensure_columns(table, {"auto": "INTEGER DEFAULT 0"})
+    _ensure_columns("users", {"planner_sorted": "INTEGER DEFAULT 0"})
+
+
 MIGRATIONS = [
     _m1_baseline,
     _m2_consent_and_resilience,
@@ -332,6 +341,7 @@ MIGRATIONS = [
     _m15_parked,
     _m16_planner,
     _m17_projects,
+    _m18_auto_filed,
 ]
 
 
@@ -363,6 +373,7 @@ def close() -> None:
 
 
 USER_FIELDS = {
+    "planner_sorted",
     "chat_id",
     "nudged_at",
     "tz",
@@ -585,6 +596,14 @@ def delete_user_data(user_id: int) -> None:
     _conn.commit()
 
 
+# Set while the background sorter files things on its own: whatever is inserted then is marked auto=1 so the coach can tell the user.
+filing_by_itself: ContextVar[bool] = ContextVar("filing_by_itself", default=False)
+
+
+def _auto() -> int:
+    return 1 if filing_by_itself.get() else 0
+
+
 # --- events: appointments and plans with a time ---
 
 MAX_UPCOMING_EVENTS = 20
@@ -598,8 +617,8 @@ def add_event(user_id: int, title: str, start: float) -> int | None:
     if waiting >= MAX_UPCOMING_EVENTS:
         return None
     cur = _conn.execute(
-        "INSERT INTO events (user_id, title, start, status, created, changed) VALUES (?,?,?,'upcoming',?,?)",
-        (user_id, title, start, time.time(), time.time()),
+        "INSERT INTO events (user_id, title, start, status, created, changed, auto) VALUES (?,?,?,'upcoming',?,?,?)",
+        (user_id, title, start, time.time(), time.time(), _auto()),
     )
     _conn.commit()
     return cur.lastrowid
@@ -937,8 +956,8 @@ def add_task(user_id: int, text: str, due: str = "", priority: int = 0, project_
             return None
         project_id = project_id or parent["project_id"] or 0
     cur = _conn.execute(
-        "INSERT INTO tasks (user_id, text, created, due, priority, project_id, parent_id) VALUES (?,?,?,?,?,?,?)",
-        (user_id, text, time.time(), due, priority, project_id, parent_id),
+        "INSERT INTO tasks (user_id, text, created, due, priority, project_id, parent_id, auto) VALUES (?,?,?,?,?,?,?,?)",
+        (user_id, text, time.time(), due, priority, project_id, parent_id, _auto()),
     )
     _conn.commit()
     return cur.lastrowid
@@ -1126,7 +1145,7 @@ def add_project(user_id: int, title: str) -> int | None:
     """None when the user already has the maximum number of active projects."""
     if len(active_projects(user_id)) >= MAX_PROJECTS:
         return None
-    cur = _conn.execute("INSERT INTO projects (user_id, title, created) VALUES (?,?,?)", (user_id, title, time.time()))
+    cur = _conn.execute("INSERT INTO projects (user_id, title, created, auto) VALUES (?,?,?,?)", (user_id, title, time.time(), _auto()))
     _conn.commit()
     return cur.lastrowid
 
@@ -1153,3 +1172,23 @@ def prune_projects(days: int = TASK_KEEP_DAYS) -> int:
     cur = _conn.execute("DELETE FROM projects WHERE status!='active' AND closed<?", (time.time() - days * 86400,))
     _conn.commit()
     return cur.rowcount
+
+
+def unannounced_auto(user_id: int) -> dict[str, list[sqlite3.Row]]:
+    """What the bot filed by itself and has not yet told the user about (open to-dos, active projects, upcoming events)."""
+    return {
+        "tasks": _conn.execute("SELECT * FROM tasks WHERE user_id=? AND auto=1 AND status='open' ORDER BY id", (user_id,)).fetchall(),
+        "projects": _conn.execute(
+            "SELECT * FROM projects WHERE user_id=? AND auto=1 AND status='active' ORDER BY id", (user_id,)
+        ).fetchall(),
+        "events": _conn.execute(
+            "SELECT * FROM events WHERE user_id=? AND auto=1 AND status='upcoming' ORDER BY start", (user_id,)
+        ).fetchall(),
+    }
+
+
+def mark_auto_announced(user_id: int, before: float) -> None:
+    """The coach has now said what it filed: only what existed before this reply began counts (a later filing was not in its notes)."""
+    for table in ("tasks", "projects", "events"):
+        _conn.execute(f"UPDATE {table} SET auto=2 WHERE user_id=? AND auto=1 AND created<=?", (user_id, before))
+    _conn.commit()

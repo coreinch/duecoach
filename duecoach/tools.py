@@ -787,6 +787,16 @@ def coaching_state(user_id: int) -> str:
         for o in closed:
             detail = ", ".join(x for x in (o["barrier"], o["note"]) if x)
             lines.append(f"  #{o['id']} {o['status']}: {o['text']}" + (f" ({detail})" if detail else ""))
+    fresh = db.unannounced_auto(user_id)
+    if any(fresh.values()):
+        lines.append(
+            "Filed for them by yourself from what they told you, not yet mentioned (say so in ONE short sentence at the start of this "
+            "reply, naming at most three of the things in their words (with how many more, if so, and that /tasks shows all of it), and that "
+            "they can tell you if any of it is wrong; then carry on):"
+        )
+        lines += [f"  to-do #{t['id']} {t['text']}" + (f", due {t['due']}" if t["due"] else "") for t in fresh["tasks"]]
+        lines += [f"  project #{p['id']} {p['title']}" for p in fresh["projects"]]
+        lines += [f"  appointment #{e['id']} {e['title']}, {_shown(user_id, e['start'])}" for e in fresh["events"]]
     today = local.date()
     sections = agenda.task_tree(user_id)
     has_todo = any(rows for _, rows in sections)
