@@ -156,7 +156,7 @@ def test_pulse_block_only_has_what_is_close(user):
 
 async def test_check_ins_are_handed_the_agenda(user, monkeypatch):
     uid = user["user_id"]
-    db.set_fields(uid, interval_min=30, tz="Europe/Athens", tz_set=1, last_inbound=time.time() - 3 * 86400)
+    db.set_fields(uid, interval_min=30, tz="Europe/Athens", tz_set=1, last_inbound=time.time() - 3 * 86400, morning_hour=0, evening_hour=23)
     db.add_event(uid, "Standup", at("2026-11-13", "10:00"))
     seen = []
 

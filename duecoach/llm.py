@@ -44,10 +44,26 @@ NOTES_EVERY = 20  # new chat messages between refreshes of the long-term notes
 SHORT_JOB_TOKENS = 2000
 FIRST_PASS_TOKENS = 4000  # the main model thinks before it answers
 
-_client = AsyncOpenAI(api_key=LLM_API_KEY, base_url=LLM_BASE_URL, timeout=LLM_TIMEOUT, max_retries=2)
+
+def _headers(base_url: str) -> dict[str, str]:
+    """OpenCode routes (and caches) by session and wants the client to name itself; other providers need neither."""
+    if "opencode.ai" in base_url:
+        return {"x-opencode-session": "duecoach", "User-Agent": "duecoach/1.0"}
+    return {}
+
+
+_client = AsyncOpenAI(
+    api_key=LLM_API_KEY, base_url=LLM_BASE_URL, timeout=LLM_TIMEOUT, max_retries=2, default_headers=_headers(LLM_BASE_URL)
+)
 # The verifier may live at another provider; then it has its own client (otherwise it shares the coach's).
 _verifier_client = (
-    AsyncOpenAI(api_key=LLM_VERIFIER_API_KEY, base_url=LLM_VERIFIER_BASE_URL, timeout=LLM_TIMEOUT, max_retries=2)
+    AsyncOpenAI(
+        api_key=LLM_VERIFIER_API_KEY,
+        base_url=LLM_VERIFIER_BASE_URL,
+        timeout=LLM_TIMEOUT,
+        max_retries=2,
+        default_headers=_headers(LLM_VERIFIER_BASE_URL),
+    )
     if (LLM_VERIFIER_BASE_URL, LLM_VERIFIER_API_KEY) != (LLM_BASE_URL, LLM_API_KEY)
     else _client
 )
