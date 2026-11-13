@@ -228,9 +228,9 @@ def calendar_text(uid: int, days: int = 7) -> str:
 # --- what the check-ins are told ---
 
 _USE = (
-    " These are facts from their own calendar and to-do list: use them to coach, don't read them back as a list. Mention at most "
-    "three items, lead with the one that matters most or comes first, and turn it into a concrete next step (when, where, a tiny first "
-    "move). Never say an item is done or missed unless the lists say so."
+    " These are facts from their own calendar and to-do list: use them to coach, don't read them back as a list. Open "
+    "with a plain reminder of the one item that matters most or comes first (what it is and when), then turn it into a concrete next "
+    "step (when, where, a tiny first move) as your one question. Mention at most three items. Never say an item is done or missed unless the lists say so."
 )
 
 

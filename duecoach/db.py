@@ -328,6 +328,11 @@ def _m19_grouping() -> None:
     _ensure_columns("users", {"grouped_ids": "TEXT DEFAULT ''"})
 
 
+def _m20_event_heads_up() -> None:
+    """Whether the heads-up before an event has been sent."""
+    _ensure_columns("events", {"heads_up": "INTEGER DEFAULT 0"})
+
+
 MIGRATIONS = [
     _m1_baseline,
     _m2_consent_and_resilience,
@@ -348,6 +353,7 @@ MIGRATIONS = [
     _m17_projects,
     _m18_auto_filed,
     _m19_grouping,
+    _m20_event_heads_up,
 ]
 
 
@@ -662,6 +668,27 @@ def events_between(user_id: int, start: float, end: float) -> list[sqlite3.Row]:
         "SELECT id, title, start FROM events WHERE user_id=? AND status='upcoming' AND start>=? AND start<? ORDER BY start",
         (user_id, start, end),
     ).fetchall()
+
+
+HEADS_UP_MINUTES = 30
+
+
+def events_needing_heads_up(now: float) -> list[sqlite3.Row]:
+    """Events starting within the heads-up window whose user has agreed and who has not had the nudge yet.
+
+    Events saved when they were already that close are left alone: the user has just said it.
+    """
+    lead = HEADS_UP_MINUTES * 60
+    return _conn.execute(
+        "SELECT e.id, e.user_id, e.title, e.start FROM events e JOIN users u ON u.user_id=e.user_id "
+        "WHERE e.status='upcoming' AND e.heads_up=0 AND e.start>? AND e.start<=? AND e.created<e.start-? AND u.consent_at IS NOT NULL",
+        (now, now + lead, lead),
+    ).fetchall()
+
+
+def mark_heads_up(event_id: int) -> None:
+    _conn.execute("UPDATE events SET heads_up=1 WHERE id=?", (event_id,))
+    _conn.commit()
 
 
 def reminders_between(user_id: int, start: float, end: float) -> list[sqlite3.Row]:

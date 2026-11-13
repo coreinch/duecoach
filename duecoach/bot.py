@@ -54,6 +54,28 @@ async def deliver_reminders() -> None:
         db.mark_sent(r["id"])  # delivered, or dropped because it never can be
 
 
+async def deliver_heads_ups() -> None:
+    """A short nudge shortly before each saved event, written by code so it never depends on a model call."""
+    now = time.time()
+    for e in db.events_needing_heads_up(now):
+        user = db.get_user(e["user_id"])
+        if user is None:
+            continue
+        try:
+            at = datetime.fromtimestamp(e["start"], ZoneInfo(user["tz"]))
+        except Exception:
+            at = datetime.fromtimestamp(e["start"])
+        text = strings.t(user["lang"], "EVENT_HEADS_UP", mins=max(1, round((e["start"] - now) / 60)), time=f"{at:%H:%M}", title=e["title"])
+        try:
+            await channels.send(user, text)
+        except channels.Unreachable:
+            log.info("heads-up for event %s dropped: user %s cannot be messaged", e["id"], e["user_id"])
+        except Exception:
+            log.exception("heads-up for event %s failed, will retry", e["id"])
+            continue
+        db.mark_heads_up(e["id"])
+
+
 # --- check-ins ---
 
 AGENDA_KINDS = {prompts.MORNING: "morning", prompts.EVENING: "evening", prompts.PULSE: "pulse"}
@@ -251,6 +273,7 @@ async def main(stop: asyncio.Event | None = None) -> None:
     # independent loops: a slow model call during check-ins must never delay reminders
     loops = [
         asyncio.create_task(forever("reminders", deliver_reminders)),
+        asyncio.create_task(forever("heads_ups", deliver_heads_ups)),
         asyncio.create_task(forever("checkins", run_checkins)),
         asyncio.create_task(forever("maintenance", maintenance_job)),
     ]

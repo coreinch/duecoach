@@ -116,3 +116,25 @@ async def test_the_telegram_adapter_sends_to_the_users_chat():
     channel.app = SimpleNamespace(bot=SimpleNamespace(send_message=send_message))
     await channel.send({"chat_id": "42"}, "hello")
     assert sent == [(42, "hello")]  # chat ids are numbers for Telegram
+
+
+async def test_an_event_gets_one_heads_up_shortly_before_it_starts(user, monkeypatch):
+    channel = Recorder()
+    monkeypatch.setitem(channels.REGISTRY, "telegram", channel)
+    now = time.time()
+    monkeypatch.setattr(time, "time", lambda: now - 3 * 3600)
+    soon = db.add_event(1001, "dentist", now + 20 * 60)
+    far = db.add_event(1001, "dinner", now + 5 * 3600)
+    monkeypatch.setattr(time, "time", lambda: now)
+    await bot.deliver_heads_ups()
+    await bot.deliver_heads_ups()
+    assert len(channel.sent) == 1 and "dentist" in channel.sent[0] and "20 min" in channel.sent[0]
+    assert soon and far
+
+
+async def test_an_event_saved_when_already_close_gets_no_heads_up(user, monkeypatch):
+    channel = Recorder()
+    monkeypatch.setitem(channels.REGISTRY, "telegram", channel)
+    db.add_event(1001, "call", time.time() + 10 * 60)
+    await bot.deliver_heads_ups()
+    assert channel.sent == []
