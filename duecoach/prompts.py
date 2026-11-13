@@ -396,15 +396,27 @@ Answer with JSON only: {{"tasks": [...], "projects": [...], "events": [...]}}
   "important": true/false, "project_id": number or null}}. "text" is short, starts with a verb, in {language}, in their terms. "due" only
   when they named a deadline day (work it out from Now). "important" only when they said it matters most. "project_id" when it clearly
   belongs to a project already listed. A thing they agreed to when the coach proposed it counts; a thing only the coach proposed does not.
-- "projects": a bigger effort that takes several steps over days or weeks and that they described as something they are doing or want to
-  do (move flat, apply for jobs, plan a trip): {{"title": ..., "steps": [...]}} with 1 to 4 first steps, each a concrete literal action in
-  {language}, the first one tiny (about 5 minutes). Not for a single chore: that is a to-do.
+- "projects": an ongoing effort: something with a name or a purpose that they keep returning to and that takes several separate
+  actions over days or weeks (move flat, apply for jobs, plan a trip, build or fix a thing, a course, a creative piece). It is a project
+  when they described such an effort, OR when two or more to-dos (listed or being filed) are about the same named thing: those to-dos are
+  its steps, so create the project and move the listed ones in with "task_ids". {{"title": ..., "steps": [...], "task_ids": [...]}}:
+  "title" in {language}, in their words; "steps" are 0 to 4 NEW first steps (concrete literal actions, the first tiny, about 5 minutes)
+  that the chat shows are still open, and only needed when nothing listed covers it; "task_ids" are the numbers (without the #) of listed
+  to-dos that belong to it. Not for a single chore: that is a to-do. Don't create a project that is already listed: file new to-dos into
+  it with "project_id" instead.
 - "events": an appointment, call or plan for which they gave BOTH a day and a time of day: {{"title": ..., "at": "YYYY-MM-DD HH:MM"}}
   (24h, their local time, from Now). Never guess a missing time or day.
 - Never file: something they already did, feelings, ideas they set aside, hypotheticals, advice they asked for, things for the coach to
   do, coaching goals or weekly steps (stored elsewhere), or anything the chat does not support. If a later message says it was done or
   cancelled, skip it. When unsure, leave it out: a missed item is cheap, a wrong one is noise.
-- At most {limits}. Empty lists when there is nothing: that is the usual answer.
+{first_pass_rules}- At most {limits}. Empty lists when there is nothing: that is the usual answer for a single exchange.
+"""
+
+SORTER_FIRST_PASS = """- This is the first pass over a long chat, so read it all, oldest first. Look specifically for ongoing efforts: things they are working
+  on or want to get done that take several separate actions over days or weeks (a move, a job search, a course, a trip, a business, a
+  health routine, a big cleanup, a creative piece). Each one is a project, even if they only mentioned it in passing or in several places;
+  attach the listed to-dos that belong to it and add the next steps the chat shows are still open. A coaching goal they are actively working on through several
+  separate actions counts too. A single chore is a to-do. Skip what is clearly finished or that they gave up on.
 """
 
 SUMMARIZE = """Update the coaching notes about this user. Keep durable facts learned in conversation only: recurring struggles,
