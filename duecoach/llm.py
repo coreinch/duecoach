@@ -1,10 +1,13 @@
 import asyncio
 import difflib
+import hashlib
+import hmac
 import json
 import logging
 import re
 import time
 from collections.abc import Callable
+from contextvars import ContextVar
 from datetime import datetime
 from typing import Any, NamedTuple
 
@@ -28,6 +31,7 @@ from .config import (
     LLM_VERIFIER_API_KEY,
     LLM_VERIFIER_BASE_URL,
     LLM_VERIFIER_MODEL,
+    TELEGRAM_BOT_TOKEN,
 )
 
 log = logging.getLogger("duecoach.llm")
@@ -46,10 +50,26 @@ SHORT_JOB_TOKENS = 2000
 FIRST_PASS_TOKENS = 4000  # the main model thinks before it answers
 
 
-def _headers(base_url: str) -> dict[str, str]:
-    """OpenCode routes (and caches) by session and wants the client to name itself; other providers need neither."""
+_session: ContextVar[int | None] = ContextVar("llm_session", default=None)  # whose conversation the model calls in this task belong to
+
+
+def _for(user_id: int) -> None:
+    """Mark the model calls that follow (in this task and the ones it starts) as this user's conversation."""
+    _session.set(user_id)
+
+
+def _session_id(user_id: int | None) -> str:
+    """A stable id per user for the provider's routing and prompt cache. Hashed with the bot token: the provider never sees the real id."""
+    if user_id is None:
+        return "duecoach"
+    return "duecoach-" + hmac.new(TELEGRAM_BOT_TOKEN.encode(), str(user_id).encode(), hashlib.sha256).hexdigest()[:16]
+
+
+def _headers(base_url: str, user_id: int | None = None) -> dict[str, str]:
+    """OpenCode routes and caches by session (one constant id for everyone got no cache hits, one per user does) and wants the client
+    to name itself; other providers need neither."""
     if "opencode.ai" in base_url:
-        return {"x-opencode-session": "duecoach", "User-Agent": "duecoach/1.0"}
+        return {"x-opencode-session": _session_id(user_id), "User-Agent": "duecoach/1.0"}
     return {}
 
 
@@ -316,13 +336,14 @@ async def _chat(
 ):
     model = model or LLM_MODEL
     client = _verifier_client if model == LLM_VERIFIER_MODEL and model != LLM_MODEL else _client
+    headers = _headers(LLM_BASE_URL if client is _client else LLM_VERIFIER_BASE_URL, _session.get())
     kwargs: dict[str, Any] = {"tools": tool_defs} if tool_defs else {}
     problem = "no completion"
     for attempt in range(MODEL_ATTEMPTS):
         try:
             async with _slots:
                 resp = await client.chat.completions.create(
-                    model=model, messages=messages, max_tokens=max_tokens, **kwargs, **_extra(model, effort)
+                    model=model, messages=messages, max_tokens=max_tokens, extra_headers=headers or None, **kwargs, **_extra(model, effort)
                 )
         except openai.OpenAIError as error:  # connection, timeout, rate limit, server error, or a request the model rejects
             problem = f"{type(error).__name__}: {error}"[:200]
@@ -370,6 +391,7 @@ async def read_agreements(user_id: int, user_text: str) -> dict | None:
 
     Only runs while a goal or a step is still missing, and only when the coach's last message is there to be agreed to.
     """
+    _for(user_id)
     goals, steps = db.active_goals(user_id), db.open_objectives(user_id)
     if (goals and steps) or user_text.startswith("/"):
         return None
@@ -436,6 +458,7 @@ async def signals_crisis(user_id: int, text: str) -> bool:
     The word list in crisis.py catches the plain cases without a model; this reads what a list cannot (other languages, indirect or
     slang wording). A call that fails or answers badly says no: the list is still there, and a coaching reply is never blocked by it.
     """
+    _for(user_id)
     recent = "\n".join(f"{m['role']}: {m['content'][:300]}" for m in db.recent_messages(user_id, 4)) or "(none)"
     prompt = prompts.CRISIS_CHECK.format(recent=recent, user=text[:600])
     try:
@@ -550,6 +573,7 @@ async def reply(user_id: int, user_text: str, instruction: str | None = None) ->
 
     `instruction` is a hidden steering note for this turn (e.g. a /stuck command or a check-in's purpose).
     """
+    _for(user_id)
     stat: dict[str, Any] = {"outcome": "sent", "flags": [], "tools": [], "rounds": 0}
     started, began = time.monotonic(), time.time()
     try:
@@ -797,6 +821,7 @@ async def refresh_notes(user_id: int) -> None:
 
     (Counting "since the last time" matters: check-ins store a single message, so the count is not always a multiple of 20.)
     """
+    _for(user_id)
     count = db.message_count(user_id)
     if count - (db.get_user(user_id)["notes_at_count"] or 0) < NOTES_EVERY:
         return
@@ -849,6 +874,7 @@ async def sort_into_planner(user_id: int) -> int:
     from them) and returns what to file; the code writes it through the same checked tools the coach uses, marked as filed by itself
     so the coach tells the user once. Returns how many things were filed.
     """
+    _for(user_id)
     user = db.get_user(user_id)
     if user is None or not user["consent_at"]:
         return 0
@@ -943,6 +969,7 @@ async def group_into_projects(user_id: int) -> int:
     looked at the loose to-dos together later. This small call does, whenever the set of loose to-dos has changed since it last looked.
     Returns how many projects were made or filled.
     """
+    _for(user_id)
     user = db.get_user(user_id)
     if user is None or not user["consent_at"]:
         return 0
