@@ -37,7 +37,7 @@ async def test_language_can_be_chosen_before_agreeing():
 
 async def test_commands_run_without_the_model(ai, user):
     assert "/stuck" in await say("/help")
-    assert await say("/notes") == "Nothing yet. We're just getting started."
+    assert await say("/memory") == "Nothing yet. We're just getting started."
     assert "Europe/Athens" in await say("/timezone")
     assert "I don't know that timezone" in await say("/timezone Mars/Base")
     assert "set to Asia/Tokyo" in await say("/timezone Asia/Tokyo")
