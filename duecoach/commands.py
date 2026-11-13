@@ -3,7 +3,7 @@
 import time
 from zoneinfo import ZoneInfo
 
-from . import db, prompts, ratelimit, strings
+from . import agenda, db, prompts, ratelimit, strings
 from .chat import coach, privacy, say
 from .config import CHECKIN_INTERVAL_MINUTES
 
@@ -69,10 +69,22 @@ async def _toolbox(uid, args):
 
 
 async def _tasks(uid, args):
-    items = db.open_tasks(uid)
+    return agenda.tasks_text(uid)
+
+
+async def _today(uid, args):
+    return agenda.today_text(uid)
+
+
+async def _calendar(uid, args):
+    return agenda.calendar_text(uid)
+
+
+async def _notes(uid, args):
+    items = db.memos(uid)
     if not items:
-        return say(uid, "TASKS_EMPTY")
-    return f"{say(uid, 'TASKS_HEADER')}:\n" + "\n".join(f"• {t['text']}" for t in items)
+        return say(uid, "NOTE_EMPTY")
+    return f"{say(uid, 'NOTE_HEADER')}:\n" + "\n".join(f"• {m['text']}" for m in items[:20])
 
 
 async def _log(uid, args):
@@ -99,7 +111,7 @@ def _profile_text(uid: int) -> str:
     return f"{say(uid, 'PROFILE_HEADER')}:\n" + "\n".join(lines) if lines else ""
 
 
-async def _notes(uid, args):
+async def _memory(uid, args):
     parts = [part for part in (_profile_text(uid), db.get_notes(uid)) if part]
     return "\n\n".join(parts) or say(uid, "NOTES_EMPTY")
 
@@ -201,11 +213,15 @@ COMMANDS = {
     "overwhelm": _overwhelm,
     "remind": _remind,
     "notes": _notes,
+    "memory": _memory,
     "forget": _forget,
     "goals": _goals,
     "wrong": _wrong,
     "toolbox": _toolbox,
     "tasks": _tasks,
+    "today": _today,
+    "calendar": _calendar,
+    "agenda": _calendar,
     "log": _log,
     "parked": _parked,
     "progress": _progress,

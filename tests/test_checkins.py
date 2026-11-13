@@ -40,7 +40,7 @@ def outbox(monkeypatch):
     kinds = {prompts.MORNING: "morning", prompts.EVENING: "evening", prompts.PULSE: "pulse", prompts.WEEKLY_REVIEW: "review"}
 
     async def fake_reply(uid, text, instruction=None):
-        return kinds.get(instruction, "reengage")
+        return next((kind for base, kind in kinds.items() if (instruction or "").startswith(base)), "reengage")
 
     class FakeChannel:
         name = "telegram"

@@ -9,7 +9,7 @@ from zoneinfo import ZoneInfo
 
 from aiohttp import web
 
-from . import backoff, channels, chat, core, db, llm, prompts, strings, watch
+from . import agenda, backoff, channels, chat, core, db, llm, prompts, strings, watch
 from .channels.telegram import TelegramChannel
 from .config import (
     DB_PATH,
@@ -55,6 +55,8 @@ async def deliver_reminders() -> None:
 
 
 # --- check-ins ---
+
+AGENDA_KINDS = {prompts.MORNING: "morning", prompts.EVENING: "evening", prompts.PULSE: "pulse"}
 
 
 def plan_checkin(u, now_ts: float, now: datetime) -> tuple[str, dict] | None:
@@ -115,6 +117,9 @@ async def checkin(u) -> None:
         instruction, marks = plan
         seen_inbound = u["last_inbound"] or 0
         parked = db.parked_to_return(uid) if instruction in (prompts.MORNING, prompts.PULSE) else None
+        kind = AGENDA_KINDS.get(instruction)
+        if kind:  # what is really on their day, worked out by code, so the coach starts from their calendar and list
+            instruction += agenda.prompt_block(uid, kind)
         if parked:  # an idea set aside earlier: offered at a calm moment, never to someone who is ignoring check-ins
             instruction += prompts.PARKED_RETURN.format(idea=parked["text"])
         try:
@@ -163,6 +168,7 @@ def maintain() -> None:
     abandoned = db.abandon_stale_reminders(REMINDER_GIVE_UP_HOURS)
     db.prune_events()
     db.prune_tasks()
+    db.prune_projects()
     db.prune_activities()
     db.prune_parked()
     db.prune_turn_stats()

@@ -6,7 +6,7 @@ import time
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 
-from . import db
+from . import agenda, db
 from .config import CHECKIN_INTERVAL_MINUTES
 
 MAX_REMINDER_MINUTES = 60 * 24 * 30
@@ -184,11 +184,22 @@ TOOLS = [
     ),
     _fn(
         "add_task",
-        "Put something on the user's running to-do list: a thing they said they want or need to do that has NO set time (with a day and "
-        "a time use add_event or set_reminder instead). Call it in the same turn they mention it ('I need to email the landlord', "
-        "'I keep meaning to renew my passport'), so it is not forgotten. Not for coaching goals or weekly steps (use add_goal / "
-        "add_objective) and not for facts about them.",
-        {"text": {"type": "string", "description": "The thing to do, short, starting with a verb, in the user's language."}},
+        "Put something on the user's to-do list: a thing they said they want or need to do. It may have a due DAY (a deadline such as "
+        "'by Friday') but no time of day; with a time of day use add_event or set_reminder instead. Call it in the same turn they mention "
+        "it ('I need to email the landlord', 'I keep meaning to renew my passport'), so it is not forgotten. Not for coaching goals or "
+        "weekly steps (use add_goal / add_objective) and not for facts about them.",
+        {
+            "text": {"type": "string", "description": "The thing to do, short, starting with a verb, in the user's language."},
+            "due": {
+                "type": "string",
+                "description": "Only if they gave a deadline day: 'YYYY-MM-DD' in their local time (work it out from the 'Now' line). "
+                "Never invent one.",
+            },
+            "important": {
+                "type": "boolean",
+                "description": "True only if they said it matters most, or it is a real deadline with consequences.",
+            },
+        },
         ["text"],
     ),
     _fn(
@@ -205,9 +216,68 @@ TOOLS = [
     ),
     _fn(
         "update_task",
-        "Reword an open to-do, for example to a smaller first step, when the user changes it (by the id in the to-do list).",
-        {"task_id": {"type": "integer"}, "text": {"type": "string", "description": "The new wording."}},
-        ["task_id", "text"],
+        "Change an open to-do (by the id in the to-do list): reword it, for example to a smaller first step, move or clear its due day, "
+        "or change whether it is important. Give only what changes.",
+        {
+            "task_id": {"type": "integer"},
+            "text": {"type": "string", "description": "The new wording."},
+            "due": {"type": "string", "description": "New due day 'YYYY-MM-DD' (local), or an empty string to remove the due day."},
+            "important": {"type": "boolean"},
+            "project_id": {"type": "integer", "description": "Move it into this project (0 takes it out of its project)."},
+        },
+        ["task_id"],
+    ),
+    _fn(
+        "break_down_task",
+        "Split an open to-do into smaller steps, saved as steps under it (by the id in the to-do list). Use it whenever a to-do is big, "
+        "vague or has several parts, or the user says they are stuck on it or overwhelmed by it. Give 2 to 7 steps in the order to do "
+        "them: each one concrete and literal (the action itself, a single sitting of about 5 to 30 minutes at most), the FIRST one tiny "
+        "(about 5 minutes) so starting is easy. The parent stays as the umbrella; ticking off the steps completes it.",
+        {
+            "task_id": {"type": "integer", "description": "The #id of the to-do to split."},
+            "steps": {
+                "type": "array",
+                "items": {"type": "string"},
+                "description": "The steps in order, each starting with a verb, in the user's language, in their terms.",
+            },
+        },
+        ["task_id", "steps"],
+    ),
+    _fn(
+        "add_project",
+        "Start a project: something bigger than one to-do that takes several steps over days or weeks (move flat, apply for a job, "
+        "finish the thesis, plan a trip). Call it when they describe such a thing they actually want to do. Give its first 2 to 6 steps "
+        "right away (they become to-dos in the project, the first one tiny); a project must never be left without a next step. Not for "
+        "a single to-do and not for coaching goals (add_goal).",
+        {
+            "title": {"type": "string", "description": "What the project is, short, in the user's language and words."},
+            "steps": {
+                "type": "array",
+                "items": {"type": "string"},
+                "description": "The first steps in order, concrete, each starting with a verb.",
+            },
+        },
+        ["title", "steps"],
+    ),
+    _fn(
+        "close_project",
+        "Close a project (by the id in the record): done = it is finished, dropped = they no longer want it (its open to-dos go too).",
+        {"project_id": {"type": "integer"}, "outcome": {"type": "string", "enum": ["done", "dropped"]}},
+        ["project_id", "outcome"],
+    ),
+    _fn(
+        "add_note",
+        "Keep a note the user asked you to write down ('note that the wifi password is...', 'remember the plumber's number'). Only on "
+        "request or when they clearly want something kept, in their words; never for things you merely learned about them (that is "
+        "your own memory) and not for to-dos, appointments or reminders.",
+        {"text": {"type": "string", "description": "The note, in the user's own words and language, as complete as they gave it."}},
+        ["text"],
+    ),
+    _fn(
+        "delete_note",
+        "Delete one of the user's notes when they ask (by the id in their notes list).",
+        {"note_id": {"type": "integer", "description": "The #id shown in the notes list."}},
+        ["note_id"],
     ),
     _fn(
         "save_to_toolbox",
@@ -492,13 +562,39 @@ def _forget_activity(uid: int, a: dict) -> str:
     return "ok: forgotten" if db.forget_activity(uid, int(a["activity_id"])) else "error: no such activity"
 
 
+def _due_day(uid: int, value: object) -> str | None:
+    """A model-given due day as 'YYYY-MM-DD' ('' for none); None when it is not a valid day or is already past."""
+    text = str(value or "").strip()[:10]
+    if not text:
+        return ""
+    try:
+        day = datetime.strptime(text, "%Y-%m-%d").date()
+    except ValueError:
+        return None
+    return text if day >= agenda.today_for(uid) else None
+
+
+_BAD_DUE = "error: `due` must be a day from today on, as 'YYYY-MM-DD' (check the 'Now' line); leave it out if they gave no deadline"
+
+
 def _add_task(uid: int, a: dict) -> str:
     text = _text(a)
+    due = _due_day(uid, a.get("due"))
+    if due is None:
+        return _BAD_DUE
     for t in db.open_tasks(uid):
         if _norm(t["text"]) == _norm(text) or _similar(t["text"], text):
+            if due and t["due"] != due:
+                db.update_task(uid, t["id"], due=due)
+                return f"ok: already on the to-do list as #{t['id']}; its due day is now {due}"
             return f"ok: already on the to-do list as #{t['id']}; not saved again"
-    tid = db.add_task(uid, text)
-    return f"ok: to-do #{tid} saved" if tid else f"error: already {db.MAX_OPEN_TASKS} open to-dos; finish or drop some first"
+    project_id = int(a.get("project_id") or 0)
+    if project_id and project_id not in {p["id"] for p in db.active_projects(uid)}:
+        return "error: no such active project"
+    tid = db.add_task(uid, text, due, 1 if a.get("important") else 0, project_id)
+    if tid is None:
+        return f"error: already {db.MAX_OPEN_TASKS} open to-dos; finish or drop some first"
+    return f"ok: to-do #{tid} saved" + (f", due {due}" if due else "")
 
 
 def _complete_task(uid: int, a: dict) -> str:
@@ -510,7 +606,93 @@ def _drop_task(uid: int, a: dict) -> str:
 
 
 def _update_task(uid: int, a: dict) -> str:
-    return "ok: reworded" if db.update_task(uid, int(a["task_id"]), _text(a)) else "error: no such open to-do"
+    due = _due_day(uid, a["due"]) if "due" in a else None
+    if "due" in a and due is None:
+        return _BAD_DUE
+    text = _text(a) if a.get("text") else None
+    important = None if a.get("important") is None else int(bool(a["important"]))
+    project = None if a.get("project_id") is None else int(a["project_id"])
+    if project and project not in {p["id"] for p in db.active_projects(uid)}:
+        return "error: no such active project"
+    if text is None and due is None and important is None and project is None:
+        return "error: nothing to change; give text, due, important or project_id"
+    return "ok: updated" if db.update_task(uid, int(a["task_id"]), text, due, important, project) else "error: no such open to-do"
+
+
+def _steps(a: dict, low: int, high: int) -> list[str] | str:
+    """The cleaned list of steps from a tool call, or an error text."""
+    raw = a.get("steps")
+    if not isinstance(raw, list):
+        return "error: `steps` must be a list of short texts"
+    steps: list[str] = []
+    for item in raw:
+        text = " ".join(str(item).split())[:200].strip()
+        if text and not any(_norm(text) == _norm(x) for x in steps):
+            steps.append(text)
+    if not low <= len(steps) <= high:
+        return f"error: give {low} to {high} distinct steps"
+    return steps
+
+
+def _break_down_task(uid: int, a: dict) -> str:
+    steps = _steps(a, 2, 7)
+    if isinstance(steps, str):
+        return steps
+    parent = db.get_open_task(uid, int(a["task_id"]))
+    if parent is None:
+        return "error: no such open to-do"
+    if parent["parent_id"]:
+        return "error: that is already a step; split the to-do it belongs to, or reword the step"
+    have = [t for t in db.open_tasks(uid) if t["parent_id"] == parent["id"]]
+    if have:
+        return f"ok: it already has {len(have)} steps (see the list); don't split it again, change them with update_task or add_task"
+    saved: list[int] = []
+    for text in steps:
+        tid = db.add_task(uid, text, parent["due"] or "", 0, 0, parent["id"])
+        if tid is None:
+            return f"error: the list is full ({db.MAX_OPEN_TASKS}); saved {len(saved)} steps" + (f" (#{saved[0]}...)" if saved else "")
+        saved.append(tid)
+    return f"ok: {len(saved)} steps saved under #{parent['id']} as #{saved[0]} to #{saved[-1]}; the first one is the one to start with"
+
+
+def _add_project(uid: int, a: dict) -> str:
+    title = _text(a, "title")
+    steps = _steps(a, 1, 6)
+    if isinstance(steps, str):
+        return steps
+    for p in db.active_projects(uid):
+        if _norm(p["title"]) == _norm(title) or _similar(p["title"], title):
+            return f"ok: already a project as #{p['id']}; add its steps with add_task (project_id), don't start it again"
+    pid = db.add_project(uid, title)
+    if pid is None:
+        return f"error: already {db.MAX_PROJECTS} active projects; close one first"
+    saved = [db.add_task(uid, text, "", 0, pid) for text in steps]
+    made = [t for t in saved if t]
+    return (
+        f"ok: project #{pid} saved with {len(made)} steps (to-dos #{made[0]} on)"
+        if made
+        else f"ok: project #{pid} saved, but the to-do list is full"
+    )
+
+
+def _close_project(uid: int, a: dict) -> str:
+    outcome = str(a.get("outcome") or "")
+    if outcome not in ("done", "dropped"):
+        return "error: outcome must be done or dropped"
+    return "ok: project closed" if db.close_project(uid, int(a["project_id"]), outcome) else "error: no such active project"
+
+
+def _add_note(uid: int, a: dict) -> str:
+    text = _text(a)
+    for m in db.memos(uid, 5):
+        if _norm(m["text"]) == _norm(text):
+            return f"ok: already noted as #{m['id']}; not saved again"
+    mid = db.add_memo(uid, text)
+    return f"ok: note #{mid} saved" if mid else f"error: the notebook is full ({db.MAX_MEMOS}); ask which notes to delete"
+
+
+def _delete_note(uid: int, a: dict) -> str:
+    return "ok: note deleted" if db.delete_memo(uid, int(a["note_id"])) else "error: no such note"
 
 
 _DISPATCH = {
@@ -522,6 +704,11 @@ _DISPATCH = {
     "complete_task": _complete_task,
     "drop_task": _drop_task,
     "update_task": _update_task,
+    "break_down_task": _break_down_task,
+    "add_project": _add_project,
+    "close_project": _close_project,
+    "add_note": _add_note,
+    "delete_note": _delete_note,
     "set_timezone": _set_timezone,
     "skip_timezone": _skip_timezone,
     "set_checkins": _set_checkins,
@@ -600,14 +787,27 @@ def coaching_state(user_id: int) -> str:
         for o in closed:
             detail = ", ".join(x for x in (o["barrier"], o["note"]) if x)
             lines.append(f"  #{o['id']} {o['status']}: {o['text']}" + (f" ({detail})" if detail else ""))
-    todo = db.open_tasks(user_id)
+    today = local.date()
+    sections = agenda.task_tree(user_id)
+    has_todo = any(rows for _, rows in sections)
     lines.append(
-        "To-do list (things they said they want or need to do, no set time; oldest first; bring them back gently when it fits):"
-        if todo
-        else "To-do list: empty."
+        "To-do list (what they said they want or need to do, grouped by project; dated ones first; 'important' ones matter most; "
+        "an indented step belongs to the to-do above it; bring them back gently when it fits, and never let a due day slip past unmentioned):"
+        if has_todo or db.active_projects(user_id)
+        else "To-do list: empty. Projects: none."
     )
-    for t in todo:
-        lines.append(f"  #{t['id']} {t['text']}, on the list since {_ago(t['created'], zone)}")
+    for project, rows in sections:
+        if project is not None:
+            lines.append(
+                f"  Project #{project['id']} {project['title']}"
+                + ("" if rows else ": NO OPEN NEXT STEP, so offer one small concrete step at a calm moment and save it once they agree")
+            )
+        elif rows and db.active_projects(user_id):
+            lines.append("  Not in a project:")
+        for t, step in rows:
+            due = agenda.due_label("en", t["due"] or "", today)
+            flags = (f", due {due}" if due else "") + (", important" if t["priority"] else "")
+            lines.append(f"{'      step' if step else '    '} #{t['id']} {t['text']}{flags}; on the list since {_ago(t['created'], zone)}")
     finished = db.recent_finished_tasks(user_id)
     if finished:
         lines.append("Ticked off in the last 3 days (worth a word of recognition, not a new question):")
@@ -647,6 +847,13 @@ def coaching_state(user_id: int) -> str:
     )
     for e in events:
         lines.append(f"  #{e['id']} {e['title']}: {_event_when(e, zone)}")
+    notes = db.memos(user_id, 8)
+    if notes:
+        lines.append(
+            "Their own notes (they asked you to keep them; newest first, the 8 latest; tell them what is in one when it is relevant "
+            "or asked for, never recite them unprompted):"
+        )
+        lines += [f"  #{m['id']} {m['text'][:200]}" for m in notes]
     profile = db.get_profile(user_id)
     told = {
         "why they came": profile.get("why"),

@@ -8,6 +8,16 @@ def lang_from_telegram(code: str | None) -> str:
     return "el" if code and code.lower().startswith("el") else "en"
 
 
+WEEKDAYS = {
+    "en": ("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"),
+    "el": ("Δευ", "Τρι", "Τετ", "Πεμ", "Παρ", "Σαβ", "Κυρ"),
+}
+MONTHS = {
+    "en": ("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"),
+    "el": ("Ιαν", "Φεβ", "Μαρ", "Απρ", "Μαΐ", "Ιουν", "Ιουλ", "Αυγ", "Σεπ", "Οκτ", "Νοε", "Δεκ"),
+}
+
+
 def t(lang: str, key: str, **kw) -> str:
     return STRINGS.get(lang, STRINGS[DEFAULT_LANG])[key].format(**kw)
 
@@ -28,14 +38,17 @@ STRINGS = {
             "/wrong - το τελευταίο μήνυμά μου ήταν λάθος\n"
             "/progress - σημείωση προόδου της εβδομάδας\n"
             "/toolbox - τι έχει δουλέψει για σένα\n"
-            "/tasks - η λίστα με όσα θέλεις να κάνεις\n"
+            "/today - τι έχεις σήμερα\n"
+            "/calendar - η επόμενη εβδομάδα\n"
+            "/tasks - οι εργασίες και τα projects σου\n"
+            "/notes - οι σημειώσεις σου\n"
             "/log - τι μου είπες ότι έκανες πρόσφατα\n"
             "/parked - ιδέες που άφησα στην άκρη για αργότερα\n"
             "/language <el|en> - γλώσσα\n"
-            "/notes - τι θυμάμαι για σένα\n"
+            "/memory - τι θυμάμαι για σένα\n"
             "/privacy - πώς χρησιμοποιώ τα δεδομένα σου\n"
             "/deletedata - σβήσε τα πάντα για σένα\n"
-            "/forget - σβήσε τις σημειώσεις μου για σένα"
+            "/forget - ξέχασε ό,τι έμαθα για σένα"
         ),
         "LLM_ERROR": "Το μυαλό μου κόλλησε για λίγο. Δοκίμασε ξανά σε λίγο;",
         "REMIND_DEFAULT": "Ώρα να ξεκινήσεις!",
@@ -65,6 +78,23 @@ STRINGS = {
         "PARKED_EMPTY": "Δεν έχω αφήσει τίποτα στην άκρη. Αν ξεφύγεις σε κάτι άλλο ενώ δουλεύεις, θα το κρατήσω και θα σου το θυμίσω αργότερα.",
         "LOG_HEADER": "Τι μου είπες ότι έκανες (τελευταίες 2 εβδομάδες)",
         "LOG_EMPTY": "Δεν έχω σημειώσει τίποτα ακόμα. Πες μου τι κάνεις ή τι ολοκλήρωσες και θα το κρατήσω.",
+        "DUE_TODAY": "σήμερα",
+        "DUE_TOMORROW": "αύριο",
+        "DUE_OVERDUE": "έληξε ({day})",
+        "AGENDA_HEADER": "Σήμερα, {day}",
+        "AGENDA_EMPTY": "Δεν έχεις τίποτα προγραμματισμένο σήμερα. Πες μου τι θέλεις να κάνεις.",
+        "AGENDA_EVENTS": "Ραντεβού",
+        "AGENDA_REMINDERS": "Υπενθυμίσεις",
+        "AGENDA_OVERDUE": "Έχουν περάσει",
+        "AGENDA_DUE_TODAY": "Για σήμερα",
+        "AGENDA_NO_DATE": "Χωρίς ημερομηνία",
+        "CALENDAR_HEADER": "Οι επόμενες {days} μέρες",
+        "CALENDAR_EMPTY": "Δεν έχεις τίποτα προγραμματισμένο τις επόμενες {days} μέρες. Πες μου τι έχεις και θα το γράψω.",
+        "NOTE_HEADER": "Οι σημειώσεις σου (οι πιο πρόσφατες πρώτα)",
+        "NOTE_EMPTY": "Δεν έχεις σημειώσεις. Πες μου «κράτα σημείωση ότι…» και θα τη γράψω.",
+        "PROJECT_HEADER": "Project: {title}",
+        "PROJECT_NO_STEP": "    (δεν υπάρχει επόμενο βήμα ακόμα)",
+        "TASKS_OTHER": "Άλλες εργασίες",
         "TASKS_HEADER": "Η λίστα σου",
         "TASKS_EMPTY": "Δεν υπάρχει τίποτα στη λίστα. Πες μου τι πρέπει να κάνεις, θα το κρατήσω και θα σου το θυμίσω όταν ταιριάζει.",
         "TOOLBOX_HEADER": "Το εργαλειοκουτί σου (τι έχει δουλέψει)",
@@ -78,14 +108,14 @@ STRINGS = {
             "Πριν ξεκινήσουμε: είμαι βοηθός coaching με τεχνητή νοημοσύνη, όχι θεραπευτής ή ιατρική υπηρεσία. "
             "Όσα μου γράφεις (και οι στόχοι και η πρόοδός σου) αποθηκεύονται για να σε καθοδηγώ, και κάθε μήνυμα "
             "στέλνεται σε πάροχο μοντέλου τεχνητής νοημοσύνης για να φτιαχτεί η απάντηση. Μην μοιράζεσαι κάτι που δεν θα ήθελες "
-            "να επεξεργαστεί έτσι. Βλέπεις τι κρατάω με /notes και /goals και σβήνεις τα πάντα με /deletedata, και τα αντίγραφα ασφαλείας αντικαθίστανται μέσα σε περίπου μία εβδομάδα.{keeping} "
+            "να επεξεργαστεί έτσι. Βλέπεις τι κρατάω με /memory, /tasks, /notes και /goals και σβήνεις τα πάντα με /deletedata, και τα αντίγραφα ασφαλείας αντικαθίστανται μέσα σε περίπου μία εβδομάδα.{keeping} "
             "Αν βρίσκεσαι σε κρίση ή κίνδυνο, κάλεσε τον τοπικό αριθμό έκτακτης ανάγκης (112 στην ΕΕ) αντί για εμένα.\n\n"
             "Στείλε /agree για να συνεχίσουμε."
         ),
         "KEEP_MESSAGES": " Τα μηνύματα της συνομιλίας σβήνονται μετά από {days} ημέρες.",
         "KEEP_INACTIVE": " Όλα όσα έχω για σένα σβήνονται μετά από {days} ημέρες χωρίς μήνυμά σου.",
         "AGREED": "Ευχαριστώ, είμαστε έτοιμοι. Πρώτα, πού μένεις; Πες μου την πόλη (ή τη χώρα) σου και θα ορίσω τη ζώνη ώρας, ώστε υπενθυμίσεις και check-in να έρχονται στη σωστή ώρα. Μπορείς και να πεις «παράλειψη». Μετά πες μου τι σε έφερε εδώ.",
-        "DELETE_CONFIRM": "Αυτό σβήνει οριστικά ό,τι έχω για σένα: ιστορικό συνομιλίας, σημειώσεις, στόχους, εβδομαδιαία βήματα, εργασίες της λίστας, σημειώσεις δραστηριότητας, ιδέες στην άκρη, εργαλειοκουτί και υπενθυμίσεις. Στείλε /deletedata confirm για να προχωρήσω.",
+        "DELETE_CONFIRM": "Αυτό σβήνει οριστικά ό,τι έχω για σένα: ιστορικό συνομιλίας, σημειώσεις, στόχους, εβδομαδιαία βήματα, εργασίες της λίστας, ραντεβού, σημειώσεις σου, σημειώσεις δραστηριότητας, ιδέες στην άκρη, εργαλειοκουτί και υπενθυμίσεις. Στείλε /deletedata confirm για να προχωρήσω.",
         "DELETED": "Έγινε. Όλα όσα είχα για σένα σβήστηκαν (τα αντίγραφα ασφαλείας αντικαθίστανται μέσα σε περίπου μία εβδομάδα). Μπορείς να ξεκινήσεις από την αρχή όποτε θέλεις.",
         "RATE_LIMITED": "Είναι πολλά μαζί. Θα κάνω μια παύση λίγων λεπτών για να προλάβω.",
         "EMPTY_REPLY": "Δεν κατάφερα να σκεφτώ σωστή απάντηση αυτή τη στιγμή. Μπορείς να το ξαναγράψεις σε λίγο;",
@@ -127,11 +157,14 @@ STRINGS = {
             "/wrong - my last message was wrong\n"
             "/progress - this week's progress note\n"
             "/toolbox - what has worked for you\n"
-            "/tasks - your to-do list\n"
+            "/today - what's on today\n"
+            "/calendar - the next week\n"
+            "/tasks - your to-dos and projects\n"
+            "/notes - your notes\n"
             "/log - what you told me you did lately\n"
             "/parked - ideas I set aside for later\n"
             "/language <el|en> - language\n"
-            "/notes - see what I remember about you\n"
+            "/memory - what I have learned about you\n"
             "/privacy - how your data is used\n"
             "/deletedata - erase everything about you\n"
             "/forget - wipe my memory of you"
@@ -164,6 +197,23 @@ STRINGS = {
         "PARKED_EMPTY": "Nothing parked. If you drift onto something else while you work, I'll keep it and bring it back later.",
         "LOG_HEADER": "What you told me you did (last 2 weeks)",
         "LOG_EMPTY": "Nothing noted yet. Tell me what you are doing or finished and I'll keep it.",
+        "DUE_TODAY": "today",
+        "DUE_TOMORROW": "tomorrow",
+        "DUE_OVERDUE": "overdue ({day})",
+        "AGENDA_HEADER": "Today, {day}",
+        "AGENDA_EMPTY": "Nothing planned for today. Tell me what you want to get done.",
+        "AGENDA_EVENTS": "Appointments",
+        "AGENDA_REMINDERS": "Reminders",
+        "AGENDA_OVERDUE": "Overdue",
+        "AGENDA_DUE_TODAY": "Due today",
+        "AGENDA_NO_DATE": "No date",
+        "CALENDAR_HEADER": "The next {days} days",
+        "CALENDAR_EMPTY": "Nothing planned for the next {days} days. Tell me what's coming up and I'll put it in.",
+        "NOTE_HEADER": "Your notes (newest first)",
+        "NOTE_EMPTY": 'No notes yet. Tell me "note down that…" and I\'ll write it for you.',
+        "PROJECT_HEADER": "Project: {title}",
+        "PROJECT_NO_STEP": "    (no next step yet)",
+        "TASKS_OTHER": "Other to-dos",
         "TASKS_HEADER": "Your to-do list",
         "TASKS_EMPTY": "Nothing on the list. Tell me what you need to get done and I'll keep it for you and nudge you when it fits.",
         "TOOLBOX_HEADER": "Your toolbox (what has worked)",
@@ -176,14 +226,14 @@ STRINGS = {
             "Hi, I'm Duecoach. I help you follow through on what you mean to do: pick a goal, take one small step a week, and get a nudge when you get stuck.\n\n"
             "Before we start: I'm an AI coaching assistant, not a therapist or a medical service. What you write to me (including your "
             "goals and progress) is stored so I can coach you, and each message is sent to an AI model provider to generate the reply. "
-            "Please don't share anything you wouldn't want processed that way. You can see what I keep with /notes and /goals, and "
+            "Please don't share anything you wouldn't want processed that way. You can see what I keep with /memory, /tasks, /notes and /goals, and "
             "erase everything with /deletedata, and backup copies are overwritten within about a week.{keeping} If you're in crisis or danger, contact your local emergency number (112 in the EU) "
             "instead of me.\n\nSend /agree to continue."
         ),
         "KEEP_MESSAGES": " Chat messages are deleted after {days} days.",
         "KEEP_INACTIVE": " Everything about you is deleted after {days} days without a message from you.",
         "AGREED": "Thanks, you're set. First, where do you live? Tell me your city (or country) and I'll set your timezone, so reminders and check-ins land at the right time. You can also say \"skip\". Then tell me what brought you here.",
-        "DELETE_CONFIRM": "This permanently erases everything I have about you: chat history, notes, goals, weekly steps, to-dos, activity notes, parked ideas, toolbox and reminders. Send /deletedata confirm to go ahead.",
+        "DELETE_CONFIRM": "This permanently erases everything I have about you: chat history, notes, goals, weekly steps, to-dos, appointments, your own notes, activity notes, parked ideas, toolbox and reminders. Send /deletedata confirm to go ahead.",
         "DELETED": "Done. Everything I had about you has been erased (backup copies are overwritten within about a week). You're welcome to start fresh any time.",
         "RATE_LIMITED": "That's a lot at once. I'll pause for a few minutes to catch up.",
         "EMPTY_REPLY": "I couldn't put a proper answer together just now. Could you send that again in a moment?",

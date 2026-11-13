@@ -109,6 +109,8 @@ def test_delete_user_data_removes_everything(user):
     db.add_task(uid, "email the landlord")
     db.add_activity(uid, "went for a run", "done")
     db.park_idea(uid, "look up flights")
+    db.add_memo(uid, "locker code 4821")
+    db.add_project(uid, "move flat")
     db.add_reminder(uid, 0, "r")
     db.add_event(uid, "Dentist", time.time() + 3600)
     db.add_turn_stat(uid, "reply", "sent", [], [], 1, 0.5)
@@ -125,6 +127,8 @@ def test_delete_user_data_removes_everything(user):
         "tasks",
         "activities",
         "parked",
+        "memos",
+        "projects",
         "reminders",
         "events",
         "turn_stats",

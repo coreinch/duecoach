@@ -295,6 +295,25 @@ def _m15_parked() -> None:
     _conn.execute("CREATE INDEX IF NOT EXISTS idx_parked_user ON parked (user_id, status)")
 
 
+def _m16_planner() -> None:
+    """Due dates (a local calendar day, 'YYYY-MM-DD', or '' for none) and a priority on to-dos, and notes the user keeps on purpose."""
+    _ensure_columns("tasks", {"due": "TEXT DEFAULT ''", "priority": "INTEGER DEFAULT 0"})
+    _conn.execute("CREATE TABLE IF NOT EXISTS memos (id INTEGER PRIMARY KEY)")
+    _ensure_columns("memos", {"user_id": "INTEGER", "text": "TEXT", "created": "REAL"})
+    _conn.execute("CREATE INDEX IF NOT EXISTS idx_memos_user ON memos (user_id, created)")
+
+
+def _m17_projects() -> None:
+    """Projects (bigger things with several steps) and steps under a task, so the coach can break work down and keep a next step ready."""
+    _conn.execute("CREATE TABLE IF NOT EXISTS projects (id INTEGER PRIMARY KEY)")
+    _ensure_columns(
+        "projects",
+        {"user_id": "INTEGER", "title": "TEXT", "status": "TEXT DEFAULT 'active'", "created": "REAL", "closed": "REAL DEFAULT 0"},
+    )
+    _ensure_columns("tasks", {"project_id": "INTEGER DEFAULT 0", "parent_id": "INTEGER DEFAULT 0"})
+    _conn.execute("CREATE INDEX IF NOT EXISTS idx_projects_user ON projects (user_id, status)")
+
+
 MIGRATIONS = [
     _m1_baseline,
     _m2_consent_and_resilience,
@@ -311,6 +330,8 @@ MIGRATIONS = [
     _m13_tasks,
     _m14_activities,
     _m15_parked,
+    _m16_planner,
+    _m17_projects,
 ]
 
 
@@ -552,6 +573,8 @@ def delete_user_data(user_id: int) -> None:
         "tasks",
         "activities",
         "parked",
+        "memos",
+        "projects",
         "events",
         "turn_stats",
         "flags",
@@ -604,6 +627,21 @@ def events_for_state(user_id: int, now: float) -> list[sqlite3.Row]:
         "SELECT id, title, start, status FROM events WHERE user_id=? AND "
         "((status='upcoming' AND start>?) OR (status='canceled' AND changed>?)) ORDER BY start",
         (user_id, now - 86400, now - 86400),
+    ).fetchall()
+
+
+def events_between(user_id: int, start: float, end: float) -> list[sqlite3.Row]:
+    """Upcoming events that start in [start, end)."""
+    return _conn.execute(
+        "SELECT id, title, start FROM events WHERE user_id=? AND status='upcoming' AND start>=? AND start<? ORDER BY start",
+        (user_id, start, end),
+    ).fetchall()
+
+
+def reminders_between(user_id: int, start: float, end: float) -> list[sqlite3.Row]:
+    return _conn.execute(
+        "SELECT id, due, text, repeat_daily FROM reminders WHERE user_id=? AND sent=0 AND due>=? AND due<? ORDER BY due",
+        (user_id, start, end),
     ).fetchall()
 
 
@@ -884,22 +922,38 @@ def toolbox(user_id: int, n: int = MAX_TOOLBOX) -> list[sqlite3.Row]:
 
 # --- tasks: the running to-do list ---
 
-MAX_OPEN_TASKS = 25
+MAX_OPEN_TASKS = 50  # steps under a task count too
 TASK_KEEP_DAYS = 14  # finished and dropped tasks stay this long so the coach can celebrate them, then go
 
 
-def add_task(user_id: int, text: str) -> int | None:
-    """None when the list is full."""
+def add_task(user_id: int, text: str, due: str = "", priority: int = 0, project_id: int = 0, parent_id: int = 0) -> int | None:
+    """None when the list is full. `due` is a local day as 'YYYY-MM-DD' (or ''); priority 1 means it matters most. A step under a task
+    belongs to that task's project."""
     if len(open_tasks(user_id)) >= MAX_OPEN_TASKS:
         return None
-    cur = _conn.execute("INSERT INTO tasks (user_id, text, created) VALUES (?,?,?)", (user_id, text, time.time()))
+    if parent_id:
+        parent = get_open_task(user_id, parent_id)
+        if parent is None:
+            return None
+        project_id = project_id or parent["project_id"] or 0
+    cur = _conn.execute(
+        "INSERT INTO tasks (user_id, text, created, due, priority, project_id, parent_id) VALUES (?,?,?,?,?,?,?)",
+        (user_id, text, time.time(), due, priority, project_id, parent_id),
+    )
     _conn.commit()
     return cur.lastrowid
 
 
 def open_tasks(user_id: int) -> list[sqlite3.Row]:
-    """Oldest-waiting first."""
-    return _conn.execute("SELECT * FROM tasks WHERE user_id=? AND status='open' ORDER BY id", (user_id,)).fetchall()
+    """Dated tasks first (soonest first), then the rest, high priority before normal, oldest-waiting first."""
+    return _conn.execute(
+        "SELECT * FROM tasks WHERE user_id=? AND status='open' ORDER BY (due=''), due, priority DESC, id",
+        (user_id,),
+    ).fetchall()
+
+
+def get_open_task(user_id: int, task_id: int) -> sqlite3.Row | None:
+    return _conn.execute("SELECT * FROM tasks WHERE id=? AND user_id=? AND status='open'", (task_id, user_id)).fetchone()
 
 
 def recent_finished_tasks(user_id: int, days: int = 3) -> list[sqlite3.Row]:
@@ -909,15 +963,31 @@ def recent_finished_tasks(user_id: int, days: int = 3) -> list[sqlite3.Row]:
 
 
 def close_task(user_id: int, task_id: int, status: str) -> bool:
+    """Close an open task; the steps still open under it go with it (as dropped: finishing the whole needs no more steps)."""
     cur = _conn.execute(
         "UPDATE tasks SET status=?, closed=? WHERE id=? AND user_id=? AND status='open'", (status, time.time(), task_id, user_id)
     )
+    if cur.rowcount == 1:
+        _conn.execute(
+            "UPDATE tasks SET status='dropped', closed=? WHERE parent_id=? AND user_id=? AND status='open'", (time.time(), task_id, user_id)
+        )
     _conn.commit()
     return cur.rowcount == 1
 
 
-def update_task(user_id: int, task_id: int, text: str) -> bool:
-    cur = _conn.execute("UPDATE tasks SET text=? WHERE id=? AND user_id=? AND status='open'", (text, task_id, user_id))
+def update_task(
+    user_id: int, task_id: int, text: str | None = None, due: str | None = None, priority: int | None = None, project_id: int | None = None
+) -> bool:
+    """Change only what is given (`due=''` clears the due day, `project_id=0` takes it out of its project)."""
+    changes = {k: v for k, v in (("text", text), ("due", due), ("priority", priority), ("project_id", project_id)) if v is not None}
+    if not changes:
+        return False
+    cur = _conn.execute(
+        f"UPDATE tasks SET {', '.join(f'{k}=?' for k in changes)} WHERE id=? AND user_id=? AND status='open'",
+        (*changes.values(), task_id, user_id),
+    )
+    if cur.rowcount == 1 and project_id is not None:
+        _conn.execute("UPDATE tasks SET project_id=? WHERE parent_id=? AND user_id=? AND status='open'", (project_id, task_id, user_id))
     _conn.commit()
     return cur.rowcount == 1
 
@@ -1017,5 +1087,69 @@ def prune_parked() -> int:
         "DELETE FROM parked WHERE (status='parked' AND created<?) OR (status!='parked' AND closed<?)",
         (now - PARKED_KEEP_DAYS * 86400, now - 14 * 86400),
     )
+    _conn.commit()
+    return cur.rowcount
+
+
+# --- memos: notes the user keeps on purpose (not what the coach learns about them) ---
+
+MAX_MEMOS = 100
+MEMO_LENGTH = 1000
+
+
+def add_memo(user_id: int, text: str) -> int | None:
+    """None when the notebook is full."""
+    if _conn.execute("SELECT COUNT(*) FROM memos WHERE user_id=?", (user_id,)).fetchone()[0] >= MAX_MEMOS:
+        return None
+    cur = _conn.execute("INSERT INTO memos (user_id, text, created) VALUES (?,?,?)", (user_id, text[:MEMO_LENGTH], time.time()))
+    _conn.commit()
+    return cur.lastrowid
+
+
+def memos(user_id: int, n: int = MAX_MEMOS) -> list[sqlite3.Row]:
+    """Newest first."""
+    return _conn.execute("SELECT * FROM memos WHERE user_id=? ORDER BY id DESC LIMIT ?", (user_id, n)).fetchall()
+
+
+def delete_memo(user_id: int, memo_id: int) -> bool:
+    cur = _conn.execute("DELETE FROM memos WHERE id=? AND user_id=?", (memo_id, user_id))
+    _conn.commit()
+    return cur.rowcount == 1
+
+
+# --- projects: bigger things with several steps ---
+
+MAX_PROJECTS = 8
+
+
+def add_project(user_id: int, title: str) -> int | None:
+    """None when the user already has the maximum number of active projects."""
+    if len(active_projects(user_id)) >= MAX_PROJECTS:
+        return None
+    cur = _conn.execute("INSERT INTO projects (user_id, title, created) VALUES (?,?,?)", (user_id, title, time.time()))
+    _conn.commit()
+    return cur.lastrowid
+
+
+def active_projects(user_id: int) -> list[sqlite3.Row]:
+    return _conn.execute("SELECT * FROM projects WHERE user_id=? AND status='active' ORDER BY id", (user_id,)).fetchall()
+
+
+def close_project(user_id: int, project_id: int, status: str) -> bool:
+    """Finish ('done') or abandon ('dropped') a project; a dropped project takes its open to-dos with it."""
+    cur = _conn.execute(
+        "UPDATE projects SET status=?, closed=? WHERE id=? AND user_id=? AND status='active'", (status, time.time(), project_id, user_id)
+    )
+    if cur.rowcount == 1 and status == "dropped":
+        _conn.execute(
+            "UPDATE tasks SET status='dropped', closed=? WHERE project_id=? AND user_id=? AND status='open'",
+            (time.time(), project_id, user_id),
+        )
+    _conn.commit()
+    return cur.rowcount == 1
+
+
+def prune_projects(days: int = TASK_KEEP_DAYS) -> int:
+    cur = _conn.execute("DELETE FROM projects WHERE status!='active' AND closed<?", (time.time() - days * 86400,))
     _conn.commit()
     return cur.rowcount
