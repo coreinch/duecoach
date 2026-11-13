@@ -884,3 +884,79 @@ def _file(user_id: int, found: dict, max_tasks: int, max_projects: int, max_even
     if filed:
         log.info("filed %d things in the planner of %s by itself", filed, user_id)
     return filed
+
+
+async def group_into_projects(user_id: int) -> int:
+    """Put loose to-dos that are about the same thing into a project (or into one that exists), on the main model.
+
+    The per-message pass runs on the fast side model, which does not reliably see that three to-dos are one project, and nothing ever
+    looked at the loose to-dos together later. This small call does, whenever the set of loose to-dos has changed since it last looked.
+    Returns how many projects were made or filled.
+    """
+    user = db.get_user(user_id)
+    if user is None or not user["consent_at"]:
+        return 0
+    async with _sorting.setdefault(user_id, asyncio.Lock()):
+
+        def loose() -> list:
+            return [t for t in db.open_tasks(user_id) if not t["project_id"] and not t["parent_id"]]
+
+        now = loose()
+        if len(now) < 2 or ",".join(str(t["id"]) for t in now) == (user["grouped_ids"] or ""):
+            return 0
+        projects = db.active_projects(user_id)
+        prompt = prompts.GROUPER.format(
+            loose="\n".join(f"#{t['id']} {t['text']}" for t in now),
+            projects="; ".join(f"#{p['id']} {p['title']}" for p in projects) or "none",
+            goals="; ".join(g["text"] for g in db.active_goals(user_id)) or "none",
+            notes=f"Notes about them: {db.get_notes(user_id)[:800]}\n" if db.get_notes(user_id) else "",
+            language=prompts.LANGUAGE_NAME.get(user["lang"], "English"),
+        )
+        try:
+            out = await _complete([{"role": "user", "content": prompt}], max_tokens=FIRST_PASS_TOKENS, model=LLM_MODEL)
+            found = json.loads(re.search(r"\{.*\}", out, re.DOTALL).group(0))  # type: ignore[union-attr]
+        except Exception:
+            log.warning("could not read the project grouping for %s, trying again later", user_id)
+            return 0
+        made = _group(user_id, found, {t["id"] for t in now}, {p["id"] for p in projects})
+        db.set_field(user_id, "grouped_ids", ",".join(str(t["id"]) for t in loose()))  # what is still loose is not asked about again
+        log.info("project grouping for %s: %d loose to-dos, %d projects made or filled", user_id, len(now), made)
+        return made
+
+
+def _group(user_id: int, found: dict, loose_ids: set[int], project_ids: set[int]) -> int:
+    def ids(item: object) -> list[int]:
+        raw = item.get("task_ids") if isinstance(item, dict) else None
+        return [i for i in raw if isinstance(i, int) and i in loose_ids] if isinstance(raw, list) else []
+
+    made = 0
+    token = db.filing_by_itself.set(True)  # a project the sorter makes is announced to the user once
+    try:
+        for item in (found.get("new_projects") if isinstance(found, dict) else None) or []:
+            title = item.get("title") if isinstance(item, dict) else None
+            wanted = [i for i in ids(item) if i in loose_ids]
+            if title and len(set(wanted)) >= 2:
+                result = tools.run_tool(user_id, "add_project", json.dumps({"title": title, "steps": [], "task_ids": wanted}))
+                if result.startswith("ok: project #"):
+                    made += 1
+                    loose_ids -= set(wanted)
+        for item in (found.get("add_to") if isinstance(found, dict) else None) or []:
+            pid = item.get("project_id") if isinstance(item, dict) else None
+            if isinstance(pid, int) and pid in project_ids:
+                for tid in ids(item):
+                    if tid in loose_ids and db.update_task(user_id, tid, project_id=pid):
+                        loose_ids.discard(tid)
+                        made += 1
+    finally:
+        db.filing_by_itself.reset(token)
+    return made
+
+
+async def refresh_planner(user_id: int) -> None:
+    """Bring the planner up to date before it is shown (`/projects`, `/tasks`): the pass for someone not yet read, then the grouping."""
+    user = db.get_user(user_id)
+    if user is None or not user["consent_at"]:
+        return
+    if (user["planner_sorted"] or 0) < SORT_VERSION:
+        await sort_into_planner(user_id)
+    await group_into_projects(user_id)

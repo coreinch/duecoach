@@ -247,3 +247,112 @@ async def test_the_one_time_first_pass_uses_the_main_model_and_later_passes_the_
     await llm.sort_into_planner(uid)
     await llm.sort_into_planner(uid)
     assert sorter.models == [llm.LLM_MODEL, None]  # None: the side model
+
+
+# --- grouping loose to-dos into projects, and the views catching up before they answer ---
+
+
+def loose_tasks(uid, *texts):
+    return [db.add_task(uid, t) for t in texts]
+
+
+async def test_to_dos_about_the_same_thing_are_grouped_by_the_main_model(sorter, user):
+    uid = user["user_id"]
+    ram, nvme, milk = loose_tasks(uid, "Install RAM in yozora", "Pick up yozora after the NVMe arrives", "Buy milk")
+    sorter.answers.append({"new_projects": [{"title": "yozora", "task_ids": [ram, nvme]}], "add_to": []})
+    assert await llm.group_into_projects(uid) == 1
+    assert {t["id"]: t["project_id"] for t in db.open_tasks(uid)} == {ram: 1, nvme: 1, milk: 0}
+    assert sorter.models == [llm.LLM_MODEL]
+    assert [p["auto"] for p in db.active_projects(uid)] == [1]  # announced to the user at the next reply
+    assert f"#{ram} Install RAM" in sorter.prompts[0] and "Buy milk" in sorter.prompts[0]
+
+
+async def test_loose_to_dos_can_join_a_project_that_exists(sorter, user):
+    uid = user["user_id"]
+    tools.run_tool(uid, "add_project", json.dumps({"title": "Trip to Rome", "steps": ["Pick the dates"]}))
+    flights, hotel = loose_tasks(uid, "Book the flights to Rome", "Reserve a hotel")
+    sorter.answers.append(
+        {"new_projects": [], "add_to": [{"project_id": 1, "task_ids": [flights]}, {"project_id": 7, "task_ids": [hotel]}]}
+    )
+    assert await llm.group_into_projects(uid) == 1
+    assert {t["text"]: t["project_id"] for t in db.open_tasks(uid)}["Book the flights to Rome"] == 1
+    assert {t["text"]: t["project_id"] for t in db.open_tasks(uid)}["Reserve a hotel"] == 0  # no such project: left alone
+
+
+async def test_it_asks_again_only_when_the_loose_to_dos_changed(sorter, user):
+    uid = user["user_id"]
+    loose_tasks(uid, "Water the plants", "Call the bank")
+    sorter.answers.append({"new_projects": [], "add_to": []})
+    assert await llm.group_into_projects(uid) == 0 and len(sorter.prompts) == 1
+    assert await llm.group_into_projects(uid) == 0 and len(sorter.prompts) == 1  # same to-dos: no second call
+    loose_tasks(uid, "Book a haircut")
+    sorter.answers.append({"new_projects": [], "add_to": []})
+    await llm.group_into_projects(uid)
+    assert len(sorter.prompts) == 2
+
+
+async def test_one_loose_to_do_or_nothing_valid_makes_no_project_and_no_call(sorter, user):
+    uid = user["user_id"]
+    loose_tasks(uid, "Call the bank")
+    assert await llm.group_into_projects(uid) == 0 and sorter.prompts == []
+    loose_tasks(uid, "Water the plants", "Book a haircut")
+    sorter.answers.append(
+        {"new_projects": [{"title": "Odd", "task_ids": [1, 99]}, {"title": "", "task_ids": [2, 3]}, "junk"], "add_to": "junk"}
+    )
+    assert await llm.group_into_projects(uid) == 0
+    assert db.active_projects(uid) == []
+
+
+async def test_an_unreadable_grouping_answer_is_tried_again_next_time(sorter, user):
+    uid = user["user_id"]
+    loose_tasks(uid, "Water the plants", "Call the bank")
+    sorter.answers += ["no json here", {"new_projects": [], "add_to": []}]
+    await llm.group_into_projects(uid)
+    await llm.group_into_projects(uid)
+    assert len(sorter.prompts) == 2
+
+
+async def test_grouping_runs_after_the_sort_for_a_plain_message(monkeypatch, user):
+    uid = user["user_id"]
+    order = []
+
+    async def fake_reply(u, text, instruction=None):
+        return "ok"
+
+    async def fake_sort(u):
+        order.append("sort")
+
+    async def fake_group(u):
+        order.append("group")
+
+    monkeypatch.setattr(llm, "reply", fake_reply)
+    monkeypatch.setattr(llm, "sort_into_planner", fake_sort)
+    monkeypatch.setattr(llm, "group_into_projects", fake_group)
+    await chat.coach(uid, "I need to install the RAM")
+    for task in list(chat.background):
+        await task
+    assert order == ["sort", "group"]
+
+
+async def test_projects_and_tasks_catch_up_before_they_answer(sorter, user):
+    from duecoach import commands
+
+    uid = user["user_id"]
+    talk(uid, ("user", "I keep working on yozora, my Linux distro"))
+    ram, nvme = loose_tasks(uid, "Install RAM in yozora", "Pick up yozora after the NVMe arrives")
+    # the first pass (nothing new), then the grouping
+    sorter.answers += [{}, {"new_projects": [{"title": "yozora", "task_ids": [ram, nvme]}], "add_to": []}]
+    view = await commands.COMMANDS["projects"](uid, [])
+    assert view == "Your projects:\n• yozora — next: Install RAM in yozora (2 open)"
+    assert db.get_user(uid)["planner_sorted"] == llm.SORT_VERSION
+    # a second look needs no model call: nothing has changed
+    assert await commands.COMMANDS["projects"](uid, []) == view and len(sorter.prompts) == 2
+
+
+async def test_the_views_still_answer_when_the_model_is_down(user):
+    from duecoach import commands
+
+    uid = user["user_id"]
+    loose_tasks(uid, "Call the bank", "Water the plants")  # conftest makes the real model refuse every call
+    assert "Call the bank" in await commands.COMMANDS["tasks"](uid, [])
+    assert "No projects yet" in await commands.COMMANDS["projects"](uid, [])
