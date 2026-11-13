@@ -42,6 +42,7 @@ NOTES_EVERY = 20  # new chat messages between refreshes of the long-term notes
 # Reasoning models: they think before they answer, and the thinking counts against max_tokens. A small limit
 # is used up by the thinking and the answer comes back empty, so even one-sentence jobs get a generous budget.
 SHORT_JOB_TOKENS = 2000
+FIRST_PASS_TOKENS = 4000  # the main model thinks before it answers
 
 _client = AsyncOpenAI(api_key=LLM_API_KEY, base_url=LLM_BASE_URL, timeout=LLM_TIMEOUT, max_retries=2)
 # The verifier may live at another provider; then it has its own client (otherwise it shares the coach's).
@@ -759,7 +760,8 @@ async def refresh_notes(user_id: int) -> None:
 
 
 _sorting: dict[int, asyncio.Lock] = {}  # one planner pass at a time per user, so two quick messages cannot file the same thing twice
-BACKFILL_MESSAGES = 60
+BACKFILL_MESSAGES = 300  # the first pass reads this many of the latest messages (a month of chat is a few thousand words)
+SORT_VERSION = 2  # raised when the first pass improves: everyone below it gets one more full pass (what is already filed is skipped)
 RECENT_MESSAGES = 6
 
 
@@ -802,7 +804,7 @@ async def sort_into_planner(user_id: int) -> int:
         return 0
     lock = _sorting.setdefault(user_id, asyncio.Lock())
     async with lock:
-        first_pass = not user["planner_sorted"]
+        first_pass = (user["planner_sorted"] or 0) < SORT_VERSION
         history = db.recent_messages(user_id, BACKFILL_MESSAGES if first_pass else RECENT_MESSAGES)
         if not any(m["role"] == "user" for m in history):
             return 0
@@ -819,19 +821,38 @@ async def sort_into_planner(user_id: int) -> int:
             tasks=todos,
             events=events,
             background=_backfill_background(user_id) if first_pass else "",
-            convo="\n".join(f"{m['role']}: {m['content'][:600]}" for m in history),
+            convo="\n".join(f"{m['role']}: {m['content'][: 300 if m['role'] == 'assistant' and first_pass else 600]}" for m in history),
             language=prompts.LANGUAGE_NAME.get(user["lang"], "English"),
+            first_pass_rules=prompts.SORTER_FIRST_PASS if first_pass else "",
             limits="10 to-dos, 4 projects and 6 appointments" if first_pass else "4 to-dos, 2 projects and 3 appointments",
         )
         try:
-            out = await _complete([{"role": "user", "content": prompt}], max_tokens=SHORT_JOB_TOKENS)
+            # the first pass is a long chat and a hard judgement (which to-dos are one project); the fast side model missed projects the
+            # main model found on the same chat, and it runs once per user, so it uses the main model
+            out = await _complete(
+                [{"role": "user", "content": prompt}],
+                max_tokens=FIRST_PASS_TOKENS if first_pass else SHORT_JOB_TOKENS,
+                model=LLM_MODEL if first_pass else None,
+            )
             found = json.loads(re.search(r"\{.*\}", out, re.DOTALL).group(0))  # type: ignore[union-attr]
         except Exception:
             log.warning("could not read the planner sort for %s, trying again after the next message", user_id)
             return 0
         if first_pass:
-            db.set_field(user_id, "planner_sorted", 1)
-        return _file(user_id, found, 10 if first_pass else 4, 4 if first_pass else 2, 6 if first_pass else 3)
+            db.set_field(user_id, "planner_sorted", SORT_VERSION)
+        filed = _file(user_id, found, 10 if first_pass else 4, 4 if first_pass else 2, 6 if first_pass else 3)
+        sizes = {
+            k: len(found.get(k) or []) if isinstance(found, dict) and isinstance(found.get(k), list) else 0
+            for k in ("tasks", "projects", "events")
+        }
+        log.info(
+            "planner sort for %s (%s): the model found %s, filed %d",
+            user_id,
+            "first pass" if first_pass else "latest exchange",
+            sizes,
+            filed,
+        )
+        return filed
 
 
 def _file(user_id: int, found: dict, max_tasks: int, max_projects: int, max_events: int) -> int:
@@ -845,9 +866,8 @@ def _file(user_id: int, found: dict, max_tasks: int, max_projects: int, max_even
     filed = 0
     try:
         for p in items("projects", max_projects):
-            filed += tools.run_tool(user_id, "add_project", json.dumps({"title": p.get("title"), "steps": p.get("steps")})).startswith(
-                "ok: project #"
-            )
+            args = {"title": p.get("title"), "steps": p.get("steps") or [], "task_ids": p.get("task_ids") or []}
+            filed += tools.run_tool(user_id, "add_project", json.dumps(args)).startswith("ok: project #")
         for t in items("tasks", max_tasks):
             args = {"text": t.get("text"), "important": bool(t.get("important"))}
             if t.get("due"):

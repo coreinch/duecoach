@@ -22,15 +22,16 @@ def frozen(monkeypatch):
 @pytest.fixture
 def sorter(monkeypatch):
     """Script what the sorting model answers (a dict becomes JSON); every prompt it was given is kept."""
-    answers, prompts = [], []
+    answers, prompts, models = [], [], []
 
     async def fake_complete(messages, max_tokens=1500, model=None):
         prompts.append(messages[0]["content"])
+        models.append(model)
         answer = answers.pop(0)
         return answer if isinstance(answer, str) else json.dumps(answer)
 
     monkeypatch.setattr(llm, "_complete", fake_complete)
-    return NS(answers=answers, prompts=prompts)
+    return NS(answers=answers, prompts=prompts, models=models)
 
 
 def talk(uid, *pairs):
@@ -92,7 +93,7 @@ async def test_it_never_files_something_twice_or_something_invalid(sorter, user)
 
 async def test_the_limits_per_pass_hold(sorter, user):
     uid = user["user_id"]
-    db.set_field(uid, "planner_sorted", 1)
+    db.set_field(uid, "planner_sorted", llm.SORT_VERSION)
     talk(uid, ("user", "a long list"))
     chores = ["Water the plants", "Call the bank", "Book a haircut", "Email the landlord", "Renew the passport", "Clean the oven"]
     sorter.answers.append({"tasks": [{"text": c} for c in chores], "projects": [], "events": []})
@@ -120,7 +121,7 @@ async def test_the_first_pass_reads_everything_once_and_later_passes_only_the_la
     first = sorter.prompts[0]
     assert "first pass over everything" in first and "keeps putting off the taxes" in first and "look up flights" in first
     assert "message 5" in first  # well beyond the last few messages
-    assert db.get_user(uid)["planner_sorted"] == 1
+    assert db.get_user(uid)["planner_sorted"] == llm.SORT_VERSION
     await llm.sort_into_planner(uid)
     later = sorter.prompts[1]
     assert "latest exchange" in later and "message 5" not in later and "keeps putting off" not in later
@@ -131,7 +132,7 @@ async def test_an_unreadable_answer_files_nothing_and_the_first_pass_is_tried_ag
     talk(uid, ("user", "I need to email the landlord"))
     sorter.answers += ["I am sorry, I cannot do that", {"tasks": [{"text": "Email the landlord"}]}]
     assert await llm.sort_into_planner(uid) == 0 and db.get_user(uid)["planner_sorted"] == 0
-    assert await llm.sort_into_planner(uid) == 1 and db.get_user(uid)["planner_sorted"] == 1
+    assert await llm.sort_into_planner(uid) == 1 and db.get_user(uid)["planner_sorted"] == llm.SORT_VERSION
 
 
 async def test_without_consent_or_a_message_from_the_user_it_does_nothing(sorter, user):
@@ -166,7 +167,7 @@ async def test_it_runs_after_a_plain_message_but_not_after_commands_or_check_ins
 
 async def test_the_coach_is_told_once_what_was_filed_then_it_is_marked_as_mentioned(monkeypatch, user):
     uid = user["user_id"]
-    db.set_field(uid, "planner_sorted", 1)
+    db.set_field(uid, "planner_sorted", llm.SORT_VERSION)
     token = db.filing_by_itself.set(True)
     tools.run_tool(uid, "add_task", json.dumps({"text": "Email the landlord", "due": "2026-11-20"}))
     db.filing_by_itself.reset(token)
@@ -198,3 +199,51 @@ async def test_something_filed_while_the_coach_was_writing_is_still_announced_ne
     monkeypatch.setattr(llm, "_chat", fake_chat)
     await llm.reply(uid, "hi")
     assert [t["text"] for t in db.unannounced_auto(uid)["tasks"]] == ["Email Sam"]
+
+
+async def test_users_sorted_by_an_older_version_get_one_more_full_pass(sorter, user):
+    uid = user["user_id"]
+    db.set_field(uid, "planner_sorted", llm.SORT_VERSION - 1)
+    for i in range(80):
+        talk(uid, ("user", f"message {i}"))
+    tools.run_tool(uid, "add_task", json.dumps({"text": "Call the bank"}))
+    sorter.answers.append({"tasks": [{"text": "Call the bank"}], "projects": [{"title": "Job search", "steps": ["Update the CV"]}]})
+    assert await llm.sort_into_planner(uid) == 1  # the bank task is already there; the project is new
+    assert "first pass over everything" in sorter.prompts[0] and "ongoing efforts" in sorter.prompts[0]
+    assert "message 5" in sorter.prompts[0]  # reads far back, not only the last few dozen messages
+    assert db.get_user(uid)["planner_sorted"] == llm.SORT_VERSION
+    talk(uid, ("user", "thanks"))
+    sorter.answers.append({})
+    await llm.sort_into_planner(uid)
+    assert "ongoing efforts" not in sorter.prompts[1]  # an up-to-date user only gets the latest exchange
+
+
+async def test_the_pass_logs_what_the_model_found_and_what_was_filed_without_any_text(sorter, user, caplog):
+    uid = user["user_id"]
+    talk(uid, ("user", "my private plan about the divorce lawyer"))
+    sorter.answers.append({"tasks": [{"text": "Call the divorce lawyer"}], "projects": [], "events": []})
+    with caplog.at_level("INFO", logger="duecoach.llm"):
+        await llm.sort_into_planner(uid)
+    assert "the model found {'tasks': 1, 'projects': 0, 'events': 0}, filed 1" in caplog.text
+    assert "divorce" not in caplog.text
+
+
+async def test_to_dos_about_the_same_thing_become_one_project(sorter, user):
+    uid = user["user_id"]
+    first = db.add_task(uid, "Install RAM in the build machine")
+    second = db.add_task(uid, "Pick the build machine up after the NVMe arrives")
+    talk(uid, ("user", "the build machine needs RAM and an NVMe before I can continue"))
+    sorter.answers.append({"projects": [{"title": "Build machine", "steps": [], "task_ids": [first, second]}]})
+    assert await llm.sort_into_planner(uid) == 1
+    assert [t["project_id"] for t in db.open_tasks(uid)] == [1, 1]
+    assert [p["auto"] for p in db.active_projects(uid)] == [1]
+    assert f"#{first} Install RAM" in sorter.prompts[0] and "task_ids" in sorter.prompts[0]
+
+
+async def test_the_one_time_first_pass_uses_the_main_model_and_later_passes_the_side_model(sorter, user):
+    uid = user["user_id"]
+    talk(uid, ("user", "I need to email the landlord"))
+    sorter.answers += [{}, {}]
+    await llm.sort_into_planner(uid)
+    await llm.sort_into_planner(uid)
+    assert sorter.models == [llm.LLM_MODEL, None]  # None: the side model

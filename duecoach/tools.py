@@ -254,7 +254,12 @@ TOOLS = [
             "steps": {
                 "type": "array",
                 "items": {"type": "string"},
-                "description": "The first steps in order, concrete, each starting with a verb.",
+                "description": "The first steps in order, concrete, each starting with a verb. May be empty only when task_ids is given.",
+            },
+            "task_ids": {
+                "type": "array",
+                "items": {"type": "integer"},
+                "description": "The #ids of open to-dos already on the list that belong to this project: they move into it.",
             },
         },
         ["title", "steps"],
@@ -657,7 +662,9 @@ def _break_down_task(uid: int, a: dict) -> str:
 
 def _add_project(uid: int, a: dict) -> str:
     title = _text(a, "title")
-    steps = _steps(a, 1, 6)
+    wanted = {int(i) for i in (a.get("task_ids") or []) if str(i).isdigit()} if isinstance(a.get("task_ids"), list) else set()
+    moving = [t for t in db.open_tasks(uid) if t["id"] in wanted and not t["parent_id"]]
+    steps = [] if moving and not a.get("steps") else _steps(a, 0 if moving else 1, 6)
     if isinstance(steps, str):
         return steps
     for p in db.active_projects(uid):
@@ -666,13 +673,16 @@ def _add_project(uid: int, a: dict) -> str:
     pid = db.add_project(uid, title)
     if pid is None:
         return f"error: already {db.MAX_PROJECTS} active projects; close one first"
+    for t in moving:
+        db.update_task(uid, t["id"], project_id=pid)
     saved = [db.add_task(uid, text, "", 0, pid) for text in steps]
     made = [t for t in saved if t]
-    return (
-        f"ok: project #{pid} saved with {len(made)} steps (to-dos #{made[0]} on)"
-        if made
-        else f"ok: project #{pid} saved, but the to-do list is full"
-    )
+    result = f"ok: project #{pid} saved"
+    if made:
+        result += f" with {len(made)} steps (to-dos #{made[0]} on)"
+    elif steps:
+        result += ", but the to-do list is full"
+    return result + (f"; {len(moving)} existing to-dos moved into it" if moving else "")
 
 
 def _close_project(uid: int, a: dict) -> str:

@@ -270,3 +270,18 @@ async def test_projects_view_shows_the_next_step_and_flags_a_stalled_project(use
     view = await cmd(uid, "/projects")
     assert "• Trip — next: Check my calendar (4 open)" in view  # the first step under the first to-do, not the umbrella
     assert "• Taxes — no next step yet" in view
+
+
+def test_a_project_can_take_existing_to_dos_in_and_needs_no_new_steps(user):
+    uid = user["user_id"]
+    a = db.add_task(uid, "Install RAM in the build machine")
+    b = db.add_task(uid, "Pick the build machine up after the NVMe arrives")
+    stray = db.add_task(uid, "Buy milk")
+    reply = run(uid, "add_project", title="Build machine", steps=[], task_ids=[a, b, 99, "x"])
+    assert reply == "ok: project #1 saved; 2 existing to-dos moved into it"
+    assert {t["id"]: t["project_id"] for t in db.open_tasks(uid)} == {a: 1, b: 1, stray: 0}
+    assert run(uid, "add_project", title="Empty one", steps=[]).startswith("error: give 1 to 6")  # still needs something
+    assert run(uid, "add_project", title="Other", steps=[], task_ids=[99]).startswith("error: give 1 to 6")
+    run(uid, "break_down_task", task_id=a, steps=["Open the case", "Seat the sticks"])
+    run(uid, "add_project", title="Second", steps=["First"], task_ids=[stray])
+    assert db.get_open_task(uid, stray)["project_id"] == 2
