@@ -135,6 +135,7 @@ jobs:
           LLM_MODEL: ${{ secrets.LLM_MODEL }}
           LLM_SIDE_MODEL: ${{ vars.LLM_SIDE_MODEL }}
           ADMIN_CHAT_ID: ${{ secrets.ADMIN_CHAT_ID }}
+          GOOGLE_TTS_API_KEY: ${{ secrets.GOOGLE_TTS_API_KEY }}
         run: |
           # Built via jq rather than interpolated into the ansible-playbook
           # command line: tokens can contain shell metacharacters, and
@@ -156,6 +157,7 @@ jobs:
             --arg llm_model "$LLM_MODEL" \
             --arg llm_side_model "$LLM_SIDE_MODEL" \
             --arg admin_chat_id "$ADMIN_CHAT_ID" \
+            --arg google_tts_api_key "$GOOGLE_TTS_API_KEY" \
             '$ARGS.named' > /tmp/extra-vars.json
 
           ansible-playbook -i ansible/inventory/hosts.ini ansible/playbooks/deploy.yml \

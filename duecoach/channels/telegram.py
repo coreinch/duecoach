@@ -1,11 +1,12 @@
 import asyncio
+import io
 import logging
 
 import telegram.error
 from telegram import Update
 from telegram.ext import Application, ContextTypes, MessageHandler, filters
 
-from .. import core, strings
+from .. import core, strings, tts
 from ..config import is_allowed
 from . import Unreachable
 
@@ -40,8 +41,11 @@ class TelegramChannel:
         typing = asyncio.create_task(self._keep_typing(chat)) if is_allowed(self.name, str(user.id)) else None
         try:
             lang = strings.lang_from_telegram(user.language_code)
+            spoken, spoken_lang = None, lang
             if voice is not None:
-                reply = await core.handle_voice(self.name, str(user.id), str(chat.id), voice.duration or 0, self._downloader(voice), lang)
+                reply, spoken, spoken_lang = await core.handle_voice(
+                    self.name, str(user.id), str(chat.id), voice.duration or 0, self._downloader(voice), lang
+                )
             elif text is None:
                 reply = await core.handle_unsupported(self.name, str(user.id), str(chat.id), lang)
             else:
@@ -51,6 +55,18 @@ class TelegramChannel:
                 typing.cancel()
         if reply:
             await update.message.reply_text(reply)
+        if spoken and tts.enabled():
+            await self._speak(update, spoken, spoken_lang)
+
+    @staticmethod
+    async def _speak(update: Update, spoken: str, lang: str) -> None:
+        """The reply as a voice note too. The text is already sent, so a failure here only means no audio."""
+        try:
+            audio = await tts.synthesize(spoken, lang)
+            if audio and update.message:
+                await update.message.reply_voice(voice=io.BytesIO(audio))
+        except Exception:
+            log.warning("could not send the spoken reply", exc_info=True)
 
     async def _on_text(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         await self._answer(update, update.message.text if update.message else None)

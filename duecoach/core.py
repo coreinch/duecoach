@@ -8,6 +8,7 @@ then ordinary coaching.
 import asyncio
 import logging
 import time
+from typing import NamedTuple
 
 from . import chat, db, llm, ratelimit
 from .chat import say
@@ -73,7 +74,13 @@ async def handle_text(channel: str, ext_id: str, chat_id: str, text: str, lang_h
         return await chat.coach(uid, text)
 
 
-async def handle_voice(channel: str, ext_id: str, chat_id: str, seconds: int, fetch, lang_hint: str = "en") -> str | None:
+class VoiceResult(NamedTuple):
+    text: str | None  # what to send as text
+    spoken: str | None  # what to say aloud as well (a coach reply only: never an error, notice or safety message)
+    lang: str = "en"  # the language to say it in: the user's own setting
+
+
+async def handle_voice(channel: str, ext_id: str, chat_id: str, seconds: int, fetch, lang_hint: str = "en") -> VoiceResult:
     """A voice note: turned into text by the provider's audio model, then handled exactly like the same words typed.
 
     `fetch` downloads the audio (only called once the user is known to have agreed). The reply starts with what was heard, so a
@@ -81,30 +88,30 @@ async def handle_voice(channel: str, ext_id: str, chat_id: str, seconds: int, fe
     """
     user = _user_for(channel, ext_id, chat_id, lang_hint)
     if user is None:
-        return None
+        return VoiceResult(None, None)
     uid = user["user_id"]
     if not user["consent_at"]:
-        return chat.privacy(uid)  # nothing, not even audio, goes to the provider before they agreed
+        return VoiceResult(chat.privacy(uid), None)  # nothing, not even audio, goes to the provider before they agreed
     if not (VOICE_MODEL and VOICE_URL):
-        return say(uid, "UNSUPPORTED")
+        return VoiceResult(say(uid, "UNSUPPORTED"), None)
     if ratelimit.full(uid):
         if uid in ratelimit.warned:
-            return None
+            return VoiceResult(None, None)
         ratelimit.warned.add(uid)
-        return say(uid, "RATE_LIMITED")
+        return VoiceResult(say(uid, "RATE_LIMITED"), None)
     if seconds > VOICE_MAX_SECONDS:
-        return say(uid, "VOICE_TOO_LONG", seconds=VOICE_MAX_SECONDS)
+        return VoiceResult(say(uid, "VOICE_TOO_LONG", seconds=VOICE_MAX_SECONDS), None)
     try:
         heard = await llm.transcribe(uid, await fetch())
     except Exception:
         log.warning("voice note from %s could not be transcribed", uid, exc_info=True)
-        return say(uid, "VOICE_FAILED")
+        return VoiceResult(say(uid, "VOICE_FAILED"), None)
     if not heard:
-        return say(uid, "VOICE_UNCLEAR")
+        return VoiceResult(say(uid, "VOICE_UNCLEAR"), None)
     reply = await handle_text(channel, ext_id, chat_id, heard, lang_hint)
     if not reply or is_crisis(heard):
-        return reply  # the safety message stands alone
-    return f"🎤 “{heard}”\n\n{reply}"
+        return VoiceResult(reply, None)  # the safety message stands alone, in text
+    return VoiceResult(f"🎤 “{heard}”\n\n{reply}", reply, db.get_user(uid)["lang"])
 
 
 async def handle_unsupported(channel: str, ext_id: str, chat_id: str, lang_hint: str = "en") -> str | None:

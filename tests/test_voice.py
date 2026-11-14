@@ -53,7 +53,8 @@ class Audio:
 
 async def voice(seconds=5, fetch=None, ext="7007"):
     fetch = fetch or Audio()
-    return await core.handle_voice("telegram", ext, ext, seconds, fetch), fetch
+    result = await core.handle_voice("telegram", ext, ext, seconds, fetch)
+    return result.text, fetch
 
 
 async def test_a_voice_note_is_handled_like_the_same_words_typed_and_shows_what_was_heard(voice_on, coach, monkeypatch):
@@ -158,3 +159,15 @@ async def test_a_failing_provider_is_retried_once_then_raises(monkeypatch):
     with pytest.raises(llm.ModelError):
         await llm.transcribe(1001, b"abc")
     assert len(calls) == llm.MODEL_ATTEMPTS
+
+
+async def test_only_a_coach_reply_is_spoken_never_a_notice_or_the_safety_message(voice_on, coach, monkeypatch):
+    agreed_user()
+    transcribing(monkeypatch)
+    result = await core.handle_voice("telegram", "7007", "7007", 5, Audio())
+    assert result.spoken == "Got it." and result.lang == "en" and result.text.endswith("Got it.")
+    transcribing(monkeypatch, "I want to die")
+    crisis = await core.handle_voice("telegram", "7007", "7007", 5, Audio())
+    assert "112" in crisis.text and crisis.spoken is None
+    transcribing(monkeypatch, "")
+    assert (await core.handle_voice("telegram", "7007", "7007", 5, Audio())).spoken is None

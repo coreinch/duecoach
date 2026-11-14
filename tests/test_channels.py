@@ -60,7 +60,7 @@ async def test_a_telegram_voice_note_is_downloaded_only_when_core_asks_and_the_r
 
     async def fake_handle_voice(channel, ext_id, chat_id, seconds, fetch, lang):
         seen.update(seconds=seconds, before=len(downloads), audio=await fetch(), lang=lang)
-        return "heard you"
+        return core.VoiceResult("heard you", None)
 
     monkeypatch.setattr(core, "handle_voice", fake_handle_voice)
     update = NS(
@@ -70,3 +70,50 @@ async def test_a_telegram_voice_note_is_downloaded_only_when_core_asks_and_the_r
     )
     await TelegramChannel("123456:TEST-TOKEN")._on_voice(update, None)
     assert sent == ["heard you"] and seen == {"seconds": 7, "before": 0, "audio": b"ogg", "lang": "el"}
+
+
+async def test_a_spoken_reply_follows_the_text_and_a_failure_to_speak_never_loses_the_text(monkeypatch):
+    from types import SimpleNamespace as NS
+
+    from duecoach import core, tts
+    from duecoach.channels.telegram import TelegramChannel
+
+    texts, voices = [], []
+
+    async def reply_text(text):
+        texts.append(text)
+
+    async def reply_voice(voice):
+        voices.append(voice.read())
+
+    async def send_action(action):
+        return None
+
+    async def fake_handle_voice(channel, ext_id, chat_id, seconds, fetch, lang):
+        return core.VoiceResult("🎤 “hi”\n\nGot it.", "Got it.", "el")
+
+    asked = []
+
+    async def synthesize(text, lang):
+        asked.append((text, lang))
+        return b"opus"
+
+    monkeypatch.setattr(core, "handle_voice", fake_handle_voice)
+    monkeypatch.setattr(tts, "enabled", lambda: True)
+    monkeypatch.setattr(tts, "synthesize", synthesize)
+    update = NS(
+        effective_user=NS(id=1, language_code="en"),
+        effective_chat=NS(id=2, send_action=send_action),
+        message=NS(voice=NS(duration=3, get_file=None), reply_text=reply_text, reply_voice=reply_voice),
+    )
+    channel = TelegramChannel("123456:TEST-TOKEN")
+    await channel._on_voice(update, None)
+    assert texts == ["🎤 “hi”\n\nGot it."] and voices == [b"opus"] and asked == [("Got it.", "el")]
+
+    async def broken(text, lang):
+        raise RuntimeError("tts down")
+
+    monkeypatch.setattr(tts, "synthesize", broken)
+    texts.clear()
+    await channel._on_voice(update, None)  # must not raise
+    assert texts == ["🎤 “hi”\n\nGot it."]
