@@ -94,3 +94,16 @@ async def test_greek_words_get_the_greek_voice_even_when_the_users_setting_is_en
     with_key(monkeypatch, handler)
     await tts.synthesize("Καλημέρα! Έχεις ένα ραντεβού στις δέκα.", "en")
     assert seen["body"]["voice"]["languageCode"] == "el-GR"
+
+
+async def test_the_greek_question_mark_is_sent_as_a_latin_one_so_the_voice_asks(monkeypatch):
+    seen = []
+
+    def handler(request):
+        seen.append(json.loads(request.content)["input"]["text"])
+        return httpx.Response(200, json={"audioContent": base64.b64encode(b"x").decode()})
+
+    with_key(monkeypatch, handler)
+    await tts.synthesize("Έχεις ραντεβού; Θέλεις να το ετοιμάσουμε\u037e Ωραία.", "el")
+    await tts.synthesize("One thing; then another. Fine?", "en")
+    assert seen == ["Έχεις ραντεβού? Θέλεις να το ετοιμάσουμε? Ωραία.", "One thing; then another. Fine?"]  # English keeps its semicolon

@@ -17,6 +17,9 @@ _URL = re.compile(r"https?://\S+")
 _MARKUP = re.compile(r"[*_`#>~|]+")
 _EMOJI = re.compile("[\U0001f000-\U0001faff☀-➿️‍]")
 _ID = re.compile(r"\s#\d+\b")
+# The Greek question mark (U+037E, or the semicolon that looks like it and that Greek keyboards type) at the end of a clause: Google's
+# Greek voices lift the pitch for a Latin "?" far more often than for this one.
+_GREEK_QUESTION = re.compile(r"[;\u037e](?=\s|$)")
 _SENTENCE_END = re.compile(r"[.!?;;…]+(?:\s|$)|\n")
 
 
@@ -60,7 +63,10 @@ async def synthesize(text: str, lang: str) -> bytes | None:
     text = speakable(text)
     if not enabled() or not text:
         return None
-    code, name = TTS_VOICES.get(language_of(text, lang), TTS_VOICES["en"])
+    lang = language_of(text, lang)
+    code, name = TTS_VOICES.get(lang, TTS_VOICES["en"])
+    if lang == "el":
+        text = _GREEK_QUESTION.sub("?", text)
     body = {
         "input": {"text": text},
         "voice": {"languageCode": code, "name": name},
