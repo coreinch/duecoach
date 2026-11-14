@@ -890,3 +890,10 @@ async def test_a_replys_model_calls_carry_that_users_session(monkeypatch, user):
     await llm.reply(1001, "hi")
     assert seen
     assert all(h and h["x-opencode-session"] == llm._session_id(1001) for h in seen)
+
+
+async def test_a_long_message_is_not_read_for_an_agreement(model, user):
+    db.add_message(1001, "assistant", 'A goal that could work: "Send every invoice within 48 hours". Does that fit?')
+    long_message = "so this week has been a lot " + "and then there was more work to do " * 8
+    assert await llm.read_agreements(1001, long_message) is None
+    assert model.calls == []

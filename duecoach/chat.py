@@ -30,7 +30,23 @@ async def _refresh_notes(uid: int) -> None:
         log.exception("notes refresh failed for %s", uid)
 
 
+SORT_MIN_WORDS = 3  # "ok", "yes please" and the like have nothing to file
+SORT_COOLDOWN = 60  # seconds: messages in a burst are sorted together, in one run at the end of it (it reads the latest messages)
+_last_sort: dict[int, float] = {}
+_sort_waiting: set[int] = set()
+
+
 async def _sort_planner(uid: int) -> None:
+    wait = SORT_COOLDOWN - (time.monotonic() - _last_sort.get(uid, -SORT_COOLDOWN))
+    if wait > 0:
+        if uid in _sort_waiting:
+            return  # a run is already queued for the end of the cooldown, and it will see this message too
+        _sort_waiting.add(uid)
+        try:
+            await asyncio.sleep(wait)
+        finally:
+            _sort_waiting.discard(uid)
+    _last_sort[uid] = time.monotonic()
     try:
         await llm.sort_into_planner(uid)
         await llm.group_into_projects(uid)  # after the sort, so the to-dos it just filed are grouped in the same go
@@ -46,7 +62,7 @@ async def coach(uid: int, text: str, instruction: str | None = None) -> str:
         log.exception("LLM call failed")
         return say(uid, "LLM_ERROR")
     _spawn(_refresh_notes(uid))  # after the reply is on its way, so it never delays the user
-    if not instruction and not text.startswith("/"):
+    if not instruction and not text.startswith("/") and len(text.split()) >= SORT_MIN_WORDS:
         _spawn(_sort_planner(uid))  # files what they said they need to do, for the coach to mention at its next reply
     return out
 

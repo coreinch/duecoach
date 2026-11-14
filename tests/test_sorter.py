@@ -356,3 +356,42 @@ async def test_the_views_still_answer_when_the_model_is_down(user):
     loose_tasks(uid, "Call the bank", "Water the plants")  # conftest makes the real model refuse every call
     assert "Call the bank" in await commands.COMMANDS["tasks"](uid, [])
     assert "No projects yet" in await commands.COMMANDS["projects"](uid, [])
+
+
+async def test_short_acknowledgements_are_not_sorted(monkeypatch, user):
+    uid = user["user_id"]
+    ran = []
+
+    async def fake_reply(u, text, instruction=None):
+        return "ok"
+
+    async def fake_sort(u):
+        ran.append(u)
+
+    monkeypatch.setattr(llm, "reply", fake_reply)
+    monkeypatch.setattr(llm, "sort_into_planner", fake_sort)
+    for text in ("ok", "yes please", "thanks"):
+        await chat.coach(uid, text)
+    for task in list(chat.background):
+        await task
+    assert ran == []
+
+
+async def test_a_burst_of_messages_is_sorted_by_one_run_at_the_start_and_one_at_the_end(monkeypatch, user):
+    uid = user["user_id"]
+    ran = []
+
+    async def fake_reply(u, text, instruction=None):
+        return "ok"
+
+    async def fake_sort(u):
+        ran.append(u)
+
+    monkeypatch.setattr(llm, "reply", fake_reply)
+    monkeypatch.setattr(llm, "sort_into_planner", fake_sort)
+    monkeypatch.setattr(chat, "SORT_COOLDOWN", 0.05)
+    for text in ("I need to call the bank", "and email the landlord", "also renew my passport soon", "plus pay the rent"):
+        await chat.coach(uid, text)
+    for task in list(chat.background):
+        await task
+    assert len(ran) == 2  # four messages, two model calls: the first at once, one more when the cooldown ended

@@ -51,6 +51,7 @@ NOTES_EVERY = 20  # new chat messages between refreshes of the long-term notes
 # Reasoning models: they think before they answer, and the thinking counts against max_tokens. A small limit
 # is used up by the thinking and the answer comes back empty, so even one-sentence jobs get a generous budget.
 SHORT_JOB_TOKENS = 2000
+AGREEMENT_MAX_WORDS = 30
 VOICE_TOKENS = 1500  # a transcript of up to a couple of minutes of speech
 FIRST_PASS_TOKENS = 4000  # the main model thinks before it answers
 
@@ -398,8 +399,8 @@ async def read_agreements(user_id: int, user_text: str) -> dict | None:
     """
     _for(user_id)
     goals, steps = db.active_goals(user_id), db.open_objectives(user_id)
-    if (goals and steps) or user_text.startswith("/"):
-        return None
+    if (goals and steps) or user_text.startswith("/") or len(user_text.split()) > AGREEMENT_MAX_WORDS:
+        return None  # a long message is something new they are telling the coach, not a yes to what it proposed
     last = next((m["content"] for m in reversed(db.recent_messages(user_id, 6)) if m["role"] == "assistant"), None)
     if not last:
         return None
