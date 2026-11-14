@@ -135,3 +135,10 @@ async def test_wrong_marks_the_last_coach_message_and_says_so(user):
     assert await commands.COMMANDS["wrong"](1001, []) == commands.strings.t("en", "WRONG_OK")
     flag = db._conn.execute("SELECT * FROM flags").fetchone()
     assert flag["user_id"] == 1001 and flag["message_id"] == db._conn.execute("SELECT MAX(id) FROM messages").fetchone()[0]
+
+
+async def test_a_coached_reply_logs_where_its_time_went_without_any_text(user, ai, caplog):
+    with caplog.at_level("INFO", logger="duecoach.core"):
+        assert await say("a plain message here") == "coached"
+    lines = [r.getMessage() for r in caplog.records if r.getMessage().startswith("timing for")]
+    assert len(lines) == 1 and all(word in lines[0] for word in ("waited", "check", "coach", "total")) and "plain message" not in lines[0]

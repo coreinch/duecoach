@@ -53,7 +53,9 @@ async def handle_text(channel: str, ext_id: str, chat_id: str, text: str, lang_h
         command = word[1:].split("@")[0].lower()
     # Crisis wording is answered first, whatever the message is: plain text, or inside a command ("/stuck I want to die").
     crisis = is_crisis(text) and command not in ("deletedata", "forget")
+    started = time.monotonic()
     async with user_lock(uid):
+        waited = time.monotonic() - started
         if not user["consent_at"]:
             # health-related chat goes to a third-party AI provider: nothing is processed before the user has agreed
             if crisis:
@@ -66,12 +68,23 @@ async def handle_text(channel: str, ext_id: str, chat_id: str, text: str, lang_h
             return chat.privacy(uid)
         if not crisis and not command and await llm.precheck(uid, text):
             crisis = True  # wording the list does not know: judged by the model (only after consent: it sends the text to the provider)
+        checked = time.monotonic()
         if crisis:
             return await chat.crisis(uid, text)
         handler = COMMANDS.get(command) if command else None
         if handler:
             return await handler(uid, args)
-        return await chat.coach(uid, text)
+        reply = await chat.coach(uid, text)
+        # where the time of a reply goes (no text): waiting for an earlier message, the check before the coach, then the coach and verifier
+        log.info(
+            "timing for %s: waited %.1fs, check %.1fs, coach %.1fs, total %.1fs",
+            uid,
+            waited,
+            checked - started - waited,
+            time.monotonic() - checked,
+            time.monotonic() - started,
+        )
+        return reply
 
 
 class VoiceResult(NamedTuple):

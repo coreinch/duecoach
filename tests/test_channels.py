@@ -117,3 +117,32 @@ async def test_a_spoken_reply_follows_the_text_and_a_failure_to_speak_never_lose
     texts.clear()
     await channel._on_voice(update, None)  # must not raise
     assert texts == ["🎤 “hi”\n\nGot it."]
+
+
+async def test_each_answer_logs_how_long_after_telegram_received_the_message(monkeypatch, caplog):
+    import datetime as dt
+    from types import SimpleNamespace as NS
+
+    from duecoach import core
+    from duecoach.channels.telegram import TelegramChannel
+
+    async def reply_text(text):
+        return None
+
+    async def send_action(action):
+        return None
+
+    async def fake_handle_text(channel, ext_id, chat_id, text, lang):
+        return "hello"
+
+    monkeypatch.setattr(core, "handle_text", fake_handle_text)
+    sent = dt.datetime.now(dt.UTC) - dt.timedelta(seconds=7)
+    update = NS(
+        effective_user=NS(id=1, language_code="en"),
+        effective_chat=NS(id=2, send_action=send_action),
+        message=NS(text="hi", date=sent, reply_text=reply_text),
+    )
+    with caplog.at_level("INFO", logger="duecoach.telegram"):
+        await TelegramChannel("123456:TEST-TOKEN")._on_text(update, None)
+    line = next(r.getMessage() for r in caplog.records if "after Telegram received" in r.getMessage())
+    assert 6.5 < float(line.split()[2].rstrip("s")) < 12  # "answered 1 7.0s after Telegram received the message"

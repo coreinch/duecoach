@@ -1,6 +1,7 @@
 import asyncio
 import io
 import logging
+import time
 
 import telegram.error
 from telegram import Update
@@ -38,6 +39,9 @@ class TelegramChannel:
         user, chat = update.effective_user, update.effective_chat
         if user is None or chat is None or update.message is None:
             return
+        sent_at = (
+            update.message.date.timestamp() if getattr(update.message, "date", None) else None
+        )  # when Telegram got the message, to see the whole wait
         typing = asyncio.create_task(self._keep_typing(chat)) if is_allowed(self.name, str(user.id)) else None
         try:
             lang = strings.lang_from_telegram(user.language_code)
@@ -55,6 +59,8 @@ class TelegramChannel:
                 typing.cancel()
         if reply:
             await update.message.reply_text(reply)
+            if sent_at:
+                log.info("answered %s %.1fs after Telegram received the message", user.id, time.time() - sent_at)
         if spoken and tts.enabled():
             await self._speak(update, spoken, spoken_lang)
 
