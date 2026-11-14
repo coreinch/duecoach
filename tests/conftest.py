@@ -13,7 +13,7 @@ os.environ.update(
 
 import pytest  # noqa: E402
 
-from duecoach import core, db, llm, ratelimit  # noqa: E402
+from duecoach import chat, core, db, llm, ratelimit  # noqa: E402
 
 
 @pytest.fixture(autouse=True)
@@ -22,6 +22,8 @@ def database(tmp_path):
     db.init(str(tmp_path / "duecoach.db"))
     core._locks.clear()
     ratelimit.reset()
+    chat._last_sort.clear()
+    chat._sort_waiting.clear()
     yield
     db.close()
 
