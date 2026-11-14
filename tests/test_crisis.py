@@ -1,4 +1,3 @@
-import asyncio
 import time
 
 import pytest
@@ -89,8 +88,15 @@ async def test_someone_in_crisis_gets_the_safety_message_even_before_agreeing_an
     assert db.message_count(row["user_id"]) == 0
 
 
+def crisis_only(uid):
+    """The user already has a goal and a step, so nothing else rides along with the safety check (it uses its own prompt)."""
+    goal = db.add_goal(uid, "a goal")
+    db.add_objective(uid, goal, "a step", "a reward")
+
+
 async def test_wording_the_list_does_not_know_is_judged_by_the_model(model, monkeypatch):
     uid = make_user(8)
+    crisis_only(uid)
     asked = []
 
     async def sees_a_crisis(user_id, text):
@@ -111,7 +117,7 @@ async def test_the_model_is_not_asked_when_the_list_already_matched_or_for_comma
         return False
 
     monkeypatch.setattr(llm, "signals_crisis", records)
-    make_user(8)
+    crisis_only(make_user(8))
     await say("I want to die")  # the list matched
     await say("/help")  # a command
     db.get_or_create_user("telegram", "6006", "6006", "en")
@@ -133,40 +139,17 @@ async def test_a_failing_safety_check_never_blocks_a_normal_reply(model, monkeyp
     assert await say("a normal message") == "coached"
 
 
-async def test_the_safety_check_and_the_agreement_reading_run_at_the_same_time(model, monkeypatch):
-    make_user(8)
-    running, overlapped = [], []
-
-    async def slow(name, result):
-        running.append(name)
-        await asyncio.sleep(0.05)
-        overlapped.append(len(running))
-        running.remove(name)
-        return result
-
-    async def crisis_check(user_id, text):
-        return await slow("crisis", False)
-
-    async def agreements(user_id, text):
-        return await slow("agreements", None)
-
-    monkeypatch.setattr(llm, "signals_crisis", crisis_check)
-    monkeypatch.setattr(llm, "read_agreements", agreements)
-    assert await say("a normal message") == "coached"
-    assert overlapped == [2, 1]  # both were in flight together
-
-
-async def test_nothing_is_saved_from_the_agreement_reading_when_the_message_is_a_crisis(model, monkeypatch):
+async def test_a_crisis_found_by_the_merged_call_saves_and_files_nothing(model, monkeypatch):
     uid = make_user(8)
+    db.set_field(uid, "planner_sorted", llm.SORT_VERSION)
     db.add_message(uid, "assistant", 'A goal that could work: "Send every invoice within 48 hours". Does that fit?')
+    calls = []
 
-    async def sees_a_crisis(user_id, text):
-        return True
+    async def triage(user_id, text, agreements, planner):
+        calls.append((agreements, planner))
+        return {"crisis": True, "goal": "Send every invoice within 48 hours.", "step": None, "tasks": [{"text": "Call the bank"}]}
 
-    async def agreed_a_goal(user_id, text):
-        return {"goal": "Send every invoice within 48 hours.", "step": None}
-
-    monkeypatch.setattr(llm, "signals_crisis", sees_a_crisis)
-    monkeypatch.setattr(llm, "read_agreements", agreed_a_goal)
+    monkeypatch.setattr(llm, "_triage", triage)
     assert "112" in await say("yes, but honestly I want to disappear")
-    assert db.active_goals(uid) == [] and uid not in llm._preread
+    assert calls == [(True, True)]  # one call carried all three jobs
+    assert db.active_goals(uid) == [] and db.open_tasks(uid) == [] and uid not in llm._preread and uid not in llm._covered

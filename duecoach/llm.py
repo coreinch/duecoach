@@ -445,17 +445,118 @@ async def record_agreements(user_id: int, user_text: str, found: Any = _UNREAD) 
     return notes
 
 
-async def precheck(user_id: int, text: str) -> bool:
-    """Run the safety check and the agreement reading at the same time (each is a model call, and they don't depend on each other).
+SORT_MIN_WORDS = 3  # "ok", "yes please" and the like have nothing to file
+SORT_COOLDOWN = 60  # seconds between planner passes for one user: a burst is sorted by one run at its end (it reads the latest messages)
+_last_sort: dict[int, float] = {}
+_covered: set[int] = set()  # users whose latest message the triage call has already filed from (the background sort then skips it)
+TRIAGE_TOKENS = 2500
 
-    Returns whether the message shows a crisis. When it does, nothing is saved from the agreement reading; otherwise the reading is
-    kept for the reply that follows, which saves it.
+
+def _words(text: str) -> int:
+    return len(text.split())
+
+
+def _wants_agreements(user_id: int, text: str) -> bool:
+    """Is there anything for the agreement reading to do: a goal or step still missing, a short reply, something of the coach's to agree to."""
+    if text.startswith("/") or _words(text) > AGREEMENT_MAX_WORDS or (db.active_goals(user_id) and db.open_objectives(user_id)):
+        return False
+    return any(m["role"] == "assistant" for m in db.recent_messages(user_id, 6))
+
+
+def _wants_planner(user_id: int, text: str) -> bool:
+    """Is there anything for the planner filing to do: a message with enough words, not in a burst, after the user's first full pass."""
+    user = db.get_user(user_id)
+    return bool(
+        user is not None
+        and user["consent_at"]
+        and (user["planner_sorted"] or 0) >= SORT_VERSION
+        and _words(text) >= SORT_MIN_WORDS
+        and time.monotonic() - _last_sort.get(user_id, -SORT_COOLDOWN) >= SORT_COOLDOWN
+    )
+
+
+async def _triage(user_id: int, text: str, agreements: bool, planner: bool) -> dict | None:
+    """One model call for the safety check and, as they apply, the agreement reading and the planner filing. Writes nothing.
+
+    Returns the parsed answer, or None when the call failed or answered badly.
     """
-    crisis, found = await asyncio.gather(signals_crisis(user_id, text), read_agreements(user_id, text))
+    _for(user_id)
+    user = db.get_user(user_id)
+    history = db.recent_messages(user_id, RECENT_MESSAGES)
+    last_coach = max((i for i, m in enumerate(history) if m["role"] == "assistant"), default=-1)
+    # the coach's last message is what the user may be agreeing to: it is shown nearly in full
+    recent = "\n".join(f"{m['role']}: {m['content'][: 1200 if i == last_coach else 600]}" for i, m in enumerate(history)) or "(none)"
+    template, schema, context = prompts.TRIAGE_HEAD + prompts.TRIAGE_CRISIS, ['"crisis": true or false'], ""
+    if agreements:
+        goals, steps = db.active_goals(user_id), db.open_objectives(user_id)
+        context += (
+            f"\nGoals already saved: {'; '.join(g['text'] for g in goals) or 'none'}\n"
+            f"Open steps already saved: {'; '.join(o['text'] for o in steps) or 'none'}\n"
+        )
+        template += prompts.TRIAGE_AGREEMENT
+        schema.append('"goal": ..., "step": ...')
+    if planner:
+        projects, todos, events = _planner_snapshot(user_id)
+        context += (
+            "\nAlready in their planner (never file any of this again, not even in other words):\n"
+            f"Projects: {projects}\nTo-dos: {todos}\nAppointments: {events}\n"
+        )
+        template += prompts.TRIAGE_PLANNER
+        schema.append('"tasks": [...], "projects": [...], "events": [...]')
+    prompt = template.format(
+        now=datetime.now(tools._local_zone(user_id)).strftime("%A %Y-%m-%d %H:%M") + f" ({user['tz']})",
+        recent=recent,
+        user=text[:600],
+        context=context,
+        schema="{" + ", ".join(schema) + "}",
+        language=prompts.LANGUAGE_NAME.get(user["lang"], "English"),
+        limits="4 to-dos, 2 projects and 3 appointments",
+        first_pass_rules="",
+    )
+    try:
+        out = await _complete([{"role": "user", "content": prompt}], max_tokens=TRIAGE_TOKENS)
+        found = json.loads(re.search(r"\{.*\}", out, re.DOTALL).group(0))  # type: ignore[union-attr]
+    except Exception:
+        log.warning("could not read the triage answer for %s, falling back to the separate checks", user_id, exc_info=True)
+        return None
+    return found if isinstance(found, dict) else None
+
+
+async def precheck(user_id: int, text: str) -> bool:
+    """Before the coach answers: the safety check, and with it (in the same model call) whatever else applies to this message.
+
+    A message that needs only the safety check uses the single-purpose safety prompt. Otherwise one call also reads whether the user
+    agreed to a goal or step, and files the to-dos, projects and appointments in it. Returns whether the message shows a crisis; then
+    nothing is saved or filed. When the call fails it says no (the word list still applies) and the reply and the background sort do
+    their own work, as before (and the safety check is asked again on its own).
+    """
+    _for(user_id)
     _preread.pop(user_id, None)
-    if not crisis:
-        _preread[user_id] = (text, found)
-    return crisis
+    _covered.discard(user_id)
+    agreements, planner = _wants_agreements(user_id, text), _wants_planner(user_id, text)
+    if not (agreements or planner):
+        return await signals_crisis(user_id, text)
+    found = await _triage(user_id, text, agreements, planner)
+    if found is None:
+        return await signals_crisis(user_id, text)  # a failed merged call must not leave the message unchecked: ask the safety prompt alone
+    if found.get("crisis") is True:
+        return True
+    if agreements:
+        _preread[user_id] = (text, {"goal": found.get("goal"), "step": found.get("step")})
+    if planner:
+        _last_sort[user_id] = time.monotonic()
+        filed = _file(user_id, found, 4, 2, 3)
+        sizes = {k: len(found[k]) if isinstance(found.get(k), list) else 0 for k in ("tasks", "projects", "events")}
+        log.info("planner sort for %s (with the safety check): the model found %s, filed %d", user_id, sizes, filed)
+        _covered.add(user_id)
+    return False
+
+
+def planner_covered(user_id: int) -> bool:
+    """Did the triage call already file from the message just answered? (Read once: it is forgotten.)"""
+    covered = user_id in _covered
+    _covered.discard(user_id)
+    return covered
 
 
 async def signals_crisis(user_id: int, text: str) -> bool:
