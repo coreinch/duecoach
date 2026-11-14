@@ -389,7 +389,7 @@ async def test_a_burst_of_messages_is_sorted_by_one_run_at_the_start_and_one_at_
 
     monkeypatch.setattr(llm, "reply", fake_reply)
     monkeypatch.setattr(llm, "sort_into_planner", fake_sort)
-    monkeypatch.setattr(chat, "SORT_COOLDOWN", 0.05)
+    monkeypatch.setattr(llm, "SORT_COOLDOWN", 0.05)
     for text in ("I need to call the bank", "and email the landlord", "also renew my passport soon", "plus pay the rent"):
         await chat.coach(uid, text)
     for task in list(chat.background):

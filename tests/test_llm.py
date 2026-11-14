@@ -5,6 +5,7 @@ import pytest
 
 from duecoach import db, llm, prompts, tools
 
+REAL_SIGNALS_CRISIS = llm.signals_crisis  # taken at import, before the suite stubs it
 REAL_COMPLETE = llm._complete  # conftest blocks the real one for every test; the recorder tests put it back
 
 
@@ -897,3 +898,78 @@ async def test_a_long_message_is_not_read_for_an_agreement(model, user):
     long_message = "so this week has been a lot " + "and then there was more work to do " * 8
     assert await llm.read_agreements(1001, long_message) is None
     assert model.calls == []
+
+
+# --- the merged call: safety check + agreement reading + planner filing in one model call ---
+
+
+def triage_user():
+    db.set_field(1001, "planner_sorted", llm.SORT_VERSION)
+    db.add_message(1001, "assistant", 'A goal that could work: "Send every invoice within 48 hours". Does that fit?')
+
+
+async def test_one_call_carries_the_safety_check_the_agreement_and_the_planner_filing(model, user, recorder):
+    triage_user()
+    model.queue += [
+        message(
+            '{"crisis": false, "goal": "Send every invoice within 48 hours.", "step": null, '
+            '"tasks": [{"text": "Call the bank", "due": null, "important": false}], "projects": [], "events": []}'
+        ),
+        message("Got it. What is the first invoice you will send?"),
+    ]
+    assert await llm.precheck(1001, "yes, and I need to call the bank") is False
+    assert len(model.calls) == 1  # all three jobs in one call
+    prompt = model.calls[0]["messages"][0]["content"]
+    assert '"crisis"' in prompt and '"goal"' in prompt and '"tasks"' in prompt
+    assert db.active_goals(1001) == [] and [t["text"] for t in db.open_tasks(1001)] == [
+        "Call the bank"
+    ]  # filed now, goal saved by the reply
+    assert llm.planner_covered(1001) is True and llm.planner_covered(1001) is False  # read once
+    assert await llm.reply(1001, "yes, and I need to call the bank") == "Got it. What is the first invoice you will send?"
+    assert [g["text"] for g in db.active_goals(1001)] == ["Send every invoice within 48 hours."]
+    assert len(model.calls) == 2  # the reply did not read the agreement again
+
+
+async def test_a_message_that_needs_only_the_safety_check_uses_the_single_purpose_prompt(model, user, recorder, monkeypatch):
+    goal = db.add_goal(1001, "a goal")
+    db.add_objective(1001, goal, "a step", "a reward")  # nothing to agree to, and the planner has had its first pass
+    db.set_field(1001, "planner_sorted", llm.SORT_VERSION)
+    asked = []
+
+    async def check(user_id, text):
+        asked.append(text)
+        return False
+
+    monkeypatch.setattr(llm, "signals_crisis", check)
+    assert await llm.precheck(1001, "ok") is False  # two letters: nothing to file either
+    assert asked == ["ok"] and model.calls == []
+
+
+async def test_the_planner_part_waits_out_the_cooldown_and_is_left_to_the_background_sort(model, user, recorder):
+    triage_user()
+    model.queue += [message('{"crisis": false, "goal": null, "step": null, "tasks": [], "projects": [], "events": []}')] * 2
+    await llm.precheck(1001, "I need to call the bank today")
+    assert '"tasks"' in model.calls[0]["messages"][0]["content"]
+    assert llm.planner_covered(1001) is True
+    await llm.precheck(1001, "and then email the landlord too")  # inside the cooldown
+    assert '"tasks"' not in model.calls[1]["messages"][0]["content"] and '"goal"' in model.calls[1]["messages"][0]["content"]
+    assert llm.planner_covered(1001) is False  # the background sort will pick it up
+
+
+async def test_a_users_first_full_pass_is_not_folded_into_the_merged_call(model, user, recorder):
+    db.add_message(1001, "assistant", "What would you like to work on?")
+    model.queue += [message('{"crisis": false, "goal": null, "step": null}')]
+    await llm.precheck(1001, "I need to call the bank today")  # planner_sorted is 0: the long first pass runs in the background
+    prompt = model.calls[0]["messages"][0]["content"]
+    assert '"goal"' in prompt and '"tasks"' not in prompt and llm.planner_covered(1001) is False
+
+
+async def test_a_failed_merged_call_falls_back_to_the_safety_prompt_alone_and_leaves_the_rest_to_the_separate_checks(
+    model, user, recorder, monkeypatch
+):
+    monkeypatch.setattr(llm, "signals_crisis", REAL_SIGNALS_CRISIS)  # the suite stubs the safety check; this test needs the real one
+    triage_user()
+    model.queue += [message("this is not json"), message('{"crisis": true}')]  # the merged call fails; the safety prompt then answers
+    assert await llm.precheck(1001, "yes, and I need to call the bank") is True
+    assert "Decide whether" in model.calls[1]["messages"][0]["content"] and '"tasks"' not in model.calls[1]["messages"][0]["content"]
+    assert db.open_tasks(1001) == [] and 1001 not in llm._preread and llm.planner_covered(1001) is False

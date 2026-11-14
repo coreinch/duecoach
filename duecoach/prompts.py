@@ -301,7 +301,18 @@ PROGRESS = (
 )
 
 
-RECORDER = """You read ONE exchange of a coaching chat and decide whether the user just agreed to something that must be recorded.
+_RECORDER_RULES = """- "goal": if NO goal is saved yet and the user's reply agrees (yes, ok, sure, that works, or restates it in their own words) to a goal
+  wording the coach offered, or states a clear goal themselves, the goal as one sentence in {language}, first person, measurable, at most
+  25 words (use the coach's wording). Otherwise null.
+- "step": if no step is open yet and the user's reply agrees to do a concrete action the coach proposed for today or this week
+  (including a timer sprint on a named task), or says they will do a concrete action, that action as one sentence in {language}, first
+  person, at most 25 words, with when/where only if said (as a weekday or clock time, never "today" or "tomorrow": the wording is read
+  again days later). Otherwise null.
+Questions, "maybe", "I don't know", a reply that changes the subject, and replies to a question that offered no concrete wording are null.
+"""
+
+RECORDER = (
+    """You read ONE exchange of a coaching chat and decide whether the user just agreed to something that must be recorded.
 
 Coach's last message:
 {coach}
@@ -313,15 +324,9 @@ Goals already saved: {goals}
 Open steps already saved: {steps}
 
 Answer with JSON only: {{"goal": ..., "step": ...}}
-- "goal": if NO goal is saved yet and the user's reply agrees (yes, ok, sure, that works, or restates it in their own words) to a goal
-  wording the coach offered, or states a clear goal themselves, the goal as one sentence in {language}, first person, measurable, at most
-  25 words (use the coach's wording). Otherwise null.
-- "step": if no step is open yet and the user's reply agrees to do a concrete action the coach proposed for today or this week
-  (including a timer sprint on a named task), or says they will do a concrete action, that action as one sentence in {language}, first
-  person, at most 25 words, with when/where only if said (as a weekday or clock time, never "today" or "tomorrow": the wording is read
-  again days later). Otherwise null.
-Questions, "maybe", "I don't know", a reply that changes the subject, and replies to a question that offered no concrete wording are null.
 """
+    + _RECORDER_RULES
+)
 
 VERIFIER = """You check ONE turn of a coaching bot before its reply is sent. The bot can only change things by calling tools; saying
 it did something is not doing it.
@@ -373,11 +378,16 @@ Answer with JSON only: {{"unbacked": [short strings], "unhandled": [short string
 "unclear_reference": [short strings]}}. Use empty lists when
 there is nothing."""
 
-CRISIS_CHECK = """You are the safety check of a coaching chat for people with ADHD. Decide whether the user's LAST message shows they may be
+_CRISIS_RULES = """Decide whether the user's LAST message shows they may be
 in crisis: thinking about suicide or ending their life, wanting to die or to disappear, self-harm, feeling there is no way to go on,
 being abused or in danger now, or wanting to hurt someone. Judge by meaning, in any language, including indirect wording and slang.
 Everyday stress, frustration, tiredness, sadness without hopelessness, and figures of speech ("this deadline is killing me", "I'm dying
-of boredom", "I could murder a coffee") are NOT a crisis. When you are truly unsure whether it is serious, answer true.
+of boredom", "I could murder a coffee") are NOT a crisis. When you are truly unsure whether it is serious, answer true."""
+
+CRISIS_CHECK = (
+    """You are the safety check of a coaching chat for people with ADHD. """
+    + _CRISIS_RULES
+    + """
 
 Recent chat (oldest first):
 {recent}
@@ -386,23 +396,9 @@ Last message:
 {user}
 
 Answer with JSON only: {{"crisis": true}} or {{"crisis": false}}."""
+)
 
-SORTER = """You keep the planner of a coaching chat up to date. Read what the USER wrote and file what they said they need to do. You write
-nothing to them; you only return JSON.
-
-Now: {now}
-{mode}
-
-Already in their planner (never file any of this again, not even in other words):
-Projects: {projects}
-To-dos: {tasks}
-Appointments: {events}
-
-{background}Chat (oldest first):
-{convo}
-
-Answer with JSON only: {{"tasks": [...], "projects": [...], "events": [...]}}
-- "tasks": things the USER said they need, want, should or plan to do, with no time of day: {{"text": ..., "due": "YYYY-MM-DD" or null,
+_SORTER_RULES = """- "tasks": things the USER said they need, want, should or plan to do, with no time of day: {{"text": ..., "due": "YYYY-MM-DD" or null,
   "important": true/false, "project_id": number or null}}. "text" is short, starts with a verb, in {language}, in their terms. "due" only
   when they named a deadline day (work it out from Now). "important" only when they said it matters most. "project_id" when it clearly
   belongs to a project already listed. A thing they agreed to when the coach proposed it counts; a thing only the coach proposed does not.
@@ -421,6 +417,53 @@ Answer with JSON only: {{"tasks": [...], "projects": [...], "events": [...]}}
   cancelled, skip it. When unsure, leave it out: a missed item is cheap, a wrong one is noise.
 {first_pass_rules}- At most {limits}. Empty lists when there is nothing: that is the usual answer for a single exchange.
 """
+
+SORTER = (
+    """You keep the planner of a coaching chat up to date. Read what the USER wrote and file what they said they need to do. You write
+nothing to them; you only return JSON.
+
+Now: {now}
+{mode}
+
+Already in their planner (never file any of this again, not even in other words):
+Projects: {projects}
+To-dos: {tasks}
+Appointments: {events}
+
+{background}Chat (oldest first):
+{convo}
+
+Answer with JSON only: {{"tasks": [...], "projects": [...], "events": [...]}}
+"""
+    + _SORTER_RULES
+)
+
+# One background call for the three jobs that used to be separate calls before each reply: the safety check (always), reading whether the
+# user agreed to a goal or step, and filing to-dos, projects and appointments. The rules are the same text as in CRISIS_CHECK, RECORDER and
+# SORTER; a job that does not apply to this message is left out, and a message that needs only the safety check keeps using CRISIS_CHECK.
+TRIAGE_HEAD = """You are the background check of a coaching chat for people with ADHD. You never write to the user: you read the chat and
+return ONE JSON object, doing each of the parts below independently of the others.
+
+Now: {now}
+
+Chat so far (oldest first):
+{recent}
+
+The user's LAST message (not in the chat above yet; the coach will answer it next):
+{user}
+{context}
+Answer with JSON only: {schema}
+
+"""
+TRIAGE_CRISIS = 'Part "crisis" (always): true or false. ' + _CRISIS_RULES + "\n\n"
+TRIAGE_AGREEMENT = (
+    'Part "goal" and "step": whether the user\'s LAST message agrees to something that must be recorded, judged against the coach\'s last '
+    "message in the chat above (the coach's last message is what they may be agreeing to).\n" + _RECORDER_RULES + "\n"
+)
+TRIAGE_PLANNER = (
+    'Part "tasks", "projects" and "events": what the USER wrote (the last message and the earlier ones) that belongs in their planner.\n'
+    + _SORTER_RULES
+)
 
 GROUPER = """You tidy the planner of a coaching chat: some to-dos belong together as a project. You only return JSON.
 

@@ -22,7 +22,8 @@ def database(tmp_path):
     db.init(str(tmp_path / "duecoach.db"))
     core._locks.clear()
     ratelimit.reset()
-    chat._last_sort.clear()
+    llm._last_sort.clear()
+    llm._covered.clear()
     chat._sort_waiting.clear()
     yield
     db.close()
