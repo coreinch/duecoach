@@ -1002,3 +1002,31 @@ async def test_another_providers_verifier_is_asked_again_the_same_way_since_none
     monkeypatch.setattr(llm, "LLM_VERIFIER_MODEL", "grok-4.7")
     await llm._verify(1001, "hello there", "Hi! How are you today?", [])
     assert seen == [(llm.VERIFY_TOKENS, llm.LLM_HELPER_EFFORT)] * 2
+
+
+async def test_a_short_job_that_comes_back_empty_is_asked_again_without_thinking(monkeypatch):
+    seen = []
+
+    async def fake_chat(messages, tool_defs=None, max_tokens=1500, model=None, effort=None):
+        seen.append((max_tokens, effort))
+        return message("" if len(seen) == 1 else "the notes")
+
+    monkeypatch.setattr(llm, "_chat", fake_chat)
+    assert await REAL_COMPLETE([{"role": "user", "content": "x"}], max_tokens=2000, model="deepseek-v4.1-flash") == "the notes"
+    assert seen == [(2000, llm.LLM_HELPER_EFFORT), (llm.NO_THINKING_TOKENS, "none")]
+
+
+async def test_nothing_is_retried_when_the_answer_is_there_or_the_model_is_not_deepseek_or_the_caller_set_its_own_effort(monkeypatch):
+    seen = []
+
+    async def fake_chat(messages, tool_defs=None, max_tokens=1500, model=None, effort=None):
+        seen.append(model)
+        return message("" if model == "grok-4.7" or effort == "high" else "fine")
+
+    monkeypatch.setattr(llm, "_chat", fake_chat)
+    msgs = [{"role": "user", "content": "x"}]
+    assert await REAL_COMPLETE(msgs, model="deepseek-v4.1-flash") == "fine" and len(seen) == 1
+    seen.clear()
+    assert await REAL_COMPLETE(msgs, model="grok-4.7") == "" and len(seen) == 1  # "none" may not be allowed there
+    seen.clear()
+    assert await REAL_COMPLETE(msgs, model="deepseek-v4.1-flash", effort="high") == "" and len(seen) == 1
