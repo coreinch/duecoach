@@ -851,9 +851,13 @@ async def test_side_jobs_use_the_side_model_but_a_named_model_is_kept(monkeypatc
     assert seen == ["grok-4.20-non-reasoning", "grok-4.7"]
 
 
-def test_opencode_gets_the_session_header_it_requires_and_other_providers_do_not():
-    assert llm._headers("https://opencode.ai/zen/go/v1")["x-opencode-session"]
-    assert llm._headers("https://api.x.ai/v1") == {}
+def test_opencode_gets_a_session_header_per_user_and_other_providers_do_not():
+    mine, yours = llm._headers("https://opencode.ai/zen/go/v1", 1001), llm._headers("https://opencode.ai/zen/go/v1", 1002)
+    assert mine["x-opencode-session"] != yours["x-opencode-session"]
+    assert mine["x-opencode-session"] == llm._headers("https://opencode.ai/zen/go/v1", 1001)["x-opencode-session"]  # stable
+    assert "1001" not in mine["x-opencode-session"]  # the provider never sees the real id
+    assert llm._headers("https://opencode.ai/zen/go/v1")["x-opencode-session"] == "duecoach"  # calls that belong to nobody
+    assert llm._headers("https://api.x.ai/v1", 1001) == {}
 
 
 def test_deepseek_calls_cap_the_reasoning_effort():
@@ -872,3 +876,17 @@ async def test_an_agreement_read_by_the_precheck_is_saved_by_the_reply_without_a
     assert await llm.reply(1001, "yes") == "Got it. What is the first invoice you will send?"
     assert [g["text"] for g in db.active_goals(1001)] == ["Send every invoice within 48 hours."]
     assert len(model.calls) == 2  # the reading and the reply: the reply did not read the agreement again
+
+
+async def test_a_replys_model_calls_carry_that_users_session(monkeypatch, user):
+    seen = []
+
+    async def create(**kwargs):
+        seen.append(kwargs.get("extra_headers"))
+        return NS(choices=[NS(message=message("Hello there, friend."), finish_reason="stop")], usage=None)
+
+    monkeypatch.setattr(llm, "LLM_BASE_URL", "https://opencode.ai/zen/go/v1")
+    monkeypatch.setattr(llm._client, "chat", NS(completions=NS(create=create)))
+    await llm.reply(1001, "hi")
+    assert seen
+    assert all(h and h["x-opencode-session"] == llm._session_id(1001) for h in seen)
