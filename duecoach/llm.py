@@ -45,6 +45,7 @@ MAX_EMPTY_RETRIES = 2
 # The verifier thinks before it answers. On DeepSeek (effort low) half the calls use under 430 tokens (5 s), 83% under 1,400, and about 1 in 12
 # runs to any cap with nothing left for the JSON: at 4,000 tokens that was 48 s for an empty answer, twice, before the reply went out unchecked.
 VERIFY_TOKENS = 2000
+NO_THINKING_TOKENS = 1200  # the retry after an empty answer answers directly: JSON or a short summary fits
 VERIFY_RETRY_TOKENS = 800  # the retry answers directly (no reasoning where the model allows that), so a little is enough
 MAX_VERIFY_ROUNDS = 2  # times the verifier may send a draft back to the model
 REPLY_TOKENS = 3000  # reasoning models spend part of this thinking; too small a limit cuts the answer off mid-sentence
@@ -377,10 +378,18 @@ async def _chat(
 
 
 async def _complete(messages: list[dict], max_tokens: int = 1500, model: str | None = None, effort: str | None = None) -> str:
-    """A short side job at the helper effort, on the side model unless a model is named (the verifier names its own)."""
-    return (
-        (await _chat(messages, max_tokens=max_tokens, model=model or LLM_SIDE_MODEL, effort=effort or LLM_HELPER_EFFORT)).content or ""
-    ).strip()
+    """A short side job at the helper effort, on the side model unless a model is named (the verifier names its own).
+
+    DeepSeek sometimes spends the whole budget thinking and answers with nothing (about 1 call in 12 on the verifier: ~25 s for an empty
+    answer, and for the notes refresh a retry after every following message). An empty answer is asked for once more without the
+    thinking. A caller that sets the effort itself handles its own retry.
+    """
+    model = model or LLM_SIDE_MODEL
+    out = ((await _chat(messages, max_tokens=max_tokens, model=model, effort=effort or LLM_HELPER_EFFORT)).content or "").strip()
+    if not out and effort is None and model.startswith("deepseek-"):
+        log.warning("model %s answered with nothing (its thinking used the budget), asking again without thinking", model)
+        out = ((await _chat(messages, max_tokens=min(max_tokens, NO_THINKING_TOKENS), model=model, effort="none")).content or "").strip()
+    return out
 
 
 def _since(last_inbound: float | None) -> str:
@@ -650,7 +659,9 @@ async def _verify(user_id: int, user_text: str, draft: str, done: list[str]) -> 
     )
     out = ""
     try:
-        out = await _complete([{"role": "user", "content": prompt}], max_tokens=VERIFY_TOKENS, model=LLM_VERIFIER_MODEL)
+        out = await _complete(
+            [{"role": "user", "content": prompt}], max_tokens=VERIFY_TOKENS, model=LLM_VERIFIER_MODEL, effort=LLM_HELPER_EFFORT
+        )
         if not out:
             # a reasoning model sometimes spends the whole budget thinking and answers with nothing: ask once more, without the thinking
             # where the model allows that (asking again the same way just spent the same budget twice)
