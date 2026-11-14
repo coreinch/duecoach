@@ -19,6 +19,7 @@ class TelegramChannel:
         # concurrent updates: one user's slow model call must not hold up everyone else (core serialises each user's own messages)
         self.app = Application.builder().token(token).concurrent_updates(True).build()
         self.app.add_handler(MessageHandler(filters.TEXT, self._on_text))
+        self.app.add_handler(MessageHandler(filters.VOICE, self._on_voice))
         self.app.add_handler(MessageHandler(filters.ATTACHMENT | filters.LOCATION | filters.CONTACT, self._on_other))
         self.app.add_error_handler(self._on_error)
 
@@ -32,14 +33,16 @@ class TelegramChannel:
                 return
             await asyncio.sleep(4)
 
-    async def _answer(self, update: Update, text: str | None) -> None:
+    async def _answer(self, update: Update, text: str | None, voice=None) -> None:
         user, chat = update.effective_user, update.effective_chat
         if user is None or chat is None or update.message is None:
             return
         typing = asyncio.create_task(self._keep_typing(chat)) if is_allowed(self.name, str(user.id)) else None
         try:
             lang = strings.lang_from_telegram(user.language_code)
-            if text is None:
+            if voice is not None:
+                reply = await core.handle_voice(self.name, str(user.id), str(chat.id), voice.duration or 0, self._downloader(voice), lang)
+            elif text is None:
                 reply = await core.handle_unsupported(self.name, str(user.id), str(chat.id), lang)
             else:
                 reply = await core.handle_text(self.name, str(user.id), str(chat.id), text, lang)
@@ -51,6 +54,16 @@ class TelegramChannel:
 
     async def _on_text(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         await self._answer(update, update.message.text if update.message else None)
+
+    async def _on_voice(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+        await self._answer(update, None, voice=update.message.voice if update.message else None)
+
+    @staticmethod
+    def _downloader(voice):
+        async def fetch() -> bytes:
+            return bytes(await (await voice.get_file()).download_as_bytearray())
+
+        return fetch
 
     async def _on_other(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         await self._answer(update, None)  # voice note, photo, file...: say we only read text

@@ -1,4 +1,5 @@
 import asyncio
+import base64
 import difflib
 import hashlib
 import hmac
@@ -11,6 +12,7 @@ from contextvars import ContextVar
 from datetime import datetime
 from typing import Any, NamedTuple
 
+import httpx
 import openai
 from openai import AsyncOpenAI
 
@@ -32,6 +34,8 @@ from .config import (
     LLM_VERIFIER_BASE_URL,
     LLM_VERIFIER_MODEL,
     TELEGRAM_BOT_TOKEN,
+    VOICE_MODEL,
+    VOICE_URL,
 )
 
 log = logging.getLogger("duecoach.llm")
@@ -47,6 +51,7 @@ NOTES_EVERY = 20  # new chat messages between refreshes of the long-term notes
 # Reasoning models: they think before they answer, and the thinking counts against max_tokens. A small limit
 # is used up by the thinking and the answer comes back empty, so even one-sentence jobs get a generous budget.
 SHORT_JOB_TOKENS = 2000
+VOICE_TOKENS = 1500  # a transcript of up to a couple of minutes of speech
 FIRST_PASS_TOKENS = 4000  # the main model thinks before it answers
 
 
@@ -467,6 +472,41 @@ async def signals_crisis(user_id: int, text: str) -> bool:
     except Exception:
         log.warning("could not read the safety check, relying on the word list")
         return False
+
+
+_voice_client = httpx.AsyncClient(timeout=LLM_TIMEOUT)
+
+
+async def transcribe(user_id: int, audio: bytes, mime: str = "audio/ogg") -> str:
+    """A voice note as text, from Gemini's own API (the chat-completions endpoint refuses audio). Nothing of the audio is kept.
+
+    Empty when no words could be made out; raises ModelError when the call fails.
+    """
+    body = {
+        "contents": [
+            {
+                "role": "user",
+                "parts": [{"text": prompts.TRANSCRIBE}, {"inlineData": {"mimeType": mime, "data": base64.b64encode(audio).decode()}}],
+            }
+        ],
+        "generationConfig": {"maxOutputTokens": VOICE_TOKENS},
+    }
+    headers = {"Authorization": f"Bearer {LLM_API_KEY}", **_headers(LLM_BASE_URL, user_id)}
+    problem = "no answer"
+    for attempt in range(MODEL_ATTEMPTS):
+        try:
+            async with _slots:
+                resp = await _voice_client.post(VOICE_URL.format(model=VOICE_MODEL), json=body, headers=headers)
+            resp.raise_for_status()
+            parts = resp.json()["candidates"][0]["content"]["parts"]
+            text = "".join(p.get("text", "") for p in parts if not p.get("thought")).strip()
+            return "" if text.lower().strip("[]. ") in ("unclear", "") else text
+        except (httpx.HTTPError, KeyError, IndexError, ValueError) as error:  # connection, status, or an answer without text
+            problem = f"{type(error).__name__}: {error}"[:200]
+        log.warning("voice model %s failed (%s)%s", VOICE_MODEL, problem, ", retrying" if attempt + 1 < MODEL_ATTEMPTS else "")
+        if attempt + 1 < MODEL_ATTEMPTS:
+            await asyncio.sleep(1)
+    raise ModelError(f"{VOICE_MODEL}: {problem}")
 
 
 def _checkin_rules_for_verifier(user_id: int) -> str:

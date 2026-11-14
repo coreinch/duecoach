@@ -70,6 +70,14 @@ LLM_HELPER_EFFORT = os.getenv("LLM_HELPER_EFFORT") or "low"
 LLM_GROK_EFFORT = os.getenv("LLM_GROK_EFFORT") or "low"
 # DeepSeek V4 reasons at a slow default (a verifier call took 14-22 s); reasoning_effort caps it. Values: none, low, medium, high.
 LLM_DEEPSEEK_EFFORT = os.getenv("LLM_DEEPSEEK_EFFORT") or "low"
+# Voice notes: an audio-capable model on the same provider turns them into text (nothing of the audio is kept). gemini-4-argon takes
+# Telegram's ogg/opus; other providers have no such model by default, so voice is then off (set VOICE_MODEL and VOICE_URL to switch it on).
+VOICE_MODEL = os.getenv("VOICE_MODEL", "gemini-4-argon" if "opencode.ai" in LLM_BASE_URL else "")
+# Gemini's own generateContent API (the chat-completions endpoint refuses audio). {model} is filled in; empty turns voice off.
+VOICE_URL = os.getenv(
+    "VOICE_URL", "https://opencode.ai/inference/go/google/v1beta/models/{model}:generateContent" if "opencode.ai" in LLM_BASE_URL else ""
+)
+VOICE_MAX_SECONDS = int(os.getenv("VOICE_MAX_SECONDS") or 120)
 LLM_VERIFIER_MODEL = os.getenv("LLM_VERIFIER_MODEL") or LLM_MODEL
 # Optional faster model for the short side jobs (safety check, recorder, notes refresh); the coach and the verifier keep their own models.
 # grok-4.20-non-reasoning matched grok-4.7 on the crisis eval (0/36 missed, 0/36 false alarms) but flagged 18/33 good drafts as a verifier.

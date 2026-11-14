@@ -112,7 +112,7 @@ STRINGS = {
             "Γεια, είμαι το Duecoach. Σε βοηθάω να ολοκληρώνεις όσα σκοπεύεις να κάνεις: διαλέγεις στόχο, κάνεις ένα μικρό βήμα την εβδομάδα και παίρνεις ώθηση όταν κολλάς.\n\n"
             "Πριν ξεκινήσουμε: είμαι βοηθός coaching με τεχνητή νοημοσύνη, όχι θεραπευτής ή ιατρική υπηρεσία. "
             "Όσα μου γράφεις (και οι στόχοι και η πρόοδός σου) αποθηκεύονται για να σε καθοδηγώ, και κάθε μήνυμα "
-            "στέλνεται σε πάροχο μοντέλου τεχνητής νοημοσύνης για να φτιαχτεί η απάντηση. Μην μοιράζεσαι κάτι που δεν θα ήθελες "
+            "στέλνεται σε πάροχο μοντέλου τεχνητής νοημοσύνης για να φτιαχτεί η απάντηση (τα φωνητικά μηνύματα στέλνονται επίσης, για να γίνουν κείμενο· ο ήχος δεν διατηρείται). Μην μοιράζεσαι κάτι που δεν θα ήθελες "
             "να επεξεργαστεί έτσι. Βλέπεις τι κρατάω με /memory, /tasks, /notes και /goals και σβήνεις τα πάντα με /deletedata, και τα αντίγραφα ασφαλείας αντικαθίστανται μέσα σε περίπου μία εβδομάδα.{keeping} "
             "Αν βρίσκεσαι σε κρίση ή κίνδυνο, κάλεσε τον τοπικό αριθμό έκτακτης ανάγκης (112 στην ΕΕ) αντί για εμένα.\n\n"
             "Στείλε /agree για να συνεχίσουμε."
@@ -145,7 +145,10 @@ STRINGS = {
         "PROFILE_rhythm": "Η μέρα σου",
         "PROFILE_mood": "Διάθεση",
         "CHECKINS_ENABLED": "Θα σε ρωτάω αφού περάσουν περίπου {minutes} λεπτά ησυχίας, και πιο αραιά αν δεν απαντάς. Με /interval off σταματούν, με /interval 60 τα αραιώνεις.",
-        "UNSUPPORTED": "Προς το παρόν διαβάζω μόνο γραπτά μηνύματα. Γράψε μου τι σκέφτεσαι;",
+        "UNSUPPORTED": "Προς το παρόν διαβάζω μόνο γραπτά και φωνητικά μηνύματα. Γράψε μου τι σκέφτεσαι;",
+        "VOICE_TOO_LONG": "Το φωνητικό είναι πολύ μεγάλο (έως {seconds} δευτερόλεπτα). Μπορείς να το σπάσεις σε μικρότερα ή να το γράψεις;",
+        "VOICE_FAILED": "Δεν κατάφερα να ακούσω το φωνητικό. Δοκίμασε ξανά ή γράψε το μου.",
+        "VOICE_UNCLEAR": "Δεν έπιασα λέξεις στο φωνητικό. Μπορείς να το πεις ξανά πιο κοντά στο μικρόφωνο ή να το γράψεις;",
     },
     "en": {
         "HELP": (
@@ -235,7 +238,7 @@ STRINGS = {
         "PRIVACY": (
             "Hi, I'm Duecoach. I help you follow through on what you mean to do: pick a goal, take one small step a week, and get a nudge when you get stuck.\n\n"
             "Before we start: I'm an AI coaching assistant, not a therapist or a medical service. What you write to me (including your "
-            "goals and progress) is stored so I can coach you, and each message is sent to an AI model provider to generate the reply. "
+            "goals and progress) is stored so I can coach you, and each message is sent to an AI model provider to generate the reply (voice notes are sent too, to be turned into text; the audio is not kept). "
             "Please don't share anything you wouldn't want processed that way. You can see what I keep with /memory, /tasks, /notes and /goals, and "
             "erase everything with /deletedata, and backup copies are overwritten within about a week.{keeping} If you're in crisis or danger, contact your local emergency number (112 in the EU) "
             "instead of me.\n\nSend /agree to continue."
@@ -268,6 +271,9 @@ STRINGS = {
         "PROFILE_rhythm": "Your day",
         "PROFILE_mood": "Mood",
         "CHECKINS_ENABLED": "I'll check in after about {minutes} minutes of quiet, and less often if you don't reply. /interval off stops it, /interval 60 spaces it out.",
-        "UNSUPPORTED": "I can only read text messages for now. Could you type it out?",
+        "UNSUPPORTED": "I can only read text and voice messages for now. Could you type it out?",
+        "VOICE_TOO_LONG": "That voice note is too long (up to {seconds} seconds). Could you split it up or type it?",
+        "VOICE_FAILED": "I couldn't listen to that voice note. Try again, or type it for me.",
+        "VOICE_UNCLEAR": "I couldn't make out any words in that voice note. Could you say it again closer to the mic, or type it?",
     },
 }

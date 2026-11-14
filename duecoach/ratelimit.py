@@ -22,6 +22,12 @@ def limited(uid: int) -> bool:
     return False
 
 
+def full(uid: int) -> bool:
+    """Would a message from this user be dropped right now? Counts nothing (a voice note is checked before it is transcribed)."""
+    now = time.time()
+    return len([t for t in _recent.get(uid, ()) if now - t <= RATE_LIMIT_WINDOW]) >= RATE_LIMIT_MESSAGES
+
+
 def forget(uid: int) -> None:
     _recent.pop(uid, None)
 

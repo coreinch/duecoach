@@ -233,6 +233,11 @@ _CHECKIN_RULES = (
     "(7) Ask only ONE question, in at most 3 short sentences, in the language of their last message. Don't announce what kind of "
     "check-in this is or quote these instructions."
 )
+TRANSCRIBE = (
+    "Transcribe this voice message exactly as spoken, in the language spoken (Greek in Greek letters, English in English; never "
+    "translate). Output only the transcript: no quotes, no labels, no commentary. If it is silent or you cannot make out any words, "
+    "output exactly: [unclear]"
+)
 MORNING = (
     "Start-of-day check-in: a short briefing for their day, then coaching. Open with a one-line greeting. When an agenda follows below, "
     "give the briefing from it as short lines starting with a dash: first every appointment with its time, then the to-dos to do today "

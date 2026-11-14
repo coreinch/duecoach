@@ -12,7 +12,7 @@ import time
 from . import chat, db, llm, ratelimit
 from .chat import say
 from .commands import BEFORE_CONSENT, COMMANDS, agree
-from .config import is_allowed
+from .config import VOICE_MAX_SECONDS, VOICE_MODEL, VOICE_URL, is_allowed
 from .crisis import is_crisis
 
 log = logging.getLogger("duecoach.core")
@@ -71,6 +71,40 @@ async def handle_text(channel: str, ext_id: str, chat_id: str, text: str, lang_h
         if handler:
             return await handler(uid, args)
         return await chat.coach(uid, text)
+
+
+async def handle_voice(channel: str, ext_id: str, chat_id: str, seconds: int, fetch, lang_hint: str = "en") -> str | None:
+    """A voice note: turned into text by the provider's audio model, then handled exactly like the same words typed.
+
+    `fetch` downloads the audio (only called once the user is known to have agreed). The reply starts with what was heard, so a
+    mishearing (a wrong time, say) is visible and can be corrected.
+    """
+    user = _user_for(channel, ext_id, chat_id, lang_hint)
+    if user is None:
+        return None
+    uid = user["user_id"]
+    if not user["consent_at"]:
+        return chat.privacy(uid)  # nothing, not even audio, goes to the provider before they agreed
+    if not (VOICE_MODEL and VOICE_URL):
+        return say(uid, "UNSUPPORTED")
+    if ratelimit.full(uid):
+        if uid in ratelimit.warned:
+            return None
+        ratelimit.warned.add(uid)
+        return say(uid, "RATE_LIMITED")
+    if seconds > VOICE_MAX_SECONDS:
+        return say(uid, "VOICE_TOO_LONG", seconds=VOICE_MAX_SECONDS)
+    try:
+        heard = await llm.transcribe(uid, await fetch())
+    except Exception:
+        log.warning("voice note from %s could not be transcribed", uid, exc_info=True)
+        return say(uid, "VOICE_FAILED")
+    if not heard:
+        return say(uid, "VOICE_UNCLEAR")
+    reply = await handle_text(channel, ext_id, chat_id, heard, lang_hint)
+    if not reply or is_crisis(heard):
+        return reply  # the safety message stands alone
+    return f"🎤 “{heard}”\n\n{reply}"
 
 
 async def handle_unsupported(channel: str, ext_id: str, chat_id: str, lang_hint: str = "en") -> str | None:
