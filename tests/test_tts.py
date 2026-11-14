@@ -43,7 +43,7 @@ async def test_the_greek_standard_voice_is_asked_for_ogg_opus_with_the_key_in_a_
 
     with_key(monkeypatch, handler)
     assert await tts.synthesize("Γεια σου", "el") == b"opus-bytes"
-    assert seen["body"]["voice"] == {"languageCode": "el-GR", "name": "el-GR-Standard-A"}
+    assert seen["body"]["voice"] == {"languageCode": "el-GR", "name": "el-GR-Standard-B"}
     assert seen["body"]["audioConfig"] == {"audioEncoding": "OGG_OPUS"} and seen["body"]["input"] == {"text": "Γεια σου"}
     assert seen["key"] == "test-key" and "key=" not in seen["url"]  # never in the URL, which gets logged
 
