@@ -115,7 +115,7 @@ async def test_each_call_logs_the_prompt_size_and_the_cached_part(monkeypatch, c
     def reply(usage):
         return NS(choices=[NS(message=message("fine"))], usage=usage)
 
-    openai_style = NS(prompt_tokens=12000, prompt_tokens_details=NS(cached_tokens=11500))
+    openai_style = NS(prompt_tokens=12000, completion_tokens=450, prompt_tokens_details=NS(cached_tokens=11500))
     other_style = NS(prompt_tokens=900, model_extra={"prompt_cache_hit_tokens": 800})
     no_cache_info = NS(prompt_tokens=300)
     fake = FakeCompletions([reply(openai_style), reply(other_style), reply(no_cache_info), NS(choices=[NS(message=message("x"))])])
@@ -125,9 +125,9 @@ async def test_each_call_logs_the_prompt_size_and_the_cached_part(monkeypatch, c
             await llm._chat([{"role": "user", "content": "hi"}])
     lines = [r.getMessage() for r in caplog.records if r.getMessage().startswith("usage")]
     assert [line.split(": ", 1)[1] for line in lines] == [
-        "prompt 12000 tokens, cached 11500",
-        "prompt 900 tokens, cached 800",
-        "prompt 300 tokens, cached None",
+        "prompt 12000 tokens, cached 11500, answer 450",  # the answer includes the model's reasoning: how the verifier's budget is chosen
+        "prompt 900 tokens, cached 800, answer ?",
+        "prompt 300 tokens, cached None, answer ?",
     ]
 
 
@@ -973,3 +973,32 @@ async def test_a_failed_merged_call_falls_back_to_the_safety_prompt_alone_and_le
     assert await llm.precheck(1001, "yes, and I need to call the bank") is True
     assert "Decide whether" in model.calls[1]["messages"][0]["content"] and '"tasks"' not in model.calls[1]["messages"][0]["content"]
     assert db.open_tasks(1001) == [] and 1001 not in llm._preread and llm.planner_covered(1001) is False
+
+
+async def test_a_verifier_that_answers_with_nothing_is_asked_again_without_reasoning_and_with_a_small_budget(monkeypatch, user, verifier):
+    seen = []
+
+    async def fake_chat(messages, tool_defs=None, max_tokens=1500, model=None, effort=None):
+        seen.append((max_tokens, effort))
+        return message("" if len(seen) == 1 else '{"unbacked": [], "unhandled": []}')
+
+    monkeypatch.setattr(llm, "_chat", fake_chat)
+    monkeypatch.setattr(llm, "_complete", REAL_COMPLETE)
+    monkeypatch.setattr(llm, "LLM_VERIFIER_MODEL", "deepseek-v4.1-flash")
+    assert await llm._verify(1001, "hello there", "Hi! How are you today?", []) is None
+    assert seen == [(llm.VERIFY_TOKENS, llm.LLM_HELPER_EFFORT), (llm.VERIFY_RETRY_TOKENS, "none")]  # not the same budget spent twice
+    assert llm.VERIFY_TOKENS <= 2000 and llm.VERIFY_RETRY_TOKENS < llm.VERIFY_TOKENS
+
+
+async def test_another_providers_verifier_is_asked_again_the_same_way_since_none_may_not_be_allowed(monkeypatch, user, verifier):
+    seen = []
+
+    async def fake_chat(messages, tool_defs=None, max_tokens=1500, model=None, effort=None):
+        seen.append((max_tokens, effort))
+        return message("" if len(seen) == 1 else "{}")
+
+    monkeypatch.setattr(llm, "_chat", fake_chat)
+    monkeypatch.setattr(llm, "_complete", REAL_COMPLETE)
+    monkeypatch.setattr(llm, "LLM_VERIFIER_MODEL", "grok-4.7")
+    await llm._verify(1001, "hello there", "Hi! How are you today?", [])
+    assert seen == [(llm.VERIFY_TOKENS, llm.LLM_HELPER_EFFORT)] * 2

@@ -42,7 +42,10 @@ log = logging.getLogger("duecoach.llm")
 
 MAX_TOOL_ROUNDS = 4
 MAX_EMPTY_RETRIES = 2
-VERIFY_TOKENS = 4000  # the verifier thinks before it answers; 2000 was often used up with nothing left for the JSON
+# The verifier thinks before it answers. On DeepSeek (effort low) half the calls use under 430 tokens (5 s), 83% under 1,400, and about 1 in 12
+# runs to any cap with nothing left for the JSON: at 4,000 tokens that was 48 s for an empty answer, twice, before the reply went out unchecked.
+VERIFY_TOKENS = 2000
+VERIFY_RETRY_TOKENS = 800  # the retry answers directly (no reasoning where the model allows that), so a little is enough
 MAX_VERIFY_ROUNDS = 2  # times the verifier may send a draft back to the model
 REPLY_TOKENS = 3000  # reasoning models spend part of this thinking; too small a limit cuts the answer off mid-sentence
 MAX_CONSECUTIVE_ASSISTANT = 2  # in the history sent to the model: proactive check-ins pile up while a user is silent
@@ -334,7 +337,10 @@ def _log_usage(model: str, resp: Any) -> None:
     usage = getattr(resp, "usage", None)
     prompt = getattr(usage, "prompt_tokens", None)
     if isinstance(prompt, int):
-        log.info("usage %s: prompt %d tokens, cached %s", model, prompt, _cached_tokens(usage))
+        done = getattr(usage, "completion_tokens", None)
+        log.info(
+            "usage %s: prompt %d tokens, cached %s, answer %s", model, prompt, _cached_tokens(usage), done if isinstance(done, int) else "?"
+        )
 
 
 async def _chat(
@@ -370,9 +376,11 @@ async def _chat(
     raise ModelError(f"{model}: {problem}")
 
 
-async def _complete(messages: list[dict], max_tokens: int = 1500, model: str | None = None) -> str:
+async def _complete(messages: list[dict], max_tokens: int = 1500, model: str | None = None, effort: str | None = None) -> str:
     """A short side job at the helper effort, on the side model unless a model is named (the verifier names its own)."""
-    return ((await _chat(messages, max_tokens=max_tokens, model=model or LLM_SIDE_MODEL, effort=LLM_HELPER_EFFORT)).content or "").strip()
+    return (
+        (await _chat(messages, max_tokens=max_tokens, model=model or LLM_SIDE_MODEL, effort=effort or LLM_HELPER_EFFORT)).content or ""
+    ).strip()
 
 
 def _since(last_inbound: float | None) -> str:
@@ -642,10 +650,16 @@ async def _verify(user_id: int, user_text: str, draft: str, done: list[str]) -> 
     )
     out = ""
     try:
-        for _ in range(2):  # a reasoning model sometimes spends the whole budget thinking and answers with nothing: ask once more
-            out = await _complete([{"role": "user", "content": prompt}], max_tokens=VERIFY_TOKENS, model=LLM_VERIFIER_MODEL)
-            if out:
-                break
+        out = await _complete([{"role": "user", "content": prompt}], max_tokens=VERIFY_TOKENS, model=LLM_VERIFIER_MODEL)
+        if not out:
+            # a reasoning model sometimes spends the whole budget thinking and answers with nothing: ask once more, without the thinking
+            # where the model allows that (asking again the same way just spent the same budget twice)
+            out = await _complete(
+                [{"role": "user", "content": prompt}],
+                max_tokens=VERIFY_RETRY_TOKENS if LLM_VERIFIER_MODEL.startswith("deepseek-") else VERIFY_TOKENS,
+                model=LLM_VERIFIER_MODEL,
+                effort="none" if LLM_VERIFIER_MODEL.startswith("deepseek-") else None,
+            )
         found = json.loads(re.search(r"\{.*\}", out, re.DOTALL).group(0))  # type: ignore[union-attr]
         kinds = ("unbacked", "unhandled", "off_target", "invented_time", "unclear_reference")
         problems = [str(x) for k in kinds for x in found.get(k, []) if str(x).strip()]
