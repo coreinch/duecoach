@@ -82,7 +82,7 @@ VOICE_MAX_SECONDS = int(os.getenv("VOICE_MAX_SECONDS") or 120)
 GOOGLE_TTS_API_KEY = os.getenv("GOOGLE_TTS_API_KEY") or ""
 TTS_MAX_CHARS = int(os.getenv("TTS_MAX_CHARS") or 600)  # longer replies are spoken up to the last full sentence that fits
 TTS_VOICES = {
-    "el": ("el-GR", os.getenv("TTS_VOICE_EL") or "el-GR-Standard-A"),
+    "el": ("el-GR", os.getenv("TTS_VOICE_EL") or "el-GR-Standard-B"),
     "en": ("en-US", os.getenv("TTS_VOICE_EN") or "en-US-Standard-C"),
 }
 LLM_VERIFIER_MODEL = os.getenv("LLM_VERIFIER_MODEL") or LLM_MODEL
