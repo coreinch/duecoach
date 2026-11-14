@@ -78,6 +78,13 @@ VOICE_URL = os.getenv(
     "VOICE_URL", "https://opencode.ai/inference/go/google/v1beta/models/{model}:generateContent" if "opencode.ai" in LLM_BASE_URL else ""
 )
 VOICE_MAX_SECONDS = int(os.getenv("VOICE_MAX_SECONDS") or 120)
+# Spoken replies to voice notes, from Google Cloud Text-to-Speech (empty key: replies stay text). Standard voices are the cheapest.
+GOOGLE_TTS_API_KEY = os.getenv("GOOGLE_TTS_API_KEY") or ""
+TTS_MAX_CHARS = int(os.getenv("TTS_MAX_CHARS") or 600)  # longer replies are spoken up to the last full sentence that fits
+TTS_VOICES = {
+    "el": ("el-GR", os.getenv("TTS_VOICE_EL") or "el-GR-Standard-A"),
+    "en": ("en-US", os.getenv("TTS_VOICE_EN") or "en-US-Standard-C"),
+}
 LLM_VERIFIER_MODEL = os.getenv("LLM_VERIFIER_MODEL") or LLM_MODEL
 # Optional faster model for the short side jobs (safety check, recorder, notes refresh); the coach and the verifier keep their own models.
 # grok-4.20-non-reasoning matched grok-4.7 on the crisis eval (0/36 missed, 0/36 false alarms) but flagged 18/33 good drafts as a verifier.

@@ -112,7 +112,7 @@ STRINGS = {
             "Γεια, είμαι το Duecoach. Σε βοηθάω να ολοκληρώνεις όσα σκοπεύεις να κάνεις: διαλέγεις στόχο, κάνεις ένα μικρό βήμα την εβδομάδα και παίρνεις ώθηση όταν κολλάς.\n\n"
             "Πριν ξεκινήσουμε: είμαι βοηθός coaching με τεχνητή νοημοσύνη, όχι θεραπευτής ή ιατρική υπηρεσία. "
             "Όσα μου γράφεις (και οι στόχοι και η πρόοδός σου) αποθηκεύονται για να σε καθοδηγώ, και κάθε μήνυμα "
-            "στέλνεται σε πάροχο μοντέλου τεχνητής νοημοσύνης για να φτιαχτεί η απάντηση (τα φωνητικά μηνύματα στέλνονται επίσης, για να γίνουν κείμενο· ο ήχος δεν διατηρείται). Μην μοιράζεσαι κάτι που δεν θα ήθελες "
+            "στέλνεται σε πάροχο μοντέλου τεχνητής νοημοσύνης για να φτιαχτεί η απάντηση (τα φωνητικά μηνύματα στέλνονται επίσης, για να γίνουν κείμενο, και οι απαντήσεις σε φωνητικά διαβάζονται από υπηρεσία ομιλίας· ο ήχος δεν διατηρείται). Μην μοιράζεσαι κάτι που δεν θα ήθελες "
             "να επεξεργαστεί έτσι. Βλέπεις τι κρατάω με /memory, /tasks, /notes και /goals και σβήνεις τα πάντα με /deletedata, και τα αντίγραφα ασφαλείας αντικαθίστανται μέσα σε περίπου μία εβδομάδα.{keeping} "
             "Αν βρίσκεσαι σε κρίση ή κίνδυνο, κάλεσε τον τοπικό αριθμό έκτακτης ανάγκης (112 στην ΕΕ) αντί για εμένα.\n\n"
             "Στείλε /agree για να συνεχίσουμε."
@@ -238,7 +238,7 @@ STRINGS = {
         "PRIVACY": (
             "Hi, I'm Duecoach. I help you follow through on what you mean to do: pick a goal, take one small step a week, and get a nudge when you get stuck.\n\n"
             "Before we start: I'm an AI coaching assistant, not a therapist or a medical service. What you write to me (including your "
-            "goals and progress) is stored so I can coach you, and each message is sent to an AI model provider to generate the reply (voice notes are sent too, to be turned into text; the audio is not kept). "
+            "goals and progress) is stored so I can coach you, and each message is sent to an AI model provider to generate the reply (voice notes are sent too, to be turned into text, and replies to them are read aloud by a speech service; no audio is kept). "
             "Please don't share anything you wouldn't want processed that way. You can see what I keep with /memory, /tasks, /notes and /goals, and "
             "erase everything with /deletedata, and backup copies are overwritten within about a week.{keeping} If you're in crisis or danger, contact your local emergency number (112 in the EU) "
             "instead of me.\n\nSend /agree to continue."
