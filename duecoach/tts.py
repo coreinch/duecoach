@@ -20,6 +20,19 @@ _ID = re.compile(r"\s#\d+\b")
 _SENTENCE_END = re.compile(r"[.!?;;…]+(?:\s|$)|\n")
 
 
+_GREEK = re.compile("[\u0370-\u03ff\u1f00-\u1fff]")
+_LATIN = re.compile("[A-Za-z]")
+
+
+def language_of(text: str, fallback: str = "en") -> str:
+    """The voice language for this text, judged from its letters: the stored language setting says what the user chose, not what the
+    reply is written in (a Greek speaker with the setting on English got Greek words read by the English voice)."""
+    greek, latin = len(_GREEK.findall(text)), len(_LATIN.findall(text))
+    if greek == latin:
+        return fallback
+    return "el" if greek > latin else "en"
+
+
 def enabled() -> bool:
     return bool(GOOGLE_TTS_API_KEY)
 
@@ -47,7 +60,7 @@ async def synthesize(text: str, lang: str) -> bytes | None:
     text = speakable(text)
     if not enabled() or not text:
         return None
-    code, name = TTS_VOICES.get(lang, TTS_VOICES["en"])
+    code, name = TTS_VOICES.get(language_of(text, lang), TTS_VOICES["en"])
     body = {
         "input": {"text": text},
         "voice": {"languageCode": code, "name": name},

@@ -69,3 +69,28 @@ async def test_no_audio_without_a_key_or_text_or_when_the_call_fails(monkeypatch
     assert await tts.synthesize("🎉 https://example.com", "en") is None  # nothing to say
     monkeypatch.setattr(tts, "GOOGLE_TTS_API_KEY", "")
     assert await tts.synthesize("Hello there", "en") is None and not tts.enabled()
+
+
+@pytest.mark.parametrize(
+    ("text", "setting", "expected"),
+    [
+        ("Καλημέρα, τι κάνεις σήμερα;", "en", "el"),  # the stored setting says English, the words are Greek
+        ("Good morning, how are you today?", "el", "en"),
+        ("Θα σου στείλω ένα reminder στις 5.", "en", "el"),  # mostly Greek with an English word
+        ("12 45 !", "el", "el"),  # no letters: the setting decides
+    ],
+)
+def test_the_voice_follows_the_language_of_the_words_not_the_setting(text, setting, expected):
+    assert tts.language_of(text, setting) == expected
+
+
+async def test_greek_words_get_the_greek_voice_even_when_the_users_setting_is_english(monkeypatch):
+    seen = {}
+
+    def handler(request):
+        seen.update(body=json.loads(request.content))
+        return httpx.Response(200, json={"audioContent": base64.b64encode(b"x").decode()})
+
+    with_key(monkeypatch, handler)
+    await tts.synthesize("Καλημέρα! Έχεις ένα ραντεβού στις δέκα.", "en")
+    assert seen["body"]["voice"]["languageCode"] == "el-GR"
