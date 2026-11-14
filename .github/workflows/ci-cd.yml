@@ -134,6 +134,7 @@ jobs:
           LLM_BASE_URL: ${{ vars.LLM_BASE_URL }}
           LLM_MODEL: ${{ secrets.LLM_MODEL }}
           LLM_SIDE_MODEL: ${{ vars.LLM_SIDE_MODEL }}
+          LLM_VERIFIER_MODEL: ${{ vars.LLM_VERIFIER_MODEL }}
           ADMIN_CHAT_ID: ${{ secrets.ADMIN_CHAT_ID }}
           GOOGLE_TTS_API_KEY: ${{ secrets.GOOGLE_TTS_API_KEY }}
         run: |
@@ -156,6 +157,7 @@ jobs:
             --arg llm_base_url "$LLM_BASE_URL" \
             --arg llm_model "$LLM_MODEL" \
             --arg llm_side_model "$LLM_SIDE_MODEL" \
+            --arg llm_verifier_model "$LLM_VERIFIER_MODEL" \
             --arg admin_chat_id "$ADMIN_CHAT_ID" \
             --arg google_tts_api_key "$GOOGLE_TTS_API_KEY" \
             '$ARGS.named' > /tmp/extra-vars.json
