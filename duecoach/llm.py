@@ -51,6 +51,7 @@ MAX_VERIFY_ROUNDS = 2  # times the verifier may send a draft back to the model
 REPLY_TOKENS = 3000  # reasoning models spend part of this thinking; too small a limit cuts the answer off mid-sentence
 MAX_CONSECUTIVE_ASSISTANT = 2  # in the history sent to the model: proactive check-ins pile up while a user is silent
 MODEL_ATTEMPTS = 2  # tries per call: a provider hiccup is retried once
+SIDE_TIMEOUT = 20.0  # seconds: a short helper job (check, sort, verify) that has not answered by then has stalled; ask again
 NOTES_EVERY = 20  # new chat messages between refreshes of the long-term notes
 # Reasoning models: they think before they answer, and the thinking counts against max_tokens. A small limit
 # is used up by the thinking and the answer comes back empty, so even one-sentence jobs get a generous budget.
@@ -84,7 +85,7 @@ def _headers(base_url: str, user_id: int | None = None) -> dict[str, str]:
 
 
 _client = AsyncOpenAI(
-    api_key=LLM_API_KEY, base_url=LLM_BASE_URL, timeout=LLM_TIMEOUT, max_retries=2, default_headers=_headers(LLM_BASE_URL)
+    api_key=LLM_API_KEY, base_url=LLM_BASE_URL, timeout=LLM_TIMEOUT, max_retries=0, default_headers=_headers(LLM_BASE_URL)
 )
 # The verifier may live at another provider; then it has its own client (otherwise it shares the coach's).
 _verifier_client = (
@@ -92,7 +93,7 @@ _verifier_client = (
         api_key=LLM_VERIFIER_API_KEY,
         base_url=LLM_VERIFIER_BASE_URL,
         timeout=LLM_TIMEOUT,
-        max_retries=2,
+        max_retries=0,  # _chat retries once itself; stacked retries turned one stalled call into minutes
         default_headers=_headers(LLM_VERIFIER_BASE_URL),
     )
     if (LLM_VERIFIER_BASE_URL, LLM_VERIFIER_API_KEY) != (LLM_BASE_URL, LLM_API_KEY)
@@ -345,7 +346,12 @@ def _log_usage(model: str, resp: Any) -> None:
 
 
 async def _chat(
-    messages: Any, tool_defs: list[dict] | None = None, max_tokens: int = 1500, model: str | None = None, effort: str | None = None
+    messages: Any,
+    tool_defs: list[dict] | None = None,
+    max_tokens: int = 1500,
+    model: str | None = None,
+    effort: str | None = None,
+    timeout: float | None = None,
 ):
     model = model or LLM_MODEL
     client = _verifier_client if model == LLM_VERIFIER_MODEL and model != LLM_MODEL else _client
@@ -356,7 +362,13 @@ async def _chat(
         try:
             async with _slots:
                 resp = await client.chat.completions.create(
-                    model=model, messages=messages, max_tokens=max_tokens, extra_headers=headers or None, **kwargs, **_extra(model, effort)
+                    model=model,
+                    messages=messages,
+                    max_tokens=max_tokens,
+                    extra_headers=headers or None,
+                    timeout=timeout or LLM_TIMEOUT,
+                    **kwargs,
+                    **_extra(model, effort),
                 )
         except openai.OpenAIError as error:  # connection, timeout, rate limit, server error, or a request the model rejects
             problem = f"{type(error).__name__}: {error}"[:200]
@@ -385,10 +397,17 @@ async def _complete(messages: list[dict], max_tokens: int = 1500, model: str | N
     thinking. A caller that sets the effort itself handles its own retry.
     """
     model = model or LLM_SIDE_MODEL
-    out = ((await _chat(messages, max_tokens=max_tokens, model=model, effort=effort or LLM_HELPER_EFFORT)).content or "").strip()
+    out = (
+        (await _chat(messages, max_tokens=max_tokens, model=model, effort=effort or LLM_HELPER_EFFORT, timeout=SIDE_TIMEOUT)).content or ""
+    ).strip()
     if not out and effort is None and model.startswith("deepseek-"):
         log.warning("model %s answered with nothing (its thinking used the budget), asking again without thinking", model)
-        out = ((await _chat(messages, max_tokens=min(max_tokens, NO_THINKING_TOKENS), model=model, effort="none")).content or "").strip()
+        out = (
+            (
+                await _chat(messages, max_tokens=min(max_tokens, NO_THINKING_TOKENS), model=model, effort="none", timeout=SIDE_TIMEOUT)
+            ).content
+            or ""
+        ).strip()
     return out
 
 

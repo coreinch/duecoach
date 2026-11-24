@@ -173,7 +173,7 @@ async def test_the_coach_is_told_once_what_was_filed_then_it_is_marked_as_mentio
     db.filing_by_itself.reset(token)
     seen = []
 
-    async def fake_chat(messages, tool_defs=None, max_tokens=1500, model=None, effort=None):
+    async def fake_chat(messages, tool_defs=None, max_tokens=1500, model=None, effort=None, timeout=None):
         seen.append(messages[0]["content"])
         return NS(content="I put the landlord email on your list.", tool_calls=None)
 
@@ -189,7 +189,7 @@ async def test_the_coach_is_told_once_what_was_filed_then_it_is_marked_as_mentio
 async def test_something_filed_while_the_coach_was_writing_is_still_announced_next_time(monkeypatch, user):
     uid = user["user_id"]
 
-    async def fake_chat(messages, tool_defs=None, max_tokens=1500, model=None, effort=None):
+    async def fake_chat(messages, tool_defs=None, max_tokens=1500, model=None, effort=None, timeout=None):
         token = db.filing_by_itself.set(True)  # the sorter finishes during this reply
         monkeypatch.setattr(time, "time", lambda: NOW.timestamp() + 5)
         tools.run_tool(uid, "add_task", json.dumps({"text": "Email Sam"}))
