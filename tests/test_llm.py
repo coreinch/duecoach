@@ -24,7 +24,7 @@ def model(monkeypatch):
     """Script the model: each queued item is the message returned by one call; every call is recorded."""
     queue, calls = [], []
 
-    async def fake_chat(messages, tool_defs=None, max_tokens=1500, model=None, effort=None):
+    async def fake_chat(messages, tool_defs=None, max_tokens=1500, model=None, effort=None, timeout=None):
         calls.append({"messages": list(messages), "tools": tool_defs})
         return queue.pop(0)
 
@@ -606,7 +606,7 @@ async def test_the_verifier_cancels_a_reminder_set_for_a_time_the_user_never_gav
 async def test_a_side_job_runs_on_the_side_model_which_is_the_coachs_unless_set(monkeypatch, user):
     seen = []
 
-    async def fake_chat(messages, tool_defs=None, max_tokens=1500, model=None, effort=None):
+    async def fake_chat(messages, tool_defs=None, max_tokens=1500, model=None, effort=None, timeout=None):
         seen.append(model)
         return message("ok")
 
@@ -841,7 +841,7 @@ def test_models_that_reject_reasoning_effort_get_no_extras():
 async def test_side_jobs_use_the_side_model_but_a_named_model_is_kept(monkeypatch):
     seen = []
 
-    async def chat(messages, tool_defs=None, max_tokens=1500, model=None, effort=None):
+    async def chat(messages, tool_defs=None, max_tokens=1500, model=None, effort=None, timeout=None):
         seen.append(model)
         return NS(content="ok")
 
@@ -978,7 +978,7 @@ async def test_a_failed_merged_call_falls_back_to_the_safety_prompt_alone_and_le
 async def test_a_verifier_that_answers_with_nothing_is_asked_again_without_reasoning_and_with_a_small_budget(monkeypatch, user, verifier):
     seen = []
 
-    async def fake_chat(messages, tool_defs=None, max_tokens=1500, model=None, effort=None):
+    async def fake_chat(messages, tool_defs=None, max_tokens=1500, model=None, effort=None, timeout=None):
         seen.append((max_tokens, effort))
         return message("" if len(seen) == 1 else '{"unbacked": [], "unhandled": []}')
 
@@ -993,7 +993,7 @@ async def test_a_verifier_that_answers_with_nothing_is_asked_again_without_reaso
 async def test_another_providers_verifier_is_asked_again_the_same_way_since_none_may_not_be_allowed(monkeypatch, user, verifier):
     seen = []
 
-    async def fake_chat(messages, tool_defs=None, max_tokens=1500, model=None, effort=None):
+    async def fake_chat(messages, tool_defs=None, max_tokens=1500, model=None, effort=None, timeout=None):
         seen.append((max_tokens, effort))
         return message("" if len(seen) == 1 else "{}")
 
@@ -1007,7 +1007,7 @@ async def test_another_providers_verifier_is_asked_again_the_same_way_since_none
 async def test_a_short_job_that_comes_back_empty_is_asked_again_without_thinking(monkeypatch):
     seen = []
 
-    async def fake_chat(messages, tool_defs=None, max_tokens=1500, model=None, effort=None):
+    async def fake_chat(messages, tool_defs=None, max_tokens=1500, model=None, effort=None, timeout=None):
         seen.append((max_tokens, effort))
         return message("" if len(seen) == 1 else "the notes")
 
@@ -1019,7 +1019,7 @@ async def test_a_short_job_that_comes_back_empty_is_asked_again_without_thinking
 async def test_nothing_is_retried_when_the_answer_is_there_or_the_model_is_not_deepseek_or_the_caller_set_its_own_effort(monkeypatch):
     seen = []
 
-    async def fake_chat(messages, tool_defs=None, max_tokens=1500, model=None, effort=None):
+    async def fake_chat(messages, tool_defs=None, max_tokens=1500, model=None, effort=None, timeout=None):
         seen.append(model)
         return message("" if model == "grok-4.7" or effort == "high" else "fine")
 
@@ -1030,3 +1030,19 @@ async def test_nothing_is_retried_when_the_answer_is_there_or_the_model_is_not_d
     assert await REAL_COMPLETE(msgs, model="grok-4.7") == "" and len(seen) == 1  # "none" may not be allowed there
     seen.clear()
     assert await REAL_COMPLETE(msgs, model="deepseek-v4.1-flash", effort="high") == "" and len(seen) == 1
+
+
+REAL_COMPLETE = llm._complete  # captured at import, before the autouse fixture replaces it
+
+
+async def test_a_short_helper_job_gives_up_on_a_stalled_call_sooner_than_the_coach_does(monkeypatch):
+    seen = []
+
+    async def fake_chat(messages, tool_defs=None, max_tokens=1500, model=None, effort=None, timeout=None):
+        seen.append(timeout)
+        return NS(content="ok")
+
+    monkeypatch.setattr(llm, "_complete", REAL_COMPLETE)
+    monkeypatch.setattr(llm, "_chat", fake_chat)
+    assert await llm._complete([{"role": "user", "content": "hi"}]) == "ok"
+    assert seen == [llm.SIDE_TIMEOUT] and llm.SIDE_TIMEOUT < llm.LLM_TIMEOUT
